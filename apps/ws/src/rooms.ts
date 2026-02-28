@@ -170,6 +170,11 @@ class RoomManager {
     return room.players.find((p) => p.socketId === socketId);
   }
 
+  /** Returns the stable playerToken bound to this socket, or undefined if unrecognised. */
+  getTokenForSocket(socketId: string): string | undefined {
+    return this.socketTokens.get(socketId);
+  }
+
   isSpectator(socketId: string): boolean {
     return this.spectatorSockets.has(socketId);
   }

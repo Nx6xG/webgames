@@ -99,6 +99,19 @@ io.on('connection', (socket) => {
       players: roomPlayers(room),
     });
 
+    // Broadcast authoritative game state to the entire room so that any client
+    // whose phase was set to 'ended' by the earlier player_left event gets
+    // reset to 'playing' (the only client event that updates phase back).
+    const { state: reconnectState } = room;
+    if (reconnectState) {
+      io.to(room.code).emit('game_state', {
+        roomCode: room.code,
+        gameId: room.gameId,
+        state: reconnectState,
+        spectatorCount: room.spectators.size,
+      });
+    }
+
     if (room.matchStartsAt && Date.now() < room.matchStartsAt) {
       socket.emit('match_starting', { startsInMs: room.matchStartsAt - Date.now() });
     }
@@ -144,6 +157,16 @@ io.on('connection', (socket) => {
         playerCount: room.players.length,
         players: roomPlayers(room),
       });
+      // Same phase-reset broadcast as in the identify reconnect path.
+      const { state: rejoinState } = room;
+      if (rejoinState) {
+        io.to(code).emit('game_state', {
+          roomCode: code,
+          gameId: room.gameId,
+          state: rejoinState,
+          spectatorCount: room.spectators.size,
+        });
+      }
       return;
     }
 
@@ -251,9 +274,25 @@ io.on('connection', (socket) => {
       return;
     }
 
-    const player = roomManager.getPlayer(room, socket.id);
+    // Resolve player via the stable token mapping (socket.id changes on every
+    // reconnect; playerToken is permanent and is what the engine uses as identity).
+    const actingToken = roomManager.getTokenForSocket(socket.id);
+    const player = actingToken ? room.players.find((p) => p.playerToken === actingToken) : undefined;
     if (!player) {
       socket.emit('action_error', { code: 'NOT_IN_ROOM', message: 'You are not a player in this room.' });
+      return;
+    }
+
+    // Sanity guard: if the current-turn token is not among the room's connected
+    // players, the game cannot proceed.  Re-sync so clients show the true state
+    // and bail — this should never fire after a correct reconnect.
+    const connectedTokens = new Set(room.players.map((p) => p.playerToken));
+    const turnToken = 'currentTurn' in currentState
+      ? currentState.currentTurn
+      : currentState.currentPlayer;
+    if (!connectedTokens.has(turnToken)) {
+      console.error(`[sanity] ${code}: turn token ${turnToken} not in connected players ${[...connectedTokens].join(',')}, re-syncing`);
+      io.to(code).emit('game_state', { roomCode: code, gameId: room.gameId, state: currentState, spectatorCount: room.spectators.size });
       return;
     }
 
