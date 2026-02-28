@@ -166,7 +166,10 @@ io.on('connection', (socket) => {
       }
 
       const room = result;
-      const playerIds = room.players.map((p) => p.socketId) as [string, string];
+      const playerIds = room.players
+        .slice()
+        .sort((a, b) => a.index - b.index)
+        .map((p) => p.playerToken) as [string, string];
       const engine = engineRegistry[room.gameId];
       const state = engine.initialState(playerIds);
       room.state = state;
@@ -258,7 +261,7 @@ io.on('connection', (socket) => {
       const engine = engineRegistry[room.gameId];
       const prevStatus = currentState.status;
       const nextState = engine.applyAction(currentState, action, {
-        playerId: socket.id,
+        playerId: player.playerToken,
         playerIndex: player.index,
       });
       room.state = nextState;
@@ -352,7 +355,10 @@ io.on('connection', (socket) => {
 
     if (result.ready) {
       const engine = engineRegistry[room.gameId];
-      const playerIds = room.players.map((p) => p.socketId) as [string, string];
+      const playerIds = room.players
+        .slice()
+        .sort((a, b) => a.index - b.index)
+        .map((p) => p.playerToken) as [string, string];
       const state = engine.initialState(playerIds);
       room.state = state;
       room.rematchVotes.clear();
@@ -400,7 +406,10 @@ io.on('connection', (socket) => {
           quickPlayQueue.delete(gameId);
           broadcastOpenRooms();
           const room = result;
-          const playerIds = room.players.map((p) => p.socketId) as [string, string];
+          const playerIds = room.players
+            .slice()
+            .sort((a, b) => a.index - b.index)
+            .map((p) => p.playerToken) as [string, string];
           const state = engineRegistry[room.gameId].initialState(playerIds);
           room.state = state;
 
