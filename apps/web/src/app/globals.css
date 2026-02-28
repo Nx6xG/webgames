@@ -1,0 +1,49 @@
+@import "tailwindcss";
+
+:root {
+  --background: #09090b;
+  --foreground: #fafafa;
+}
+
+body {
+  background: var(--background);
+  color: var(--foreground);
+  font-family: system-ui, -apple-system, sans-serif;
+  min-height: 100dvh;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+/* Connect Four animations */
+@keyframes c4drop {
+  from { transform: translateY(var(--c4-from, -300px)); }
+  to   { transform: translateY(0); }
+}
+
+@keyframes c4pulse {
+  0%, 100% { filter: brightness(1); }
+  50%       { filter: brightness(1.4); }
+}
+
+/* Countdown overlay animations */
+@keyframes cd-pop {
+  0%   { opacity: 0; transform: scale(1.7); }
+  18%  { opacity: 1; transform: scale(1);   }
+  72%  { opacity: 1; transform: scale(1);   }
+  100% { opacity: 0; transform: scale(0.7); }
+}
+
+@keyframes cd-fadein {
+  from { opacity: 0; }
+  to   { opacity: 1; }
+}
+
+.cd-number {
+  animation: cd-pop 930ms cubic-bezier(0.34, 1.56, 0.64, 1) forwards;
+}
+
+.cd-overlay {
+  animation: cd-fadein 180ms ease-out forwards;
+}
