@@ -57,24 +57,27 @@ export interface MultiplayerActions {
   clearError: () => void;
 }
 
-const LOBBY: Omit<MultiplayerState<AnyGameState>, 'connection'> = {
-  phase: 'lobby',
-  roomCode: null,
-  playerIndex: null,
-  isSpectator: false,
-  playerCount: 0,
-  spectatorCount: 0,
-  gameState: null,
-  error: null,
-  rematchVotes: 0,
-  myVotedRematch: false,
-  rematchError: null,
-  stats: null,
-  players: [],
-  history: [],
-  myNickname: '',
-  matchCountdown: null,
-};
+function makeLobbyState<TState extends AnyGameState>(): MultiplayerState<TState> {
+  return {
+    connection: 'idle',
+    phase: 'lobby',
+    roomCode: null,
+    playerIndex: null,
+    isSpectator: false,
+    playerCount: 0,
+    spectatorCount: 0,
+    gameState: null,
+    error: null,
+    rematchVotes: 0,
+    myVotedRematch: false,
+    rematchError: null,
+    stats: null,
+    players: [],
+    history: [],
+    myNickname: '',
+    matchCountdown: null,
+  };
+}
 
 const TOKEN_KEY = 'wg_player_token';
 const NICK_KEY = 'wg_nickname';
@@ -119,10 +122,7 @@ export function useMultiplayer<TState extends AnyGameState = AnyGameState>(
   const gameIdRef = useRef<GameId>(gameId);
   const cdTimersRef = useRef<ReturnType<typeof setTimeout>[]>([]);
 
-  const [s, set] = useState<MultiplayerState<TState>>({
-    connection: 'idle',
-    ...LOBBY,
-  });
+  const [s, set] = useState<MultiplayerState<TState>>(() => makeLobbyState<TState>());
 
   // Keep refs for callbacks that need current values without re-subscribing
   const roomCodeRef = useRef<string | null>(null);
@@ -338,7 +338,7 @@ export function useMultiplayer<TState extends AnyGameState = AnyGameState>(
     if (socketRef.current && code) {
       socketRef.current.emit('leave_room', { roomCode: code });
     }
-    set((prev) => ({ ...LOBBY, connection: prev.connection, stats: prev.stats, history: prev.history, myNickname: prev.myNickname }));
+    set((prev) => ({ ...makeLobbyState<TState>(), connection: prev.connection, stats: prev.stats, history: prev.history, myNickname: prev.myNickname }));
   }, []);
 
   const sendAction = useCallback((action: AnyGameAction) => {

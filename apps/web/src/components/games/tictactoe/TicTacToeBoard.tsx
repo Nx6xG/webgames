@@ -4,7 +4,7 @@ import type { Cell } from 'shared';
 
 interface Props {
   board: Cell[];
-  winnerCells?: [number, number, number];
+  winnerCells?: number[];
   disabled: boolean;
   onCellClick: (index: number) => void;
 }
