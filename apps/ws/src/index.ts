@@ -24,15 +24,56 @@ const quickPlayQueue = new Map<GameId, OpenRoomInfo>();
 /** socketId → nickname for all identified sockets */
 const nicknameMap = new Map<string, string>();
 
+// ── Public room rate limiter (per IP, in-memory) ──────────────────────────────
+const PUBLIC_ROOM_RATE_LIMIT = 3;
+const PUBLIC_ROOM_RATE_WINDOW_MS = 10 * 60 * 1000; // 10 minutes
+const publicRoomCreations = new Map<string, { count: number; firstAt: number }>();
+// Evict stale entries every 5 minutes to prevent unbounded growth
+setInterval(() => {
+  const cutoff = Date.now() - PUBLIC_ROOM_RATE_WINDOW_MS;
+  for (const [ip, entry] of publicRoomCreations) {
+    if (entry.firstAt < cutoff) publicRoomCreations.delete(ip);
+  }
+}, 5 * 60 * 1000);
+
+function getClientIp(handshake: { headers: Record<string, string | string[] | undefined>; address: string }): string {
+  const fwd = handshake.headers['x-forwarded-for'];
+  if (fwd) {
+    const raw = Array.isArray(fwd) ? fwd[0] : fwd;
+    return raw.split(',')[0].trim();
+  }
+  return handshake.address;
+}
+
+function canCreatePublicRoom(ip: string): boolean {
+  const now = Date.now();
+  const entry = publicRoomCreations.get(ip);
+  if (!entry || now - entry.firstAt > PUBLIC_ROOM_RATE_WINDOW_MS) {
+    publicRoomCreations.set(ip, { count: 1, firstAt: now });
+    return true;
+  }
+  if (entry.count >= PUBLIC_ROOM_RATE_LIMIT) return false;
+  entry.count++;
+  return true;
+}
+
 function getPublicRoomList(): PublicRoomListItem[] {
-  return roomManager.getPublicWaitingRooms().map((room) => ({
+  const items = roomManager.getPublicRooms().map((room) => ({
     code: room.code,
     gameId: room.gameId,
     roomName: room.roomName,
     hostNickname: room.players[0]?.nickname ?? 'Unknown',
     playerCount: room.players.length,
+    maxPlayers: 2,
     createdAt: room.createdAt,
   }));
+  // Sort: joinable (1/2) → empty (0/2) → full (2/2); newest-first within each group
+  items.sort((a, b) => {
+    const pri = (n: number) => (n === 1 ? 0 : n === 0 ? 1 : 2);
+    const diff = pri(a.playerCount) - pri(b.playerCount);
+    return diff !== 0 ? diff : b.createdAt - a.createdAt;
+  });
+  return items;
 }
 
 const PORT = Number(process.env.PORT ?? 3001);
@@ -129,6 +170,18 @@ io.on('connection', (socket) => {
 
   // ── create_room ───────────────────────────────────────────────────────────
   socket.on('create_room', ({ playerToken, gameId = 'tictactoe', nickname, visibility = 'private', roomName }) => {
+    // Spam protection: max PUBLIC_ROOM_RATE_LIMIT public rooms per IP per window
+    if (visibility === 'public') {
+      const ip = getClientIp(socket.handshake as { headers: Record<string, string | string[] | undefined>; address: string });
+      if (!canCreatePublicRoom(ip)) {
+        socket.emit('room_error', {
+          code: 'RATE_LIMITED',
+          message: `Too many public rooms created — max ${PUBLIC_ROOM_RATE_LIMIT} per 10 minutes. Try again later.`,
+        });
+        return;
+      }
+    }
+
     // Leave any existing room first
     const existing = roomManager.getRoomBySocket(socket.id);
     if (existing) {

@@ -49,6 +49,7 @@ export interface PublicRoomListItem {
   roomName?: string;
   hostNickname: string;
   playerCount: number;
+  maxPlayers: number;
   createdAt: number;
 }
 
@@ -65,7 +66,8 @@ export interface GameStats {
 export type RoomErrorCode =
   | 'ROOM_NOT_FOUND'
   | 'ROOM_FULL'
-  | 'ALREADY_IN_ROOM';
+  | 'ALREADY_IN_ROOM'
+  | 'RATE_LIMITED';
 
 export type ActionErrorCode =
   | 'ROOM_NOT_FOUND'

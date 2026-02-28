@@ -7,6 +7,8 @@ const CODE_LENGTH = 6;
 export const PLAYER_RECONNECT_MS = 30_000;
 /** How long an empty room is kept alive after the last player's eviction timer starts (ms) */
 export const ROOM_IDLE_CLEANUP_MS = 60_000;
+/** How long an empty *public* room stays visible in the lobby before being auto-cleaned (ms) */
+export const PUBLIC_ROOM_EMPTY_CLEANUP_MS = 120_000;
 
 // ─── Data structures ──────────────────────────────────────────────────────────
 
@@ -190,11 +192,9 @@ class RoomManager {
     return this.spectatorSockets.has(socketId);
   }
 
-  /** All public rooms that have exactly one player and are open for a second. */
-  getPublicWaitingRooms(): Room[] {
-    return [...this.rooms.values()].filter(
-      (r) => r.visibility === 'public' && r.players.length === 1,
-    );
+  /** All public rooms regardless of player count (empty, joinable, or full). */
+  getPublicRooms(): Room[] {
+    return [...this.rooms.values()].filter((r) => r.visibility === 'public');
   }
 
   /**
@@ -260,7 +260,8 @@ class RoomManager {
     }
 
     if (room.players.length === 0) {
-      this.scheduleRoomCleanup(room);
+      const delay = room.visibility === 'public' ? PUBLIC_ROOM_EMPTY_CLEANUP_MS : ROOM_IDLE_CLEANUP_MS;
+      this.scheduleRoomCleanup(room, delay);
     }
 
     return { type: 'player', room, player };
@@ -274,17 +275,21 @@ class RoomManager {
     const { playerIndex } = session;
     this.tokenSessions.delete(token);
 
-    // If no remaining sessions for this room and no active players → mark for fast cleanup
+    // Private rooms are fast-cleaned once all sessions expire.
+    // Public rooms are intentionally kept alive (as 0/2) until their scheduled cleanup
+    // timer fires so they remain visible in the lobby for the full grace period.
     const roomHasSession = [...this.tokenSessions.values()].some((s) => s.roomCode === room.code);
     if (!roomHasSession && room.players.length === 0 && room.spectators.size === 0) {
-      this.rooms.delete(room.code);
-      this.cancelRoomCleanup(room.code);
+      if (room.visibility !== 'public') {
+        this.rooms.delete(room.code);
+        this.cancelRoomCleanup(room.code);
+      }
     }
 
     this.evictCb?.(room, playerIndex);
   }
 
-  private scheduleRoomCleanup(room: Room) {
+  private scheduleRoomCleanup(room: Room, delayMs = ROOM_IDLE_CLEANUP_MS) {
     this.cancelRoomCleanup(room.code);
     const timer = setTimeout(() => {
       this.roomCleanupTimers.delete(room.code);
@@ -309,7 +314,7 @@ class RoomManager {
       }
 
       this.cleanupCb?.(room);
-    }, ROOM_IDLE_CLEANUP_MS);
+    }, delayMs);
     this.roomCleanupTimers.set(room.code, timer);
   }
 
