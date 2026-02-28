@@ -6,7 +6,7 @@
   "scripts": {
     "dev": "tsx watch --clear-screen=false src/index.ts",
     "build": "tsc",
-    "start": "node dist/index.js",
+    "start": "node dist/apps/ws/src/index.js",
     "type-check": "tsc --noEmit"
   },
   "dependencies": {
