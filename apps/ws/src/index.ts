@@ -6,7 +6,7 @@ import { engineRegistry } from './engineRegistry.js';
 import { rateLimiter } from './rateLimiter.js';
 import { getStats, getAllStats, recordResult } from './stats.js';
 import { addMatch, getHistory } from './matchHistory.js';
-import type { RoomPlayerInfo, OpenRoomInfo, GameId, Match, ActionErrorCode } from 'shared';
+import type { RoomPlayerInfo, OpenRoomInfo, PublicRoomListItem, GameId, Match, ActionErrorCode } from 'shared';
 import type { Room } from './rooms.js';
 
 function roomPlayers(room: Room): RoomPlayerInfo[] {
@@ -24,8 +24,15 @@ const quickPlayQueue = new Map<GameId, OpenRoomInfo>();
 /** socketId → nickname for all identified sockets */
 const nicknameMap = new Map<string, string>();
 
-function getOpenRooms(): OpenRoomInfo[] {
-  return [...quickPlayQueue.values()];
+function getPublicRoomList(): PublicRoomListItem[] {
+  return roomManager.getPublicWaitingRooms().map((room) => ({
+    code: room.code,
+    gameId: room.gameId,
+    roomName: room.roomName,
+    hostNickname: room.players[0]?.nickname ?? 'Unknown',
+    playerCount: room.players.length,
+    createdAt: room.createdAt,
+  }));
 }
 
 const PORT = Number(process.env.PORT ?? 3001);
@@ -41,7 +48,7 @@ const io = new Server<ClientToServerEvents, ServerToClientEvents>(httpServer, {
 });
 
 function broadcastOpenRooms() {
-  io.emit('open_rooms', { rooms: getOpenRooms() });
+  io.emit('open_rooms', { rooms: getPublicRoomList() });
 }
 
 function startCountdown(room: Room) {
@@ -58,11 +65,13 @@ roomManager.onPlayerEvicted((room, playerIndex) => {
     playerIndex,
     playerCount: room.players.length,
   });
+  if (room.visibility === 'public') broadcastOpenRooms();
 });
 
 roomManager.onRoomCleaned((room) => {
   // Kick any remaining spectators from the Socket.IO room channel
   io.in(room.code).socketsLeave(room.code);
+  if (room.visibility === 'public') broadcastOpenRooms();
 });
 
 // ── Per-connection logic ──────────────────────────────────────────────────────
@@ -119,7 +128,7 @@ io.on('connection', (socket) => {
   });
 
   // ── create_room ───────────────────────────────────────────────────────────
-  socket.on('create_room', ({ playerToken, gameId = 'tictactoe', nickname }) => {
+  socket.on('create_room', ({ playerToken, gameId = 'tictactoe', nickname, visibility = 'private', roomName }) => {
     // Leave any existing room first
     const existing = roomManager.getRoomBySocket(socket.id);
     if (existing) {
@@ -127,10 +136,14 @@ io.on('connection', (socket) => {
       socket.leave(existing.code);
     }
 
-    const room = roomManager.createRoom(socket.id, playerToken, gameId, nickname);
+    // Sanitize room name: strip whitespace, cap at 24 chars
+    const sanitizedName = roomName?.trim().slice(0, 24) || undefined;
+
+    const room = roomManager.createRoom(socket.id, playerToken, gameId, nickname, visibility, sanitizedName);
     socket.join(room.code);
     socket.emit('room_created', { roomCode: room.code, playerIndex: 0, gameId: room.gameId, players: roomPlayers(room) });
-    console.log(`[room] created ${room.code} (${room.gameId})`);
+    if (visibility === 'public') broadcastOpenRooms();
+    console.log(`[room] created ${room.code} (${room.gameId}, ${visibility}${sanitizedName ? `: ${sanitizedName}` : ''})`);
   });
 
   // ── join_room ─────────────────────────────────────────────────────────────
@@ -216,6 +229,7 @@ io.on('connection', (socket) => {
         state,
         players: roomPlayers(room),
       });
+      if (room.visibility === 'public') broadcastOpenRooms();
       startCountdown(room);
       console.log(`[room] ${socket.id} joined ${code} as player 1`);
       return;
@@ -416,7 +430,7 @@ io.on('connection', (socket) => {
 
   // ── get_open_rooms ────────────────────────────────────────────────────────
   socket.on('get_open_rooms', () => {
-    socket.emit('open_rooms', { rooms: getOpenRooms() });
+    socket.emit('open_rooms', { rooms: getPublicRoomList() });
   });
 
   // ── quick_play ────────────────────────────────────────────────────────────
@@ -483,7 +497,7 @@ io.on('connection', (socket) => {
     }
 
     // No waiting room — create one and enter the queue
-    const room = roomManager.createRoom(socket.id, playerToken, gameId, nickname);
+    const room = roomManager.createRoom(socket.id, playerToken, gameId, nickname, 'public');
     quickPlayQueue.set(gameId, { roomCode: room.code, gameId, hostNickname: nickname, createdAt: Date.now() });
     broadcastOpenRooms();
     socket.join(room.code);
@@ -527,9 +541,11 @@ io.on('connection', (socket) => {
       // Remove from quick-play queue if this was the waiting room and it's now empty
       if (room.players.length === 0) {
         for (const [gid, entry] of quickPlayQueue) {
-          if (entry.roomCode === room.code) { quickPlayQueue.delete(gid); broadcastOpenRooms(); break; }
+          if (entry.roomCode === room.code) { quickPlayQueue.delete(gid); break; }
         }
       }
+      // Broadcast updated public list (covers both quick-play and custom public rooms)
+      if (room.visibility === 'public') broadcastOpenRooms();
     } else {
       // Spectator left
       io.to(room.code).emit('spectator_count_changed', { spectatorCount: room.spectators.size });

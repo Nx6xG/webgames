@@ -40,6 +40,18 @@ export interface OpenRoomInfo {
   createdAt: number;
 }
 
+export type RoomVisibility = 'private' | 'public';
+
+/** A public room shown in the /rooms lobby list */
+export interface PublicRoomListItem {
+  code: string;
+  gameId: GameId;
+  roomName?: string;
+  hostNickname: string;
+  playerCount: number;
+  createdAt: number;
+}
+
 // ─── Stats ───────────────────────────────────────────────────────────────────
 
 export interface GameStats {
@@ -170,7 +182,7 @@ export interface ServerToClientEvents {
   quick_play_joined: (data: { roomCode: string }) => void;
 
   /** Sent in response to get_open_rooms, and broadcast whenever the waiting list changes */
-  open_rooms: (data: { rooms: OpenRoomInfo[] }) => void;
+  open_rooms: (data: { rooms: PublicRoomListItem[] }) => void;
 
   /** Personal match history for the requesting player */
   history: (data: { items: Match[] }) => void;
@@ -189,7 +201,7 @@ export interface ClientToServerEvents {
   identify: (data: { playerToken: string; nickname: string }) => void;
 
   /** playerToken is stored server-side so the seat can survive a refresh */
-  create_room: (data: { playerToken: string; gameId?: GameId; nickname: string }) => void;
+  create_room: (data: { playerToken: string; gameId?: GameId; nickname: string; visibility?: RoomVisibility; roomName?: string }) => void;
 
   /** If the room is full the socket joins as spectator instead */
   join_room: (data: { roomCode: string; playerToken: string; nickname: string }) => void;

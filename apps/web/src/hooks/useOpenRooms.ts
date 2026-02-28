@@ -2,12 +2,12 @@
 
 import { useEffect, useState } from 'react';
 import { io, type Socket } from 'socket.io-client';
-import type { ServerToClientEvents, ClientToServerEvents, OpenRoomInfo } from 'shared';
+import type { ServerToClientEvents, ClientToServerEvents, PublicRoomListItem } from 'shared';
 
 type RoomsSocket = Socket<ServerToClientEvents, ClientToServerEvents>;
 
 export function useOpenRooms(wsUrl: string) {
-  const [rooms, setRooms] = useState<OpenRoomInfo[]>([]);
+  const [rooms, setRooms] = useState<PublicRoomListItem[]>([]);
   const [connected, setConnected] = useState(false);
 
   useEffect(() => {

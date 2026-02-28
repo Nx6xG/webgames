@@ -24,6 +24,8 @@ export function Connect4Game({ wsUrl, gameId, initialRoomCode, quickPlay: isQuic
   const mp = useMultiplayer<Connect4State>(wsUrl, gameId);
   const [joinInput, setJoinInput] = useState(initialRoomCode ?? '');
   const [copied, setCopied] = useState(false);
+  const [roomVisibility, setRoomVisibility] = useState<'private' | 'public'>('private');
+  const [roomName, setRoomName] = useState('');
   const [hoveredCol, setHoveredCol] = useState<number | null>(null);
   const [fallingCell, setFallingCell] = useState<string | null>(null);
   const prevBoardRef = useRef<Connect4Cell[][] | null>(null);
@@ -338,9 +340,33 @@ export function Connect4Game({ wsUrl, gameId, initialRoomCode, quickPlay: isQuic
             </Link>
           </div>
         ) : mp.phase === 'lobby' ? (
-          <div className="rounded-xl border border-zinc-800 bg-zinc-900 p-4 flex flex-col gap-4">
+          <div className="rounded-xl border border-zinc-800 bg-zinc-900 p-4 flex flex-col gap-3">
+            {/* Visibility toggle */}
+            <div className="flex gap-1 p-1 bg-zinc-800 rounded-lg">
+              {(['private', 'public'] as const).map((v) => (
+                <button
+                  key={v}
+                  onClick={() => setRoomVisibility(v)}
+                  className={`flex-1 py-1.5 text-xs rounded-md font-medium capitalize transition-colors ${
+                    roomVisibility === v ? 'bg-zinc-700 text-zinc-100' : 'text-zinc-500 hover:text-zinc-300'
+                  }`}
+                >
+                  {v}
+                </button>
+              ))}
+            </div>
+            {/* Room name (public only) */}
+            {roomVisibility === 'public' && (
+              <input
+                value={roomName}
+                onChange={(e) => setRoomName(e.target.value.slice(0, 24))}
+                placeholder="Room name (optional)"
+                maxLength={24}
+                className="bg-zinc-800 border border-zinc-700 rounded-lg px-3 py-2 text-sm text-zinc-100 placeholder-zinc-500 focus:outline-none focus:border-indigo-500"
+              />
+            )}
             <button
-              onClick={mp.createRoom}
+              onClick={() => mp.createRoom({ visibility: roomVisibility, roomName: roomName.trim() || undefined })}
               disabled={mp.connection !== 'connected'}
               className="w-full py-2.5 rounded-lg bg-indigo-600 hover:bg-indigo-500 disabled:opacity-40 disabled:cursor-not-allowed text-white font-semibold text-sm transition-colors"
             >

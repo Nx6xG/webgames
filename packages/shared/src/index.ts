@@ -32,5 +32,7 @@ export type {
   GameStats,
   RoomPlayerInfo,
   OpenRoomInfo,
+  PublicRoomListItem,
+  RoomVisibility,
   Match,
 } from './protocol.js';

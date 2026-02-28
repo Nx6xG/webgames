@@ -1,4 +1,4 @@
-import type { AnyGameState, GameId } from 'shared';
+import type { AnyGameState, GameId, RoomVisibility } from 'shared';
 
 const CODE_CHARS = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
 const CODE_LENGTH = 6;
@@ -20,6 +20,8 @@ export interface RoomPlayer {
 export interface Room {
   code: string;
   gameId: GameId;
+  visibility: RoomVisibility;
+  roomName?: string;
   /** Only currently-connected players. Max 2. */
   players: RoomPlayer[];
   /** Socket IDs of spectators (no seat, read-only). */
@@ -67,11 +69,20 @@ class RoomManager {
 
   // ── Public API ──────────────────────────────────────────────────────────────
 
-  createRoom(socketId: string, playerToken: string, gameId: GameId = 'tictactoe', nickname = 'Player 1'): Room {
+  createRoom(
+    socketId: string,
+    playerToken: string,
+    gameId: GameId = 'tictactoe',
+    nickname = 'Player 1',
+    visibility: RoomVisibility = 'private',
+    roomName?: string,
+  ): Room {
     const code = this.generateCode();
     const room: Room = {
       code,
       gameId,
+      visibility,
+      roomName,
       players: [{ socketId, index: 0, playerToken, nickname }],
       spectators: new Set(),
       state: null,
@@ -177,6 +188,13 @@ class RoomManager {
 
   isSpectator(socketId: string): boolean {
     return this.spectatorSockets.has(socketId);
+  }
+
+  /** All public rooms that have exactly one player and are open for a second. */
+  getPublicWaitingRooms(): Room[] {
+    return [...this.rooms.values()].filter(
+      (r) => r.visibility === 'public' && r.players.length === 1,
+    );
   }
 
   /**
