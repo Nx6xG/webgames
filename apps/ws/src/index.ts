@@ -6,7 +6,7 @@ import { engineRegistry } from './engineRegistry.js';
 import { rateLimiter } from './rateLimiter.js';
 import { getStats, getAllStats, recordResult } from './stats.js';
 import { addMatch, getHistory } from './matchHistory.js';
-import type { RoomPlayerInfo, OpenRoomInfo, GameId, Match } from 'shared';
+import type { RoomPlayerInfo, OpenRoomInfo, GameId, Match, ActionErrorCode } from 'shared';
 import type { Room } from './rooms.js';
 
 function roomPlayers(room: Room): RoomPlayerInfo[] {
@@ -168,7 +168,8 @@ io.on('connection', (socket) => {
       const room = result;
       const playerIds = room.players.map((p) => p.socketId) as [string, string];
       const engine = engineRegistry[room.gameId];
-      room.state = engine.initialState(playerIds);
+      const state = engine.initialState(playerIds);
+      room.state = state;
 
       socket.join(code);
       socket.emit('room_joined', {
@@ -178,7 +179,7 @@ io.on('connection', (socket) => {
         isSpectator: false,
         playerCount: room.players.length,
         spectatorCount: room.spectators.size,
-        state: room.state,
+        state,
         players: roomPlayers(room),
       });
       socket.to(code).emit('player_joined', {
@@ -186,7 +187,7 @@ io.on('connection', (socket) => {
         playerIndex: 1,
         playerCount: room.players.length,
         spectatorCount: room.spectators.size,
-        state: room.state,
+        state,
         players: roomPlayers(room),
       });
       startCountdown(room);
@@ -234,6 +235,10 @@ io.on('connection', (socket) => {
       socket.emit('action_error', { code: 'GAME_NOT_STARTED', message: 'Waiting for second player.' });
       return;
     }
+    // Capture as local const so TypeScript preserves the non-null narrowing
+    // across subsequent function calls (rateLimiter, getPlayer) that could
+    // theoretically mutate room.state from TypeScript's perspective.
+    const currentState = room.state;
     if (!rateLimiter.check(socket.id)) {
       socket.emit('action_error', { code: 'RATE_LIMITED', message: 'Slow down — too many actions.' });
       return;
@@ -251,27 +256,27 @@ io.on('connection', (socket) => {
 
     try {
       const engine = engineRegistry[room.gameId];
-      const prevStatus = room.state.status;
-      room.state = engine.applyAction(room.state, action, {
+      const prevStatus = currentState.status;
+      const nextState = engine.applyAction(currentState, action, {
         playerId: socket.id,
         playerIndex: player.index,
       });
+      room.state = nextState;
       io.to(code).emit('game_state', {
         roomCode: code,
         gameId: room.gameId,
-        state: room.state,
+        state: nextState,
         spectatorCount: room.spectators.size,
       });
 
       // Record result and broadcast updated stats when a game just ended
-      if (prevStatus === 'ongoing' && room.state.status !== 'ongoing') {
+      if (prevStatus === 'ongoing' && nextState.status !== 'ongoing') {
         let result: { winner: 0 | 1 } | { draw: true };
-        if (room.state.status === 'draw') {
+        if (nextState.status === 'draw') {
           result = { draw: true };
         } else {
-          const statePlayers = (room.state as any).players as Array<{ id: string }>;
-          const winner = (room.state as any).winner as string;
-          const winnerIdx = statePlayers.findIndex((p) => p.id === winner);
+          // Both TicTacToeState and Connect4State have players[].id and winner
+          const winnerIdx = nextState.players.findIndex((p: { id: string }) => p.id === nextState.winner);
           result = { winner: (winnerIdx === 1 ? 1 : 0) as 0 | 1 };
         }
         const stats = recordResult(room.gameId, result);
@@ -304,7 +309,7 @@ io.on('connection', (socket) => {
       const colonIdx = msg.indexOf(': ');
       const errCode = colonIdx !== -1 ? msg.slice(0, colonIdx) : 'INVALID_ACTION';
       const human = colonIdx !== -1 ? msg.slice(colonIdx + 2) : msg;
-      socket.emit('action_error', { code: errCode as any, message: human });
+      socket.emit('action_error', { code: errCode as ActionErrorCode, message: human });
     }
   });
 
@@ -348,9 +353,10 @@ io.on('connection', (socket) => {
     if (result.ready) {
       const engine = engineRegistry[room.gameId];
       const playerIds = room.players.map((p) => p.socketId) as [string, string];
-      room.state = engine.initialState(playerIds);
+      const state = engine.initialState(playerIds);
+      room.state = state;
       room.rematchVotes.clear();
-      io.to(code).emit('rematch_started', { state: room.state });
+      io.to(code).emit('rematch_started', { state });
       console.log(`[rematch] ${code} restarted`);
     } else {
       io.to(code).emit('rematch_requested', { votes: result.votes });
@@ -395,7 +401,8 @@ io.on('connection', (socket) => {
           broadcastOpenRooms();
           const room = result;
           const playerIds = room.players.map((p) => p.socketId) as [string, string];
-          room.state = engineRegistry[room.gameId].initialState(playerIds);
+          const state = engineRegistry[room.gameId].initialState(playerIds);
+          room.state = state;
 
           socket.join(entry.roomCode);
           socket.emit('room_joined', {
@@ -405,7 +412,7 @@ io.on('connection', (socket) => {
             isSpectator: false,
             playerCount: room.players.length,
             spectatorCount: room.spectators.size,
-            state: room.state,
+            state,
             players: roomPlayers(room),
           });
           socket.emit('quick_play_joined', { roomCode: entry.roomCode });
@@ -414,7 +421,7 @@ io.on('connection', (socket) => {
             playerIndex: 1,
             playerCount: room.players.length,
             spectatorCount: room.spectators.size,
-            state: room.state,
+            state,
             players: roomPlayers(room),
           });
           startCountdown(room);
