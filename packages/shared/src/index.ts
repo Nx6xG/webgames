@@ -29,6 +29,18 @@ export type {
   RpsPickAction,
 } from './games/rps.js';
 export type {
+  ChessColor,
+  ChessPieceType,
+  ChessPromoPiece,
+  ChessPiece,
+  ChessCastlingRights,
+  ChessMoveRecord,
+  ChessState,
+  ChessMoveAction,
+  ChessResignAction,
+  ChessAction,
+} from './games/chess.js';
+export type {
   AnyGameState,
   AnyGameAction,
   ServerToClientEvents,

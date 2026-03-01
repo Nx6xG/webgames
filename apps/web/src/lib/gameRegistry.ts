@@ -3,6 +3,7 @@ import type { GameId, GameManifest } from 'shared';
 import { TicTacToeGame } from '@/components/games/tictactoe/TicTacToeGame';
 import { Connect4Game } from '@/components/games/connect4/Connect4Game';
 import { RpsGame } from '@/components/games/rps/RpsGame';
+import { ChessGame } from '@/components/games/chess/ChessGame';
 
 /**
  * Props every game component must accept.
@@ -76,5 +77,18 @@ export const webRegistry: Record<GameId, WebGameEntry> = {
       maxPlayers: 2,
     },
     Component: RpsGame,
+  },
+  chess: {
+    manifest: {
+      id: 'chess',
+      name: 'Chess',
+      description: 'Classic strategy game. Outthink your opponent and deliver checkmate.',
+      categories: ['classic', 'strategy', '2 players'],
+      version: '1.0.0',
+      routeSlug: 'chess',
+      minPlayers: 2,
+      maxPlayers: 2,
+    },
+    Component: ChessGame,
   },
 };

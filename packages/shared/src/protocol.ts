@@ -1,6 +1,7 @@
 import type { TicTacToeState, TicTacToeAction } from './games/tictactoe.js';
 import type { Connect4State, Connect4Action } from './games/connect4.js';
 import type { RpsState, RpsAction } from './games/rps.js';
+import type { ChessState, ChessAction } from './games/chess.js';
 import type { GameId } from './registry.js';
 
 // ─── Game-state / action unions ───────────────────────────────────────────────
@@ -8,10 +9,10 @@ import type { GameId } from './registry.js';
 // the rest of the code stays unchanged.
 
 /** Union of all possible game states across every registered game. */
-export type AnyGameState = TicTacToeState | Connect4State | RpsState;
+export type AnyGameState = TicTacToeState | Connect4State | RpsState | ChessState;
 
 /** Union of all possible game actions across every registered game. */
-export type AnyGameAction = TicTacToeAction | Connect4Action | RpsAction;
+export type AnyGameAction = TicTacToeAction | Connect4Action | RpsAction | ChessAction;
 
 // ─── Nickname / players ───────────────────────────────────────────────────────
 
