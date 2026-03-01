@@ -9,17 +9,25 @@ type GameSocket = Socket<ServerToClientEvents, ClientToServerEvents>;
 const TOKEN_KEY = 'wg_player_token';
 const NICK_KEY = 'wg_nickname';
 
-export function useGlobalChat(wsUrl: string) {
+export function useGlobalChat(wsUrl: string, nickname: string) {
   const socketRef = useRef<GameSocket | null>(null);
+  const nicknameRef = useRef(nickname);
   const [globalMessages, setGlobalMessages] = useState<ChatMessage[]>([]);
   const [chatError, setChatError] = useState<string | null>(null);
   const [connected, setConnected] = useState(false);
+
+  // Sync ref and notify server when nickname changes while connected.
+  useEffect(() => {
+    nicknameRef.current = nickname;
+    if (nickname && socketRef.current?.connected) {
+      socketRef.current.emit('set_nickname', { nickname });
+    }
+  }, [nickname]);
 
   useEffect(() => {
     if (typeof window === 'undefined') return;
 
     const token = localStorage.getItem(TOKEN_KEY) ?? 'anonymous';
-    const nickname = localStorage.getItem(NICK_KEY) ?? 'Guest';
 
     const socket: GameSocket = io(wsUrl, {
       autoConnect: false,
@@ -33,7 +41,8 @@ export function useGlobalChat(wsUrl: string) {
 
     socket.on('connect', () => {
       setConnected(true);
-      socket.emit('identify', { playerToken: token, nickname });
+      const nick = nicknameRef.current || localStorage.getItem(NICK_KEY) || 'Guest';
+      socket.emit('identify', { playerToken: token, nickname: nick });
     });
     socket.on('disconnect', () => setConnected(false));
     socket.on('connect_error', () => setConnected(false));

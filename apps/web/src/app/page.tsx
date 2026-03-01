@@ -2,6 +2,7 @@ import Link from 'next/link';
 import { webRegistry } from '@/lib/gameRegistry';
 import type { WebGameEntry } from '@/lib/gameRegistry';
 import { GlobalChatWidget } from '@/components/chat/GlobalChatWidget';
+import { ProfileMenu } from '@/components/ProfileMenu';
 
 const CATEGORY_COLORS: Record<string, string> = {
   classic: 'bg-amber-900/40 text-amber-300 border-amber-800',
@@ -33,7 +34,7 @@ function GameCard({ entry }: { entry: WebGameEntry }) {
   }
 
   return (
-    <div className="rounded-2xl border border-zinc-800 bg-zinc-900 p-6 hover:border-indigo-700/60 hover:bg-zinc-800/50 transition-all duration-200">
+    <div className="rounded-2xl border border-[var(--cardBorder)] bg-[var(--card)] p-6 hover:border-indigo-700/60 hover:bg-zinc-800/50 transition-all duration-200">
       <div className="w-14 h-14 rounded-xl border bg-indigo-950 border-indigo-900 flex items-center justify-center mb-5 text-2xl">⊞</div>
       <h3 className="font-bold text-lg mb-1">{game.name}</h3>
       <p className="text-sm mb-4 leading-relaxed text-zinc-400">{game.description}</p>
@@ -63,9 +64,9 @@ function GameCard({ entry }: { entry: WebGameEntry }) {
 
 export default function HomePage() {
   return (
-    <main className="min-h-screen bg-zinc-950 text-zinc-100">
+    <main className="min-h-screen bg-[var(--bg)] text-[var(--fg)]">
       {/* Header */}
-      <header className="border-b border-zinc-800 bg-zinc-950/80 backdrop-blur sticky top-0 z-10">
+      <header className="border-b border-[var(--cardBorder)] bg-[var(--bg)]/80 backdrop-blur sticky top-0 z-10">
         <div className="max-w-5xl mx-auto px-6 py-4 flex items-center gap-3">
           <div className="w-8 h-8 rounded-lg bg-indigo-600 flex items-center justify-center font-black text-sm">
             W
@@ -78,6 +79,8 @@ export default function HomePage() {
             <Link href="/leaderboard" className="text-sm text-zinc-400 hover:text-zinc-100 transition-colors">
               Leaderboard
             </Link>
+            <div className="w-px h-4 bg-zinc-700 shrink-0" aria-hidden />
+            <ProfileMenu />
           </nav>
         </div>
       </header>

@@ -76,6 +76,23 @@ export interface GameStats {
   draws: number;
 }
 
+// ─── Leaderboard ─────────────────────────────────────────────────────────────
+
+export type LeaderboardMode = 'overall' | 'game';
+
+export interface LeaderboardEntry {
+  rank: number;
+  nickname: string;
+  wins: number;
+  games: number;
+  /** Win percentage 0–100, rounded to one decimal place */
+  winrate: number;
+  /** Current consecutive-win streak in the requested scope */
+  streak: number;
+  /** True only for the requesting socket's own entry */
+  isYou?: boolean;
+}
+
 // ─── Error codes ─────────────────────────────────────────────────────────────
 
 export type RoomErrorCode =
@@ -207,6 +224,9 @@ export interface ServerToClientEvents {
   /** Sent when both players are in the room, before moves are allowed */
   match_starting: (data: { startsInMs: number }) => void;
 
+  /** Emitted to the socket after identify — echoes back the stable token */
+  session_info: (data: { token: string; nickname: string }) => void;
+
   /** Emitted to the sender after a successful set_nickname */
   nickname_set: (data: { nickname: string }) => void;
 
@@ -221,6 +241,9 @@ export interface ServerToClientEvents {
 
   /** Emitted to the sender when a chat operation fails */
   chat_error: (data: { message: string }) => void;
+
+  /** Response to leaderboard_get */
+  leaderboard_data: (data: { mode: LeaderboardMode; gameId?: string; entries: LeaderboardEntry[] }) => void;
 }
 
 // ─── Client → Server ─────────────────────────────────────────────────────────
@@ -267,4 +290,7 @@ export interface ClientToServerEvents {
 
   /** Send a chat message to scope 'room' or 'global'. */
   chat_send: (data: { scope: ChatScope; roomCode?: string; message: string }) => void;
+
+  /** Request leaderboard data (server replies with leaderboard_data). */
+  leaderboard_get: (data: { mode: LeaderboardMode; gameId?: string }) => void;
 }

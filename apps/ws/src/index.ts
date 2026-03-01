@@ -7,7 +7,8 @@ import { engineRegistry } from './engineRegistry.js';
 import { rateLimiter } from './rateLimiter.js';
 import { getStats, getAllStats, recordResult } from './stats.js';
 import { addMatch, getHistory } from './matchHistory.js';
-import type { RoomPlayerInfo, OpenRoomInfo, PublicRoomListItem, GameId, Match, ActionErrorCode, ChatMessage } from 'shared';
+import { recordMatchResult, recordDraw, updateNickname, getEntries } from './leaderboard.js';
+import type { RoomPlayerInfo, OpenRoomInfo, PublicRoomListItem, GameId, Match, ActionErrorCode, ChatMessage, LeaderboardMode } from 'shared';
 import type { Room } from './rooms.js';
 import { InMemoryStorage } from './storage/inMemory.js';
 import type { Storage } from './storage/types.js';
@@ -182,6 +183,7 @@ io.on('connection', (socket) => {
     nicknameMap.set(socket.id, nickname);
     // Initialise profile from the stored nickname if no profile exists yet
     if (!profiles.has(playerToken)) profiles.set(playerToken, { nickname });
+    socket.emit('session_info', { token: playerToken, nickname });
 
     const result = roomManager.claimSession(playerToken, socket.id, nickname);
     if (!result) return; // no live session → client stays in lobby
@@ -457,10 +459,24 @@ io.on('connection', (socket) => {
         let result: { winner: 0 | 1 } | { draw: true };
         if (nextState.status === 'draw') {
           result = { draw: true };
+          // Record draw for both players
+          const [p0, p1] = room.players.slice().sort((a, b) => a.index - b.index);
+          if (p0 && p1) {
+            recordDraw(p0.playerToken, p0.nickname, p1.playerToken, p1.nickname, room.gameId);
+          }
         } else {
           // Both TicTacToeState and Connect4State have players[].id and winner
           const winnerIdx = nextState.players.findIndex((p: { id: string }) => p.id === nextState.winner);
           result = { winner: (winnerIdx === 1 ? 1 : 0) as 0 | 1 };
+
+          // Record win/loss in leaderboard (winner token = nextState.winner = playerToken)
+          const winnerToken = nextState.winner as string;
+          const winnerPlayer = room.players.find((p) => p.playerToken === winnerToken);
+          const winnerNickname = winnerPlayer?.nickname ?? profiles.get(winnerToken)?.nickname ?? 'Unknown';
+          const loserPlayer = room.players.find((p) => p.playerToken !== winnerToken);
+          const loserToken = loserPlayer?.playerToken ?? '';
+          const loserNickname = loserPlayer?.nickname ?? (loserToken ? profiles.get(loserToken)?.nickname : undefined) ?? 'Unknown';
+          recordMatchResult(winnerToken, winnerNickname, loserToken, loserNickname, room.gameId);
         }
         const stats = recordResult(room.gameId, result);
         io.to(code).emit('stats_updated', { gameId: room.gameId, stats });
@@ -662,6 +678,7 @@ io.on('connection', (socket) => {
 
     profiles.set(token, { nickname: clean });
     nicknameMap.set(socket.id, clean);
+    updateNickname(token, clean);
     socket.emit('nickname_set', { nickname: clean });
 
     // Update nickname in any room the player is currently in
@@ -725,6 +742,17 @@ io.on('connection', (socket) => {
       if (buf.length > ROOM_CHAT_BUF) buf.shift();
       io.to(code).emit('chat_message', { message: msg });
     }
+  });
+
+  // ── leaderboard_get ───────────────────────────────────────────────────────
+  socket.on('leaderboard_get', ({ mode, gameId }) => {
+    const lbMode = (mode === 'game' ? 'game' : 'overall') as LeaderboardMode;
+    const myToken = identifiedTokens.get(socket.id);
+    socket.emit('leaderboard_data', {
+      mode: lbMode,
+      gameId,
+      entries: getEntries(lbMode, gameId, myToken),
+    });
   });
 
   // ── disconnect ────────────────────────────────────────────────────────────

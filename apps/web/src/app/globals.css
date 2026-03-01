@@ -1,22 +1,63 @@
 @import "tailwindcss";
 
-:root {
-  --background: #09090b;
-  --foreground: #fafafa;
+/* ── Design tokens ─────────────────────────────────────────────────────────── */
+
+:root,
+[data-theme="dark"] {
+  --bg:          #09090b;   /* zinc-950 */
+  --fg:          #fafafa;   /* zinc-50  */
+  --card:        #18181b;   /* zinc-900 */
+  --cardBorder:  #27272a;   /* zinc-800 */
+  --muted:       #3f3f46;   /* zinc-700 */
+  --mutedFg:     #71717a;   /* zinc-500 */
+  --accent:      #4f46e5;   /* indigo-600 */
+  --accentFg:    #ffffff;
 }
 
+[data-theme="light"] {
+  --bg:          #fafafa;
+  --fg:          #09090b;
+  --card:        #ffffff;
+  --cardBorder:  #e4e4e7;   /* zinc-200 */
+  --muted:       #f4f4f5;   /* zinc-100 */
+  --mutedFg:     #52525b;   /* zinc-600 */
+  --accent:      #4f46e5;
+  --accentFg:    #ffffff;
+
+  /*
+   * Invert the Tailwind zinc palette so every existing zinc-* utility class
+   * works correctly in light mode without touching individual components.
+   * zinc-50 ↔ zinc-950, zinc-100 ↔ zinc-900, etc.
+   */
+  --color-zinc-50:  #09090b;
+  --color-zinc-100: #18181b;
+  --color-zinc-200: #27272a;
+  --color-zinc-300: #3f3f46;
+  --color-zinc-400: #52525b;
+  --color-zinc-500: #71717a;   /* midpoint — unchanged */
+  --color-zinc-600: #a1a1aa;
+  --color-zinc-700: #d4d4d8;
+  --color-zinc-800: #e4e4e7;
+  --color-zinc-900: #f4f4f5;
+  --color-zinc-950: #fafafa;
+}
+
+/* ── Base styles ───────────────────────────────────────────────────────────── */
+
 body {
-  background: var(--background);
-  color: var(--foreground);
+  background: var(--bg);
+  color: var(--fg);
   font-family: system-ui, -apple-system, sans-serif;
   min-height: 100dvh;
+  transition: background-color 0.15s ease, color 0.15s ease;
 }
 
 * {
   box-sizing: border-box;
 }
 
-/* Connect Four animations */
+/* ── Connect Four animations ───────────────────────────────────────────────── */
+
 @keyframes c4drop {
   from { transform: translateY(var(--c4-from, -300px)); }
   to   { transform: translateY(0); }
@@ -27,7 +68,8 @@ body {
   50%       { filter: brightness(1.4); }
 }
 
-/* Countdown overlay animations */
+/* ── Countdown overlay animations ─────────────────────────────────────────── */
+
 @keyframes cd-pop {
   0%   { opacity: 0; transform: scale(1.7); }
   18%  { opacity: 1; transform: scale(1);   }

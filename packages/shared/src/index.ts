@@ -37,4 +37,6 @@ export type {
   Match,
   ChatScope,
   ChatMessage,
+  LeaderboardMode,
+  LeaderboardEntry,
 } from './protocol.js';

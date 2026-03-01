@@ -1,15 +1,28 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { io, type Socket } from 'socket.io-client';
-import type { ServerToClientEvents, ClientToServerEvents, GameId, GameStats } from 'shared';
+import type { ServerToClientEvents, ClientToServerEvents, LeaderboardEntry, LeaderboardMode, GameId } from 'shared';
 
 type LBSocket = Socket<ServerToClientEvents, ClientToServerEvents>;
-export type AllStats = Record<GameId, GameStats>;
+
+export type LBTab = 'overall' | 'tictactoe' | 'connect4';
+
+const PLAYER_TOKEN_KEY = 'wg_player_token';
+const NICKNAME_KEY     = 'wg_nickname';
+
+function tabToPayload(tab: LBTab): { mode: LeaderboardMode; gameId?: GameId } {
+  if (tab === 'overall') return { mode: 'overall' };
+  return { mode: 'game', gameId: tab as GameId };
+}
 
 export function useLeaderboard(wsUrl: string) {
-  const [stats, setStats] = useState<AllStats | null>(null);
+  const [entries, setEntries] = useState<LeaderboardEntry[]>([]);
   const [connected, setConnected] = useState(false);
+  const [tab, setTab] = useState<LBTab>('overall');
+  const socketRef = useRef<LBSocket | null>(null);
+  const tabRef = useRef<LBTab>(tab);
+  tabRef.current = tab;
 
   useEffect(() => {
     const socket: LBSocket = io(wsUrl, {
@@ -19,17 +32,35 @@ export function useLeaderboard(wsUrl: string) {
       reconnectionDelayMax: 10_000,
       reconnectionAttempts: Infinity,
     });
+    socketRef.current = socket;
 
-    socket.connect();
     socket.on('connect', () => {
       setConnected(true);
-      socket.emit('get_all_stats');
+      // Identify so server can mark our own row with isYou=true
+      const token    = localStorage.getItem(PLAYER_TOKEN_KEY) ?? '';
+      const nickname = localStorage.getItem(NICKNAME_KEY) ?? '';
+      if (token) socket.emit('identify', { playerToken: token, nickname });
+      socket.emit('leaderboard_get', tabToPayload(tabRef.current));
     });
     socket.on('disconnect', () => setConnected(false));
-    socket.on('all_stats', ({ statsByGameId }) => setStats(statsByGameId as AllStats));
+    socket.on('leaderboard_data', ({ entries: e }) => setEntries(e));
+    // Re-fetch automatically whenever any game ends (all_stats is broadcast to all sockets)
+    socket.on('all_stats', () => {
+      socket.emit('leaderboard_get', tabToPayload(tabRef.current));
+    });
 
-    return () => { socket.disconnect(); };
+    socket.connect();
+    return () => {
+      socket.disconnect();
+      socketRef.current = null;
+    };
   }, [wsUrl]);
 
-  return { stats, connected };
+  const changeTab = useCallback((newTab: LBTab) => {
+    setTab(newTab);
+    const s = socketRef.current;
+    if (s?.connected) s.emit('leaderboard_get', tabToPayload(newTab));
+  }, []);
+
+  return { entries, connected, tab, changeTab };
 }
