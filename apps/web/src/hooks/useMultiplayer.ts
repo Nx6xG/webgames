@@ -12,6 +12,8 @@ import type {
   RoomPlayerInfo,
   RoomVisibility,
   Match,
+  ChatMessage,
+  ChatScope,
 } from 'shared';
 
 type GameSocket = Socket<ServerToClientEvents, ClientToServerEvents>;
@@ -45,6 +47,12 @@ export interface MultiplayerState<TState extends AnyGameState = AnyGameState> {
   myNickname: string;
   /** Current countdown label ('3'|'2'|'1'|'Go!'|null). Non-null while pre-game countdown is running. */
   matchCountdown: string | null;
+  /** Chat messages for the current room (cleared on leave). */
+  roomMessages: ChatMessage[];
+  /** Platform-wide global chat messages. */
+  globalMessages: ChatMessage[];
+  /** Non-null when the server rejected a chat action. Auto-clears after 4 s. */
+  chatError: string | null;
 }
 
 export interface MultiplayerActions {
@@ -56,6 +64,10 @@ export interface MultiplayerActions {
   sendAction: (action: AnyGameAction) => void;
   requestRematch: () => void;
   clearError: () => void;
+  /** Send a chat message to 'room' or 'global' scope. */
+  sendChat: (scope: ChatScope, message: string) => void;
+  /** Update this player's global nickname. Validated and confirmed by server. */
+  setNickname: (nickname: string) => void;
 }
 
 function makeLobbyState<TState extends AnyGameState>(): MultiplayerState<TState> {
@@ -77,6 +89,9 @@ function makeLobbyState<TState extends AnyGameState>(): MultiplayerState<TState>
     history: [],
     myNickname: '',
     matchCountdown: null,
+    roomMessages: [],
+    globalMessages: [],
+    chatError: null,
   };
 }
 
@@ -313,6 +328,34 @@ export function useMultiplayer<TState extends AnyGameState = AnyGameState>(
       setTimeout(() => set((prev) => ({ ...prev, rematchError: null })), 4000);
     });
 
+    socket.on('chat_history', ({ scope, messages }) => {
+      if (scope === 'global') {
+        set((prev) => ({ ...prev, globalMessages: messages }));
+      } else {
+        set((prev) => ({ ...prev, roomMessages: messages }));
+      }
+    });
+
+    socket.on('chat_message', ({ message }) => {
+      set((prev) => {
+        if (message.scope === 'global') {
+          return { ...prev, globalMessages: [...prev.globalMessages, message].slice(-100) };
+        }
+        return { ...prev, roomMessages: [...prev.roomMessages, message].slice(-50) };
+      });
+    });
+
+    socket.on('nickname_set', ({ nickname }) => {
+      nicknameRef.current = nickname;
+      if (typeof window !== 'undefined') localStorage.setItem(NICK_KEY, nickname);
+      set((prev) => ({ ...prev, myNickname: nickname }));
+    });
+
+    socket.on('chat_error', ({ message }) => {
+      set((prev) => ({ ...prev, chatError: message }));
+      setTimeout(() => set((prev) => ({ ...prev, chatError: null })), 4000);
+    });
+
     return () => {
       cdTimersRef.current.forEach(clearTimeout);
       socket.disconnect();
@@ -345,7 +388,7 @@ export function useMultiplayer<TState extends AnyGameState = AnyGameState>(
     if (socketRef.current && code) {
       socketRef.current.emit('leave_room', { roomCode: code });
     }
-    set((prev) => ({ ...makeLobbyState<TState>(), connection: prev.connection, stats: prev.stats, history: prev.history, myNickname: prev.myNickname }));
+    set((prev) => ({ ...makeLobbyState<TState>(), connection: prev.connection, stats: prev.stats, history: prev.history, myNickname: prev.myNickname, globalMessages: prev.globalMessages }));
   }, []);
 
   const sendAction = useCallback((action: AnyGameAction) => {
@@ -371,5 +414,24 @@ export function useMultiplayer<TState extends AnyGameState = AnyGameState>(
 
   const clearError = useCallback(() => set((prev) => ({ ...prev, error: null })), []);
 
-  return { ...s, createRoom, joinRoom, quickPlay, leaveRoom, sendAction, requestRematch, clearError };
+  const sendChat = useCallback((scope: ChatScope, message: string) => {
+    const trimmed = message.trim();
+    if (!trimmed) return;
+    socketRef.current?.emit('chat_send', {
+      scope,
+      roomCode: roomCodeRef.current ?? undefined,
+      message: trimmed,
+    });
+  }, []);
+
+  const setNickname = useCallback((nickname: string) => {
+    const trimmed = nickname.trim().slice(0, 16);
+    if (trimmed.length < 2) return;
+    nicknameRef.current = trimmed;
+    if (typeof window !== 'undefined') localStorage.setItem(NICK_KEY, trimmed);
+    set((prev) => ({ ...prev, myNickname: trimmed }));
+    socketRef.current?.emit('set_nickname', { nickname: trimmed });
+  }, []);
+
+  return { ...s, createRoom, joinRoom, quickPlay, leaveRoom, sendAction, requestRematch, clearError, sendChat, setNickname };
 }

@@ -1,4 +1,5 @@
 import { createServer } from 'node:http';
+import { randomUUID } from 'node:crypto';
 import { Server } from 'socket.io';
 import type { ServerToClientEvents, ClientToServerEvents } from 'shared';
 import { roomManager } from './rooms.js';
@@ -6,8 +7,12 @@ import { engineRegistry } from './engineRegistry.js';
 import { rateLimiter } from './rateLimiter.js';
 import { getStats, getAllStats, recordResult } from './stats.js';
 import { addMatch, getHistory } from './matchHistory.js';
-import type { RoomPlayerInfo, OpenRoomInfo, PublicRoomListItem, GameId, Match, ActionErrorCode } from 'shared';
+import type { RoomPlayerInfo, OpenRoomInfo, PublicRoomListItem, GameId, Match, ActionErrorCode, ChatMessage } from 'shared';
 import type { Room } from './rooms.js';
+import { InMemoryStorage } from './storage/inMemory.js';
+import type { Storage } from './storage/types.js';
+
+const storage: Storage = new InMemoryStorage();
 
 function roomPlayers(room: Room): RoomPlayerInfo[] {
   return room.players
@@ -76,6 +81,49 @@ function getPublicRoomList(): PublicRoomListItem[] {
   return items;
 }
 
+// ── Chat ──────────────────────────────────────────────────────────────────────
+
+/** playerToken → profile (nickname) */
+const profiles = new Map<string, { nickname: string }>();
+/** Global chat buffer — last 100 messages */
+const globalChat: ChatMessage[] = [];
+/** roomCode → chat buffer — last 50 messages */
+const roomChats = new Map<string, ChatMessage[]>();
+/** playerToken → recent message timestamps (sliding-window rate limiter) */
+const chatTimestamps = new Map<string, number[]>();
+/** socketId → playerToken for ALL identified sockets (not just room players) */
+const identifiedTokens = new Map<string, string>();
+
+const CHAT_RATE_MSGS = 5;
+const CHAT_RATE_WINDOW_MS = 10_000;
+const GLOBAL_CHAT_BUF = 100;
+const ROOM_CHAT_BUF = 50;
+const MSG_MAX_LEN = 200;
+
+function sanitizeNickname(raw: string): string | null {
+  const cleaned = raw.trim().slice(0, 16);
+  if (cleaned.length < 2) return null;
+  if (!/^[a-zA-Z0-9 _-]+$/.test(cleaned)) return null;
+  return cleaned;
+}
+
+function sanitizeMessage(raw: string): string | null {
+  const cleaned = raw.trim().slice(0, MSG_MAX_LEN);
+  return cleaned.length > 0 ? cleaned : null;
+}
+
+function canChat(token: string): boolean {
+  const now = Date.now();
+  const cutoff = now - CHAT_RATE_WINDOW_MS;
+  const times = (chatTimestamps.get(token) ?? []).filter((t) => t > cutoff);
+  if (times.length >= CHAT_RATE_MSGS) return false;
+  times.push(now);
+  chatTimestamps.set(token, times);
+  return true;
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+
 const PORT = Number(process.env.PORT ?? 3001);
 const WEB_ORIGIN = process.env.WEB_ORIGIN ?? 'http://localhost:3000';
 
@@ -113,6 +161,8 @@ roomManager.onRoomCleaned((room) => {
   // Kick any remaining spectators from the Socket.IO room channel
   io.in(room.code).socketsLeave(room.code);
   if (room.visibility === 'public') broadcastOpenRooms();
+  // Free the room's chat buffer
+  roomChats.delete(room.code);
 });
 
 // ── Per-connection logic ──────────────────────────────────────────────────────
@@ -120,11 +170,19 @@ roomManager.onRoomCleaned((room) => {
 io.on('connection', (socket) => {
   console.log(`[+] ${socket.id}`);
 
+  // Every socket joins the global chat channel and receives history
+  socket.join('global');
+  socket.emit('chat_history', { scope: 'global', messages: globalChat });
+
   // ── identify ──────────────────────────────────────────────────────────────
   // Sent by the client immediately after connecting.
   // Restores the player's seat if their token matches a live session.
   socket.on('identify', ({ playerToken, nickname }) => {
+    identifiedTokens.set(socket.id, playerToken);
     nicknameMap.set(socket.id, nickname);
+    // Initialise profile from the stored nickname if no profile exists yet
+    if (!profiles.has(playerToken)) profiles.set(playerToken, { nickname });
+
     const result = roomManager.claimSession(playerToken, socket.id, nickname);
     if (!result) return; // no live session → client stays in lobby
 
@@ -140,6 +198,9 @@ io.on('connection', (socket) => {
       state: room.state,
       players: roomPlayers(room),
     });
+
+    // Send room chat history so the rejoining player catches up
+    socket.emit('chat_history', { scope: 'room', messages: roomChats.get(room.code) ?? [] });
 
     // Notify others in the room
     socket.to(room.code).emit('player_rejoined', {
@@ -170,6 +231,10 @@ io.on('connection', (socket) => {
 
   // ── create_room ───────────────────────────────────────────────────────────
   socket.on('create_room', ({ playerToken, gameId = 'tictactoe', nickname, visibility = 'private', roomName }) => {
+    identifiedTokens.set(socket.id, playerToken);
+    nicknameMap.set(socket.id, nickname);
+    if (!profiles.has(playerToken)) profiles.set(playerToken, { nickname });
+
     // Spam protection: max PUBLIC_ROOM_RATE_LIMIT public rooms per IP per window
     if (visibility === 'public') {
       const ip = getClientIp(socket.handshake as { headers: Record<string, string | string[] | undefined>; address: string });
@@ -195,12 +260,18 @@ io.on('connection', (socket) => {
     const room = roomManager.createRoom(socket.id, playerToken, gameId, nickname, visibility, sanitizedName);
     socket.join(room.code);
     socket.emit('room_created', { roomCode: room.code, playerIndex: 0, gameId: room.gameId, players: roomPlayers(room) });
+    // Empty history for the brand-new room
+    socket.emit('chat_history', { scope: 'room', messages: [] });
     if (visibility === 'public') broadcastOpenRooms();
     console.log(`[room] created ${room.code} (${room.gameId}, ${visibility}${sanitizedName ? `: ${sanitizedName}` : ''})`);
   });
 
   // ── join_room ─────────────────────────────────────────────────────────────
   socket.on('join_room', ({ roomCode, playerToken, nickname }) => {
+    identifiedTokens.set(socket.id, playerToken);
+    nicknameMap.set(socket.id, nickname);
+    if (!profiles.has(playerToken)) profiles.set(playerToken, { nickname });
+
     const code = roomCode.toUpperCase().trim();
 
     // Check if this token already owns a seat in this room (reconnect via join_room)
@@ -217,6 +288,7 @@ io.on('connection', (socket) => {
         state: room.state,
         players: roomPlayers(room),
       });
+      socket.emit('chat_history', { scope: 'room', messages: roomChats.get(code) ?? [] });
       socket.to(code).emit('player_rejoined', {
         playerId: socket.id,
         playerIndex: player.index,
@@ -274,6 +346,7 @@ io.on('connection', (socket) => {
         state,
         players: roomPlayers(room),
       });
+      socket.emit('chat_history', { scope: 'room', messages: roomChats.get(code) ?? [] });
       socket.to(code).emit('player_joined', {
         playerId: socket.id,
         playerIndex: 1,
@@ -307,6 +380,7 @@ io.on('connection', (socket) => {
       state: room.state,
       players: roomPlayers(room),
     });
+    socket.emit('chat_history', { scope: 'room', messages: roomChats.get(code) ?? [] });
     io.to(code).emit('spectator_count_changed', { spectatorCount: room.spectators.size });
     console.log(`[room] ${socket.id} joined ${code} as spectator`);
   });
@@ -488,6 +562,10 @@ io.on('connection', (socket) => {
 
   // ── quick_play ────────────────────────────────────────────────────────────
   socket.on('quick_play', ({ gameId, playerToken, nickname }) => {
+    identifiedTokens.set(socket.id, playerToken);
+    nicknameMap.set(socket.id, nickname);
+    if (!profiles.has(playerToken)) profiles.set(playerToken, { nickname });
+
     // Leave any current room first (same as create_room)
     const existing = roomManager.getRoomBySocket(socket.id);
     if (existing) {
@@ -530,6 +608,7 @@ io.on('connection', (socket) => {
             state,
             players: roomPlayers(room),
           });
+          socket.emit('chat_history', { scope: 'room', messages: roomChats.get(entry.roomCode) ?? [] });
           socket.emit('quick_play_joined', { roomCode: entry.roomCode });
           socket.to(entry.roomCode).emit('player_joined', {
             playerId: socket.id,
@@ -560,6 +639,7 @@ io.on('connection', (socket) => {
       gameId: room.gameId,
       players: roomPlayers(room),
     });
+    socket.emit('chat_history', { scope: 'room', messages: [] });
     socket.emit('quick_play_joined', { roomCode: room.code });
     console.log(`[quick-play] ${socket.id} waiting in ${room.code} (${gameId})`);
   });
@@ -569,11 +649,90 @@ io.on('connection', (socket) => {
     handleLeave(roomCode.toUpperCase().trim());
   });
 
+  // ── set_nickname ──────────────────────────────────────────────────────────
+  socket.on('set_nickname', ({ nickname }) => {
+    const token = identifiedTokens.get(socket.id);
+    if (!token) return;
+
+    const clean = sanitizeNickname(nickname);
+    if (!clean) {
+      socket.emit('chat_error', { message: 'Nickname must be 2–16 characters (letters, numbers, spaces, _ or -).' });
+      return;
+    }
+
+    profiles.set(token, { nickname: clean });
+    nicknameMap.set(socket.id, clean);
+    socket.emit('nickname_set', { nickname: clean });
+
+    // Update nickname in any room the player is currently in
+    const room = roomManager.getRoomBySocket(socket.id);
+    if (room) {
+      const player = roomManager.getPlayer(room, socket.id);
+      if (player) {
+        player.nickname = clean;
+        io.to(room.code).emit('room_profile', { playerToken: token, nickname: clean });
+      }
+    }
+  });
+
+  // ── chat_send ─────────────────────────────────────────────────────────────
+  socket.on('chat_send', ({ scope, roomCode: targetRoom, message }) => {
+    const token = identifiedTokens.get(socket.id);
+    if (!token) return;
+
+    const clean = sanitizeMessage(message);
+    if (!clean) {
+      socket.emit('chat_error', { message: 'Message cannot be empty.' });
+      return;
+    }
+
+    if (!canChat(token)) {
+      socket.emit('chat_error', { message: 'You are sending messages too fast. Please wait.' });
+      return;
+    }
+
+    const profile = profiles.get(token);
+    const nickname = profile?.nickname ?? nicknameMap.get(socket.id) ?? 'Unknown';
+
+    const msg: ChatMessage = {
+      id: randomUUID(),
+      scope,
+      playerToken: token,
+      nickname,
+      message: clean,
+      ts: Date.now(),
+    };
+
+    if (scope === 'global') {
+      globalChat.push(msg);
+      if (globalChat.length > GLOBAL_CHAT_BUF) globalChat.shift();
+      io.to('global').emit('chat_message', { message: msg });
+    } else {
+      // Room-scoped message
+      const code = (targetRoom?.toUpperCase().trim()) || roomManager.getRoomBySocket(socket.id)?.code;
+      if (!code) {
+        socket.emit('chat_error', { message: 'You are not in a room.' });
+        return;
+      }
+      if (!socket.rooms.has(code)) {
+        socket.emit('chat_error', { message: 'Not authorised to chat in that room.' });
+        return;
+      }
+      msg.roomCode = code;
+      let buf = roomChats.get(code);
+      if (!buf) { buf = []; roomChats.set(code, buf); }
+      buf.push(msg);
+      if (buf.length > ROOM_CHAT_BUF) buf.shift();
+      io.to(code).emit('chat_message', { message: msg });
+    }
+  });
+
   // ── disconnect ────────────────────────────────────────────────────────────
   socket.on('disconnect', () => {
     console.log(`[-] ${socket.id}`);
     rateLimiter.clear(socket.id);
     nicknameMap.delete(socket.id);
+    identifiedTokens.delete(socket.id);
     handleLeave();
   });
 

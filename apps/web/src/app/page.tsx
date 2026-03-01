@@ -1,6 +1,7 @@
 import Link from 'next/link';
 import { webRegistry } from '@/lib/gameRegistry';
 import type { WebGameEntry } from '@/lib/gameRegistry';
+import { GlobalChatWidget } from '@/components/chat/GlobalChatWidget';
 
 const CATEGORY_COLORS: Record<string, string> = {
   classic: 'bg-amber-900/40 text-amber-300 border-amber-800',
@@ -105,6 +106,8 @@ export default function HomePage() {
           ))}
         </div>
       </section>
+
+      <GlobalChatWidget />
     </main>
   );
 }

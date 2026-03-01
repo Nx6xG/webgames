@@ -35,4 +35,6 @@ export type {
   PublicRoomListItem,
   RoomVisibility,
   Match,
+  ChatScope,
+  ChatMessage,
 } from './protocol.js';

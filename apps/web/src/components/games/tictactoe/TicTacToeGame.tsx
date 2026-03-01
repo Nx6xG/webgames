@@ -7,9 +7,10 @@ import type { TicTacToeState } from 'shared';
 import { useMultiplayer } from '@/hooks/useMultiplayer';
 import type { GameComponentProps } from '@/lib/gameRegistry';
 import { TicTacToeBoard } from './TicTacToeBoard';
-import { StatsCard } from '@/components/StatsCard';
-import { MatchHistoryCard } from '@/components/MatchHistoryCard';
 import { CountdownOverlay } from '@/components/CountdownOverlay';
+import { ChatPanel } from '@/components/chat/ChatPanel';
+import { NicknameEditor } from '@/components/NicknameEditor';
+import { GameInfoModal } from '@/components/GameInfoModal';
 
 export function TicTacToeGame({ wsUrl, gameId, initialRoomCode, quickPlay: isQuickPlay }: GameComponentProps) {
   const router = useRouter();
@@ -18,6 +19,10 @@ export function TicTacToeGame({ wsUrl, gameId, initialRoomCode, quickPlay: isQui
   const [copied, setCopied] = useState(false);
   const [roomVisibility, setRoomVisibility] = useState<'private' | 'public'>('private');
   const [roomName, setRoomName] = useState('');
+  const [showInfo, setShowInfo] = useState(false);
+  const [chatOpen, setChatOpen] = useState(false);
+  const [unread, setUnread] = useState(0);
+  const prevTotalRef = useRef<number | null>(null);
   const autoJoined = useRef(false);
 
   // Auto-join when arriving from invite link
@@ -42,6 +47,20 @@ export function TicTacToeGame({ wsUrl, gameId, initialRoomCode, quickPlay: isQui
       router.replace(`/games/${gameId}?room=${mp.roomCode}`);
     }
   }, [mp.roomCode]); // eslint-disable-line
+
+  // Track unread messages while chat is collapsed
+  useEffect(() => {
+    const total = mp.roomMessages.length + mp.globalMessages.length;
+    if (prevTotalRef.current === null) {
+      prevTotalRef.current = total;
+      return;
+    }
+    if (!chatOpen && total > prevTotalRef.current) {
+      setUnread((u) => u + (total - prevTotalRef.current!));
+    }
+    prevTotalRef.current = total;
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [mp.roomMessages.length, mp.globalMessages.length]);
 
   const myMark = mp.playerIndex !== null ? (mp.playerIndex === 0 ? 'X' : 'O') : null;
   const gs = mp.gameState;
@@ -190,10 +209,10 @@ export function TicTacToeGame({ wsUrl, gameId, initialRoomCode, quickPlay: isQui
       </div>
 
       {/* ── Side panel ─────────────────────────────────────────────────────── */}
-      <aside className="lg:w-72 flex flex-col gap-4">
+      <aside className="lg:w-72 flex flex-col gap-3">
 
         {/* Connection status */}
-        <div className="rounded-xl border border-zinc-800 bg-zinc-900 p-4">
+        <div className="rounded-xl border border-zinc-800 bg-zinc-900 px-4 py-3">
           <div className="flex items-center gap-2 text-xs">
             <span className={`w-2 h-2 rounded-full ${
               mp.connection === 'connected' ? 'bg-emerald-400' :
@@ -219,16 +238,12 @@ export function TicTacToeGame({ wsUrl, gameId, initialRoomCode, quickPlay: isQui
               <span className="w-2 h-2 rounded-full bg-amber-400 animate-pulse" />
               {mp.connection !== 'connected' ? 'Connecting…' : 'Finding a match…'}
             </div>
-            <Link
-              href={`/games/${gameId}`}
-              className="text-xs text-zinc-500 hover:text-zinc-300 transition-colors"
-            >
+            <Link href={`/games/${gameId}`} className="text-xs text-zinc-500 hover:text-zinc-300 transition-colors">
               Cancel
             </Link>
           </div>
         ) : mp.phase === 'lobby' ? (
           <div className="rounded-xl border border-zinc-800 bg-zinc-900 p-4 flex flex-col gap-3">
-            {/* Visibility toggle */}
             <div className="flex gap-1 p-1 bg-zinc-800 rounded-lg">
               {(['private', 'public'] as const).map((v) => (
                 <button
@@ -242,7 +257,6 @@ export function TicTacToeGame({ wsUrl, gameId, initialRoomCode, quickPlay: isQui
                 </button>
               ))}
             </div>
-            {/* Room name (public only) */}
             {roomVisibility === 'public' && (
               <input
                 value={roomName}
@@ -283,14 +297,10 @@ export function TicTacToeGame({ wsUrl, gameId, initialRoomCode, quickPlay: isQui
           <div className="rounded-xl border border-zinc-800 bg-zinc-900 p-4 flex flex-col gap-3">
             <p className="text-xs text-zinc-500 uppercase tracking-wider font-semibold">Room</p>
             <div className="flex items-center gap-2">
-              <span className="font-mono text-2xl font-black tracking-widest text-zinc-100">
-                {mp.roomCode}
-              </span>
+              <span className="font-mono text-2xl font-black tracking-widest text-zinc-100">{mp.roomCode}</span>
               <span className="text-xs text-zinc-500">{mp.playerCount}/2</span>
               {mp.spectatorCount > 0 && (
-                <span className="text-xs text-zinc-600 ml-1">
-                  {mp.spectatorCount} watching
-                </span>
+                <span className="text-xs text-zinc-600 ml-1">{mp.spectatorCount} watching</span>
               )}
             </div>
             <button
@@ -298,19 +308,9 @@ export function TicTacToeGame({ wsUrl, gameId, initialRoomCode, quickPlay: isQui
               className="w-full py-2 rounded-lg border border-zinc-700 hover:border-indigo-600 text-sm text-zinc-300 hover:text-indigo-300 transition-colors flex items-center justify-center gap-2"
             >
               {copied ? (
-                <>
-                  <svg className="w-4 h-4 text-emerald-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                    <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
-                  </svg>
-                  <span className="text-emerald-400">Copied!</span>
-                </>
+                <><svg className="w-4 h-4 text-emerald-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" /></svg><span className="text-emerald-400">Copied!</span></>
               ) : (
-                <>
-                  <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                    <path strokeLinecap="round" strokeLinejoin="round" d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" />
-                  </svg>
-                  Copy invite link
-                </>
+                <><svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" /></svg>Copy invite link</>
               )}
             </button>
             {mp.players.length > 0 && (
@@ -334,26 +334,55 @@ export function TicTacToeGame({ wsUrl, gameId, initialRoomCode, quickPlay: isQui
           </div>
         )}
 
-        {/* Stats */}
-        <StatsCard
-          stats={mp.stats}
-          playerIndex={mp.isSpectator ? null : mp.playerIndex}
+        {/* Nickname */}
+        <NicknameEditor nickname={mp.myNickname} onSave={mp.setNickname} />
+
+        {/* Chat — collapsible */}
+        <ChatPanel
+          mode="both"
+          roomCode={mp.roomCode}
+          roomMessages={mp.roomMessages}
+          globalMessages={mp.globalMessages}
+          chatError={mp.chatError}
+          onSend={mp.sendChat}
+          collapsible
+          defaultOpen={false}
+          open={chatOpen}
+          onOpenChange={(o) => { setChatOpen(o); if (o) setUnread(0); }}
+          showUnreadBadge
+          unreadCount={unread}
+          className="rounded-xl border border-zinc-800 bg-zinc-900"
         />
 
-        {/* Match history */}
-        <MatchHistoryCard history={mp.history} myNickname={mp.myNickname} />
+        {/* Game Info button */}
+        <button
+          onClick={() => setShowInfo(true)}
+          className="flex items-center gap-1.5 text-xs text-zinc-500 hover:text-zinc-200 transition-colors self-start px-1"
+        >
+          <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+            <path strokeLinecap="round" strokeLinejoin="round" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+          </svg>
+          Stats &amp; Rules
+        </button>
+      </aside>
 
-        {/* Rules */}
-        <div className="rounded-xl border border-zinc-800 bg-zinc-900 p-4">
-          <p className="text-xs text-zinc-500 uppercase tracking-wider font-semibold mb-3">Rules</p>
+      {/* Game Info modal (Stats + Rules + History) */}
+      <GameInfoModal
+        open={showInfo}
+        onClose={() => setShowInfo(false)}
+        stats={mp.stats}
+        playerIndex={mp.isSpectator ? null : mp.playerIndex}
+        history={mp.history}
+        myNickname={mp.myNickname}
+        rules={
           <ul className="text-sm text-zinc-400 space-y-1.5 list-disc list-inside">
             <li>Two players take turns placing marks</li>
             <li>First to get 3 in a row wins</li>
             <li>Rows, columns, and diagonals count</li>
             <li>If the board fills up with no winner, it&apos;s a draw</li>
           </ul>
-        </div>
-      </aside>
+        }
+      />
     </div>
   );
 }

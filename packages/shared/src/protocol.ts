@@ -53,6 +53,21 @@ export interface PublicRoomListItem {
   createdAt: number;
 }
 
+// ─── Chat ────────────────────────────────────────────────────────────────────
+
+export type ChatScope = 'room' | 'global';
+
+export interface ChatMessage {
+  id: string;
+  scope: ChatScope;
+  /** Only set for room-scoped messages */
+  roomCode?: string;
+  playerToken: string;
+  nickname: string;
+  message: string;
+  ts: number;
+}
+
 // ─── Stats ───────────────────────────────────────────────────────────────────
 
 export interface GameStats {
@@ -191,6 +206,21 @@ export interface ServerToClientEvents {
 
   /** Sent when both players are in the room, before moves are allowed */
   match_starting: (data: { startsInMs: number }) => void;
+
+  /** Emitted to the sender after a successful set_nickname */
+  nickname_set: (data: { nickname: string }) => void;
+
+  /** Broadcast to a room when a player's nickname changes */
+  room_profile: (data: { playerToken: string; nickname: string }) => void;
+
+  /** A single new chat message broadcast to scope members */
+  chat_message: (data: { message: ChatMessage }) => void;
+
+  /** Bulk history sent on join/rejoin (global on connect, room on join) */
+  chat_history: (data: { scope: ChatScope; messages: ChatMessage[] }) => void;
+
+  /** Emitted to the sender when a chat operation fails */
+  chat_error: (data: { message: string }) => void;
 }
 
 // ─── Client → Server ─────────────────────────────────────────────────────────
@@ -231,4 +261,10 @@ export interface ClientToServerEvents {
    * Always replies with quick_play_joined { roomCode }.
    */
   quick_play: (data: { gameId: GameId; playerToken: string; nickname: string }) => void;
+
+  /** Update the player's global display name. Server replies with nickname_set or chat_error. */
+  set_nickname: (data: { nickname: string }) => void;
+
+  /** Send a chat message to scope 'room' or 'global'. */
+  chat_send: (data: { scope: ChatScope; roomCode?: string; message: string }) => void;
 }
