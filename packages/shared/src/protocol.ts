@@ -1,5 +1,6 @@
 import type { TicTacToeState, TicTacToeAction } from './games/tictactoe.js';
 import type { Connect4State, Connect4Action } from './games/connect4.js';
+import type { RpsState, RpsAction } from './games/rps.js';
 import type { GameId } from './registry.js';
 
 // ─── Game-state / action unions ───────────────────────────────────────────────
@@ -7,10 +8,10 @@ import type { GameId } from './registry.js';
 // the rest of the code stays unchanged.
 
 /** Union of all possible game states across every registered game. */
-export type AnyGameState = TicTacToeState | Connect4State;
+export type AnyGameState = TicTacToeState | Connect4State | RpsState;
 
 /** Union of all possible game actions across every registered game. */
-export type AnyGameAction = TicTacToeAction | Connect4Action;
+export type AnyGameAction = TicTacToeAction | Connect4Action | RpsAction;
 
 // ─── Nickname / players ───────────────────────────────────────────────────────
 
@@ -113,6 +114,7 @@ export type ActionErrorCode =
   | 'INVALID_POSITION'
   | 'INVALID_ACTION'
   | 'GAME_OVER'
+  | 'ALREADY_PICKED'
   | 'RATE_LIMITED';
 
 export type RematchErrorCode =

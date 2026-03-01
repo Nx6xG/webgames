@@ -2,6 +2,7 @@ import type { ComponentType } from 'react';
 import type { GameId, GameManifest } from 'shared';
 import { TicTacToeGame } from '@/components/games/tictactoe/TicTacToeGame';
 import { Connect4Game } from '@/components/games/connect4/Connect4Game';
+import { RpsGame } from '@/components/games/rps/RpsGame';
 
 /**
  * Props every game component must accept.
@@ -62,5 +63,18 @@ export const webRegistry: Record<GameId, WebGameEntry> = {
       maxPlayers: 2,
     },
     Component: Connect4Game,
+  },
+  rps: {
+    manifest: {
+      id: 'rps',
+      name: 'Rock Paper Scissors',
+      description: 'Choose your weapon in this simultaneous best-of-3 showdown!',
+      categories: ['classic', '2 players', 'multiplayer'],
+      version: '1.0.0',
+      routeSlug: 'rps',
+      minPlayers: 2,
+      maxPlayers: 2,
+    },
+    Component: RpsGame,
   },
 };

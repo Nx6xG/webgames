@@ -22,6 +22,13 @@ export type {
   DropAction,
 } from './games/connect4.js';
 export type {
+  RpsState,
+  RpsPick,
+  RpsAction,
+  RpsPlayer,
+  RpsPickAction,
+} from './games/rps.js';
+export type {
   AnyGameState,
   AnyGameAction,
   ServerToClientEvents,

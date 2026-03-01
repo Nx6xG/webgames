@@ -1,6 +1,7 @@
 import type { GameId, GameEngine } from 'shared';
 import { ticTacToeEngine } from './engines/tictactoe.js';
 import { connect4Engine } from './engines/connect4.js';
+import { rpsEngine } from './engines/rps.js';
 
 /**
  * Maps every GameId to its authoritative server-side engine.
@@ -12,5 +13,6 @@ import { connect4Engine } from './engines/connect4.js';
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 export const engineRegistry: Record<GameId, GameEngine<any, any>> = {
   tictactoe: ticTacToeEngine,
-  connect4: connect4Engine,
+  connect4:  connect4Engine,
+  rps:       rpsEngine,
 };
