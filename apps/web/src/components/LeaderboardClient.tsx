@@ -2,12 +2,7 @@
 
 import { useLeaderboard } from '@/hooks/useLeaderboard';
 import type { LBTab } from '@/hooks/useLeaderboard';
-
-const TABS: { key: LBTab; label: string }[] = [
-  { key: 'overall',   label: 'Overall'     },
-  { key: 'tictactoe', label: 'Tic-Tac-Toe' },
-  { key: 'connect4',  label: 'Connect Four' },
-];
+import { useI18n } from '@/components/providers/LanguageProvider';
 
 const RANK_MEDAL: Record<number, string> = { 1: '🥇', 2: '🥈', 3: '🥉' };
 
@@ -17,6 +12,13 @@ function fmt(winrate: number) {
 
 export function LeaderboardClient({ wsUrl }: { wsUrl: string }) {
   const { entries, connected, tab, changeTab } = useLeaderboard(wsUrl);
+  const { t } = useI18n();
+
+  const TABS: { key: LBTab; label: string }[] = [
+    { key: 'overall',   label: t('leaderboard.overall') },
+    { key: 'tictactoe', label: 'Tic-Tac-Toe' },
+    { key: 'connect4',  label: 'Connect Four' },
+  ];
 
   return (
     <main className="min-h-screen bg-[var(--bg)] text-[var(--fg)]">
@@ -26,12 +28,12 @@ export function LeaderboardClient({ wsUrl }: { wsUrl: string }) {
         <div className="mb-10 flex items-end justify-between gap-4">
           <div>
             <p className="text-xs font-semibold uppercase tracking-widest text-zinc-500 mb-2">Platform</p>
-            <h1 className="text-4xl font-black tracking-tight">Leaderboard</h1>
+            <h1 className="text-4xl font-black tracking-tight">{t('leaderboard.title')}</h1>
             <p className="text-zinc-400 mt-2 text-sm">Top players ranked by total wins.</p>
           </div>
           <div className="flex items-center gap-2 text-xs shrink-0">
             <span className={`w-2 h-2 rounded-full ${connected ? 'bg-emerald-400 animate-pulse' : 'bg-zinc-600'}`} />
-            <span className="text-zinc-500">{connected ? 'Live' : 'Connecting…'}</span>
+            <span className="text-zinc-500">{connected ? 'Live' : t('status.connecting')}</span>
           </div>
         </div>
 
@@ -59,17 +61,17 @@ export function LeaderboardClient({ wsUrl }: { wsUrl: string }) {
               <tr className="bg-[var(--card)]">
                 <th className="py-3 px-4 text-left   text-xs uppercase tracking-wider text-zinc-500 font-semibold w-16">Rank</th>
                 <th className="py-3 px-4 text-left   text-xs uppercase tracking-wider text-zinc-500 font-semibold">Player</th>
-                <th className="py-3 px-4 text-center text-xs uppercase tracking-wider text-zinc-500 font-semibold">Wins</th>
-                <th className="py-3 px-4 text-center text-xs uppercase tracking-wider text-zinc-500 font-semibold">Games</th>
-                <th className="py-3 px-4 text-center text-xs uppercase tracking-wider text-zinc-500 font-semibold">Win %</th>
-                <th className="py-3 px-4 text-center text-xs uppercase tracking-wider text-zinc-500 font-semibold">Streak</th>
+                <th className="py-3 px-4 text-center text-xs uppercase tracking-wider text-zinc-500 font-semibold">{t('leaderboard.wins')}</th>
+                <th className="py-3 px-4 text-center text-xs uppercase tracking-wider text-zinc-500 font-semibold">{t('leaderboard.games')}</th>
+                <th className="py-3 px-4 text-center text-xs uppercase tracking-wider text-zinc-500 font-semibold">{t('leaderboard.winrate')}</th>
+                <th className="py-3 px-4 text-center text-xs uppercase tracking-wider text-zinc-500 font-semibold">{t('leaderboard.streak')}</th>
               </tr>
             </thead>
             <tbody className="bg-[var(--bg)]">
               {entries.length === 0 ? (
                 <tr>
                   <td colSpan={6} className="py-16 text-center text-zinc-600 text-sm">
-                    {connected ? 'No games played yet — be the first!' : 'Connecting…'}
+                    {connected ? 'No games played yet — be the first!' : t('status.connecting')}
                   </td>
                 </tr>
               ) : (

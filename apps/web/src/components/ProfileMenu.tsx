@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState } from 'react';
 import { useNickname } from '@/components/providers/NicknameProvider';
+import { useI18n } from '@/components/providers/LanguageProvider';
 import { generateRandomNickname, sanitizeNickname } from '@/lib/nickname';
 
 const THEME_KEY = 'webgames:theme';
@@ -19,6 +20,7 @@ function applyTheme(t: Theme) {
 
 export function ProfileMenu() {
   const { nickname, setNickname } = useNickname();
+  const { lang, setLang, t } = useI18n();
   const [open, setOpen] = useState(false);
   const [value, setValue] = useState('');
   const [error, setError] = useState<string | null>(null);
@@ -56,9 +58,9 @@ export function ProfileMenu() {
     closeMenu();
   }
 
-  function handleTheme(t: Theme) {
-    applyTheme(t);
-    setTheme(t);
+  function handleTheme(th: Theme) {
+    applyTheme(th);
+    setTheme(th);
   }
 
   // Close on Escape
@@ -111,7 +113,7 @@ export function ProfileMenu() {
             <p className="text-xs text-zinc-500 uppercase tracking-wider font-semibold">Nickname</p>
             <button
               onClick={closeMenu}
-              aria-label="Close"
+              aria-label={t('common.close')}
               className="text-zinc-600 hover:text-zinc-300 transition-colors p-0.5 rounded"
             >
               <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
@@ -140,20 +142,20 @@ export function ProfileMenu() {
               onClick={handleSave}
               className="flex-1 py-1.5 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-semibold transition-colors"
             >
-              Save
+              {t('common.save')}
             </button>
             <button
               onClick={closeMenu}
               className="flex-1 py-1.5 rounded-lg border border-zinc-700 text-zinc-400 hover:text-zinc-200 text-xs transition-colors"
             >
-              Cancel
+              {t('common.cancel')}
             </button>
           </div>
 
           {/* ── Divider ── */}
           <div className="flex items-center gap-2 pt-1">
             <div className="flex-1 h-px bg-zinc-800" />
-            <span className="text-[10px] text-zinc-600 uppercase tracking-wider font-semibold shrink-0">Settings</span>
+            <span className="text-[10px] text-zinc-600 uppercase tracking-wider font-semibold shrink-0">{t('profile.settings')}</span>
             <div className="flex-1 h-px bg-zinc-800" />
           </div>
 
@@ -172,17 +174,37 @@ export function ProfileMenu() {
           <div className="flex items-center justify-between">
             <span className="text-xs text-zinc-500 font-medium">Theme</span>
             <div className="flex gap-0.5 p-0.5 bg-zinc-800 rounded-lg">
-              {(['dark', 'light'] as Theme[]).map((t) => (
+              {(['dark', 'light'] as Theme[]).map((th) => (
                 <button
-                  key={t}
-                  onClick={() => handleTheme(t)}
+                  key={th}
+                  onClick={() => handleTheme(th)}
                   className={`px-3 py-1 rounded-md text-xs font-semibold capitalize transition-colors ${
-                    theme === t
+                    theme === th
                       ? 'bg-zinc-700 text-zinc-100'
                       : 'text-zinc-500 hover:text-zinc-300'
                   }`}
                 >
-                  {t}
+                  {th}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {/* ── Language toggle ── */}
+          <div className="flex items-center justify-between">
+            <span className="text-xs text-zinc-500 font-medium">{t('profile.language')}</span>
+            <div className="flex gap-0.5 p-0.5 bg-zinc-800 rounded-lg">
+              {(['de', 'en'] as const).map((l) => (
+                <button
+                  key={l}
+                  onClick={() => setLang(l)}
+                  className={`px-3 py-1 rounded-md text-xs font-semibold uppercase transition-colors ${
+                    lang === l
+                      ? 'bg-zinc-700 text-zinc-100'
+                      : 'text-zinc-500 hover:text-zinc-300'
+                  }`}
+                >
+                  {l}
                 </button>
               ))}
             </div>

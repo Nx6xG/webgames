@@ -20,12 +20,24 @@ export interface GameComponentProps {
 type WebGameEntry =
   | {
       manifest: GameManifest;
+      /**
+       * i18n key for the game title shown in the lobby card (e.g. 'lobby.games.chess.title').
+       * Looked up via t(titleKey) — do NOT store translated strings here directly.
+       */
+      titleKey: string;
+      /**
+       * i18n key for the game description shown in the lobby card (e.g. 'lobby.games.chess.desc').
+       * Looked up via t(descKey) — do NOT store translated strings here directly.
+       */
+      descKey: string;
       comingSoon?: false;
       /** Top-level game component rendered inside GamePage. */
       Component: ComponentType<GameComponentProps>;
     }
   | {
       manifest: GameManifest;
+      titleKey: string;
+      descKey: string;
       /** Mark as coming-soon: card is shown but Play is disabled; /games/[id] shows a placeholder. */
       comingSoon: true;
       Component?: never;
@@ -35,8 +47,15 @@ export type { WebGameEntry };
 
 /**
  * Central web registry — maps every GameId to its manifest and React component.
- * Adding a new game: import the component and add one entry here.
- * For a coming-soon stub: omit Component and set comingSoon: true.
+ *
+ * manifest.name / manifest.description hold English strings used for:
+ *   - <title> metadata (server-side, no i18n context available)
+ *   - GamePage breadcrumb header (server component)
+ *
+ * For translated display in lobby cards, use titleKey / descKey with useI18n().t().
+ *
+ * Adding a new game: import the component, add titleKey/descKey i18n messages, then
+ * register one entry here.
  */
 export const webRegistry: Record<GameId, WebGameEntry> = {
   tictactoe: {
@@ -50,6 +69,8 @@ export const webRegistry: Record<GameId, WebGameEntry> = {
       minPlayers: 2,
       maxPlayers: 2,
     },
+    titleKey: 'lobby.games.tictactoe.title',
+    descKey:  'lobby.games.tictactoe.desc',
     Component: TicTacToeGame,
   },
   connect4: {
@@ -63,6 +84,8 @@ export const webRegistry: Record<GameId, WebGameEntry> = {
       minPlayers: 2,
       maxPlayers: 2,
     },
+    titleKey: 'lobby.games.connect4.title',
+    descKey:  'lobby.games.connect4.desc',
     Component: Connect4Game,
   },
   rps: {
@@ -76,6 +99,8 @@ export const webRegistry: Record<GameId, WebGameEntry> = {
       minPlayers: 2,
       maxPlayers: 2,
     },
+    titleKey: 'lobby.games.rps.title',
+    descKey:  'lobby.games.rps.desc',
     Component: RpsGame,
   },
   chess: {
@@ -89,6 +114,8 @@ export const webRegistry: Record<GameId, WebGameEntry> = {
       minPlayers: 2,
       maxPlayers: 2,
     },
+    titleKey: 'lobby.games.chess.title',
+    descKey:  'lobby.games.chess.desc',
     Component: ChessGame,
   },
 };

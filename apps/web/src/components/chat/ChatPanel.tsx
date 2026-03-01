@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState } from 'react';
 import type { ChatMessage, ChatScope } from 'shared';
+import { useI18n } from '@/components/providers/LanguageProvider';
 
 function formatTime(ts: number): string {
   return new Date(ts).toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' });
@@ -60,6 +61,7 @@ export function ChatPanel({
   onOpenChange,
   showUnreadBadge = false,
 }: ChatPanelProps) {
+  const { t } = useI18n();
   const [scope, setScope] = useState<ChatScope>(mode === 'global' ? 'global' : 'room');
   const [internalExpanded, setInternalExpanded] = useState(defaultOpen);
   const expanded = controlledOpen !== undefined ? controlledOpen : internalExpanded;
@@ -129,6 +131,8 @@ export function ChatPanel({
 
   const canSend = scope === 'global' || (scope === 'room' && roomCode != null);
 
+  const scopeLabel = (s: ChatScope) => s === 'room' ? t('chat.room') : t('chat.global');
+
   // ── Collapsible variant ────────────────────────────────────────────────────
   if (collapsible) {
     return (
@@ -152,7 +156,7 @@ export function ChatPanel({
               expanded ? 'border-b border-zinc-800' : ''
             }`}
           >
-            <span className="text-[11px] font-semibold text-zinc-500 uppercase tracking-wider">Chat</span>
+            <span className="text-[11px] font-semibold text-zinc-500 uppercase tracking-wider">{t('chat.title')}</span>
             <div className="flex items-center gap-2">
               {mode === 'both' && expanded && (
                 <div className="flex gap-0.5">
@@ -160,13 +164,13 @@ export function ChatPanel({
                     <button
                       key={s}
                       onClick={(e) => { e.stopPropagation(); setScope(s); }}
-                      className={`px-2 py-0.5 rounded text-[10px] font-semibold capitalize transition-colors ${
+                      className={`px-2 py-0.5 rounded text-[10px] font-semibold transition-colors ${
                         scope === s
                           ? 'bg-zinc-700 text-zinc-100'
                           : 'text-zinc-500 hover:text-zinc-300'
                       }`}
                     >
-                      {s}
+                      {scopeLabel(s)}
                     </button>
                   ))}
                 </div>
@@ -224,7 +228,7 @@ export function ChatPanel({
                   onKeyDown={(e) => {
                     if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); handleSend(); }
                   }}
-                  placeholder={canSend ? 'Message…' : 'Join a room to chat'}
+                  placeholder={canSend ? t('chat.placeholder') : 'Join a room to chat'}
                   disabled={!canSend || !expanded}
                   className="flex-1 bg-zinc-800 border border-zinc-700 rounded-lg px-3 py-1.5 text-xs text-zinc-100 placeholder-zinc-600 focus:outline-none focus:border-indigo-500 disabled:opacity-40"
                 />
@@ -233,7 +237,7 @@ export function ChatPanel({
                   disabled={!canSend || !input.trim() || !expanded}
                   className="px-3 py-1.5 rounded-lg bg-indigo-600 hover:bg-indigo-500 disabled:opacity-40 disabled:cursor-not-allowed text-white text-xs font-semibold transition-colors shrink-0"
                 >
-                  Send
+                  {t('chat.send')}
                 </button>
               </div>
             </div>
@@ -251,20 +255,20 @@ export function ChatPanel({
       {mode === 'both' && (
         <div className="flex items-center justify-between border-b border-zinc-800 shrink-0 px-3">
           <span className="py-2.5 text-[11px] font-semibold text-zinc-500 uppercase tracking-wider">
-            Chat
+            {t('chat.title')}
           </span>
           <div className="flex">
             {(['room', 'global'] as ChatScope[]).map((s) => (
               <button
                 key={s}
                 onClick={() => setScope(s)}
-                className={`px-3 py-2.5 text-xs font-semibold capitalize transition-colors ${
+                className={`px-3 py-2.5 text-xs font-semibold transition-colors ${
                   scope === s
                     ? 'text-zinc-100 border-b-2 border-indigo-500 -mb-px'
                     : 'text-zinc-500 hover:text-zinc-300'
                 }`}
               >
-                {s}
+                {scopeLabel(s)}
               </button>
             ))}
           </div>
@@ -308,7 +312,7 @@ export function ChatPanel({
           onKeyDown={(e) => {
             if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); handleSend(); }
           }}
-          placeholder={canSend ? 'Message…' : 'Join a room to chat'}
+          placeholder={canSend ? t('chat.placeholder') : 'Join a room to chat'}
           disabled={!canSend}
           className="flex-1 bg-zinc-800 border border-zinc-700 rounded-lg px-3 py-1.5 text-xs text-zinc-100 placeholder-zinc-600 focus:outline-none focus:border-indigo-500 disabled:opacity-40"
         />
@@ -317,7 +321,7 @@ export function ChatPanel({
           disabled={!canSend || !input.trim()}
           className="px-3 py-1.5 rounded-lg bg-indigo-600 hover:bg-indigo-500 disabled:opacity-40 disabled:cursor-not-allowed text-white text-xs font-semibold transition-colors shrink-0"
         >
-          Send
+          {t('chat.send')}
         </button>
       </div>
     </div>
