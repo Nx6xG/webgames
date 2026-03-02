@@ -10,16 +10,13 @@ import { CountdownOverlay } from '@/components/CountdownOverlay';
 import { ChatPanel } from '@/components/chat/ChatPanel';
 import { NicknameEditor } from '@/components/NicknameEditor';
 import { GameInfoModal } from '@/components/GameInfoModal';
+import { useI18n } from '@/components/providers/LanguageProvider';
 
 // ── Piece rendering ────────────────────────────────────────────────────────────
 
 const PIECE_CHAR: Record<ChessColor, Record<ChessPieceType, string>> = {
   w: { k: '♔', q: '♕', r: '♖', b: '♗', n: '♘', p: '♙' },
   b: { k: '♚', q: '♛', r: '♜', b: '♝', n: '♞', p: '♟' },
-};
-
-const PROMO_LABELS: Record<ChessPromoPiece, string> = {
-  q: 'Queen', r: 'Rook', b: 'Bishop', n: 'Knight',
 };
 
 // ── Material values & captured-piece helpers ───────────────────────────────────
@@ -269,6 +266,7 @@ function buildPGN(gs: ChessState, p0nick: string, p1nick: string): string {
 export function ChessGame({ wsUrl, gameId, initialRoomCode, quickPlay: isQuickPlay }: GameComponentProps) {
   const router = useRouter();
   const mp = useMultiplayer<ChessState>(wsUrl, gameId);
+  const { t } = useI18n();
   const [joinInput, setJoinInput]               = useState(initialRoomCode ?? '');
   const [copied, setCopied]                     = useState(false);
   const [pgnCopied, setPgnCopied]               = useState(false);
@@ -364,10 +362,17 @@ export function ChessGame({ wsUrl, gameId, initialRoomCode, quickPlay: isQuickPl
   const myColor: ChessColor | null = myIdx === null ? null : myIdx === 0 ? 'w' : 'b';
   const flipped = myColor === 'b';
 
-  const p0nick  = mp.players.find((p) => p.index === 0)?.nickname ?? 'White';
-  const p1nick  = mp.players.find((p) => p.index === 1)?.nickname ?? 'Black';
+  const p0nick  = mp.players.find((p) => p.index === 0)?.nickname ?? t('chess.white');
+  const p1nick  = mp.players.find((p) => p.index === 1)?.nickname ?? t('chess.black');
   const myNick  = myIdx !== null ? (mp.players.find((p) => p.index === myIdx)?.nickname  ?? `Player ${myIdx + 1}`) : null;
-  const oppNick = myIdx !== null ? (mp.players.find((p) => p.index !== myIdx)?.nickname ?? 'Opponent')            : null;
+  const oppNick = myIdx !== null ? (mp.players.find((p) => p.index !== myIdx)?.nickname ?? t('game.common.opponent')) : null;
+
+  const promoLabels: Record<ChessPromoPiece, string> = {
+    q: t('chess.piece.queen'),
+    r: t('chess.piece.rook'),
+    b: t('chess.piece.bishop'),
+    n: t('chess.piece.knight'),
+  };
 
   const isMyTurn      = gs !== null && myColor !== null && gs.turn === myColor && gs.status === 'ongoing';
   const boardDisabled = replayMode || mp.isSpectator || mp.phase !== 'playing' || !isMyTurn || mp.matchCountdown !== null;
@@ -601,17 +606,17 @@ export function ChessGame({ wsUrl, gameId, initialRoomCode, quickPlay: isQuickPl
         {pendingPromotion && myColor && (
           <div className="absolute inset-0 bg-black/70 flex items-center justify-center z-50 rounded">
             <div className="bg-zinc-900 border border-zinc-700 rounded-xl p-5 flex flex-col items-center gap-3 shadow-2xl">
-              <p className="text-sm text-zinc-300 font-semibold">Promote pawn to:</p>
+              <p className="text-sm text-zinc-300 font-semibold">{t('chess.promoteTitle')}</p>
               <div className="flex gap-2">
                 {(['q', 'r', 'b', 'n'] as const).map((pt) => (
                   <button
                     key={pt}
                     onClick={() => sendPromotion(pt)}
                     className="w-14 h-14 rounded-lg bg-zinc-800 hover:bg-indigo-700 border border-zinc-600 hover:border-indigo-500 flex flex-col items-center justify-center gap-0.5 transition-colors"
-                    title={PROMO_LABELS[pt]}
+                    title={promoLabels[pt]}
                   >
                     <span className="text-2xl leading-none">{PIECE_CHAR[myColor][pt]}</span>
-                    <span className="text-[0.6rem] text-zinc-400">{PROMO_LABELS[pt]}</span>
+                    <span className="text-[0.6rem] text-zinc-400">{promoLabels[pt]}</span>
                   </button>
                 ))}
               </div>
@@ -619,7 +624,7 @@ export function ChessGame({ wsUrl, gameId, initialRoomCode, quickPlay: isQuickPl
                 onClick={() => setPendingPromotion(null)}
                 className="text-xs text-zinc-600 hover:text-zinc-400 transition-colors"
               >
-                Cancel
+                {t('common.cancel')}
               </button>
             </div>
           </div>
@@ -641,7 +646,7 @@ export function ChessGame({ wsUrl, gameId, initialRoomCode, quickPlay: isQuickPl
 
     // Positive value means this color is ahead in material
     const myAdvantage  = color === 'w' ? materialDiff : -materialDiff;
-    const hasCaptured  = CAPTURED_ORDER.some(t => (captures[t] ?? 0) > 0);
+    const hasCaptured  = CAPTURED_ORDER.some(pt => (captures[pt] ?? 0) > 0);
 
     return (
       <div className="w-full" style={{ maxWidth: 'min(92vw, 760px, calc(100vh - 220px))' }}>
@@ -652,7 +657,7 @@ export function ChessGame({ wsUrl, gameId, initialRoomCode, quickPlay: isQuickPl
             }`}
           />
           <span className={`font-semibold truncate ${isMe ? 'text-indigo-300' : 'text-zinc-300'}`}>
-            {nick}{isMe ? ' (you)' : ''}
+            {nick}{isMe ? ` ${t('game.common.you')}` : ''}
           </span>
           {isTurn && <span className="w-1.5 h-1.5 rounded-full bg-indigo-400 animate-pulse shrink-0" />}
           {myAdvantage > 0 && (
@@ -719,7 +724,7 @@ export function ChessGame({ wsUrl, gameId, initialRoomCode, quickPlay: isQuickPl
         {/* Header */}
         <div className="px-3 py-2 flex items-center justify-between border-b border-zinc-800 gap-2">
           <span className="text-xs font-semibold text-zinc-400 uppercase tracking-wider shrink-0">
-            {replayMode ? `Move ${replayStep}/${maxStep}` : 'Moves'}
+            {replayMode ? `${t('chess.replayMoveLabel')} ${replayStep}/${maxStep}` : t('chess.replayMovesLabel')}
           </span>
           <div className="flex items-center gap-0.5">
             <button onClick={goToStart}   disabled={!canGoToStart} title="Go to start"   className={btnBase} aria-label="Go to start">⏮</button>
@@ -739,7 +744,7 @@ export function ChessGame({ wsUrl, gameId, initialRoomCode, quickPlay: isQuickPl
                 disabled={isEmpty}
                 className="ml-1 px-2 py-0.5 text-xs rounded border border-zinc-700 text-zinc-400 hover:border-zinc-500 hover:text-zinc-200 disabled:opacity-30 disabled:cursor-not-allowed transition-colors focus-visible:ring-1 focus-visible:ring-indigo-500 focus-visible:outline-none"
               >
-                Replay
+                {t('chess.replay')}
               </button>
             )}
           </div>
@@ -754,7 +759,7 @@ export function ChessGame({ wsUrl, gameId, initialRoomCode, quickPlay: isQuickPl
           aria-label="Move history"
         >
           {isEmpty ? (
-            <p className="text-xs text-zinc-600 px-4 py-2">No moves yet.</p>
+            <p className="text-xs text-zinc-600 px-4 py-2">{t('chess.noMoves')}</p>
           ) : (
             pairs.map(({ moveNum, white, black }) => (
               <div key={moveNum} className="flex items-center" role="listitem">
@@ -805,11 +810,11 @@ export function ChessGame({ wsUrl, gameId, initialRoomCode, quickPlay: isQuickPl
 
   // ── Draw reason helper ────────────────────────────────────────────────────────
 
-  function drawReason(t: ChessState['termination']) {
-    if (t === 'stalemate')  return 'stalemate';
-    if (t === 'fifty_move') return '50-move rule';
-    if (t === 'threefold')  return 'threefold repetition';
-    return 'draw';
+  function drawReason(term: ChessState['termination']) {
+    if (term === 'stalemate')  return t('chess.termination.stalemate');
+    if (term === 'fifty_move') return t('chess.termination.fiftyMove');
+    if (term === 'threefold')  return t('chess.termination.threefold');
+    return t('chess.termination.draw');
   }
 
   // ── Status banner ─────────────────────────────────────────────────────────────
@@ -820,7 +825,7 @@ export function ChessGame({ wsUrl, gameId, initialRoomCode, quickPlay: isQuickPl
       return (
         <div className="flex flex-col items-center gap-0.5">
           <p className="text-xs text-indigo-300 font-medium">
-            Replay — move {replayStep} / {totalMoves}
+            {t('chess.replayHeaderPre')} {replayStep} / {totalMoves}
           </p>
           {replayStep > 0 && (
             <p className="text-xs text-zinc-500 font-mono">{gs.moves[replayStep - 1]?.san}</p>
@@ -829,27 +834,27 @@ export function ChessGame({ wsUrl, gameId, initialRoomCode, quickPlay: isQuickPl
       );
     }
     if (mp.phase === 'lobby') {
-      return <p className="text-zinc-500 text-sm text-center">Create or join a room to play.</p>;
+      return <p className="text-zinc-500 text-sm text-center">{t('game.lobby.joinPrompt')}</p>;
     }
     if (mp.isSpectator) {
-      if (!gs) return <p className="text-zinc-500 text-sm text-center">Watching…</p>;
+      if (!gs) return <p className="text-zinc-500 text-sm text-center">{t('game.lobby.watching')}</p>;
       if (gs.status === 'win') {
         const winColor = gs.players[0].id === gs.winner ? 'w' : 'b';
         const winName  = winColor === 'w' ? p0nick : p1nick;
-        const reason   = gs.termination === 'checkmate' ? ' by checkmate' : gs.termination === 'resigned' ? ' by resignation' : '';
-        return <p className="text-lg font-bold text-center text-yellow-400">{winName} wins{reason}!</p>;
+        const reason   = gs.termination === 'checkmate' ? ` ${t('chess.byCheckmate')}` : gs.termination === 'resigned' ? ` ${t('chess.byResignation')}` : '';
+        return <p className="text-lg font-bold text-center text-yellow-400">{winName} {t('chess.winsVerb')}{reason}!</p>;
       }
       if (gs.status === 'draw') {
-        return <p className="text-lg font-bold text-center text-zinc-400">Draw by {drawReason(gs.termination)}!</p>;
+        return <p className="text-lg font-bold text-center text-zinc-400">{t('chess.drawByPre')}{drawReason(gs.termination)}!</p>;
       }
       const turnName = gs.turn === 'w' ? p0nick : p1nick;
       return (
         <div className="flex flex-col items-center gap-0.5">
           <div className="flex items-center gap-2 text-zinc-400 text-sm">
             <span className="w-2 h-2 rounded-full bg-zinc-400 animate-pulse" />
-            {turnName} to move
+            {turnName} {t('chess.toMove')}
           </div>
-          {gs.check && <p className="text-amber-400 text-xs font-semibold">Check!</p>}
+          {gs.check && <p className="text-amber-400 text-xs font-semibold">{t('chess.check')}</p>}
         </div>
       );
     }
@@ -857,32 +862,32 @@ export function ChessGame({ wsUrl, gameId, initialRoomCode, quickPlay: isQuickPl
       return (
         <div className="flex items-center gap-2 text-amber-400 text-sm justify-center">
           <span className="w-2 h-2 rounded-full bg-amber-400 animate-pulse" />
-          Waiting for opponent to join…
+          {t('game.status.waitingToJoin')}
         </div>
       );
     }
     if (!gs) return null;
     if (gs.status === 'win') {
       const iWon   = myIdx !== null && gs.winner === gs.players[myIdx]?.id;
-      const reason = gs.termination === 'checkmate' ? ' (checkmate)' : gs.termination === 'resigned' ? ' (resignation)' : '';
+      const reason = gs.termination === 'checkmate' ? ` (${t('chess.byCheckmate')})` : gs.termination === 'resigned' ? ` (${t('chess.byResignation')})` : '';
       return (
         <p className={`text-lg font-black text-center ${iWon ? 'text-yellow-400' : 'text-zinc-400'}`}>
-          {iWon ? `🏆 ${myNick} wins${reason}!` : `${oppNick} wins${reason}.`}
+          {iWon ? `🏆 ${myNick} ${t('chess.winsVerb')}${reason}!` : `${oppNick} ${t('chess.winsVerb')}${reason}.`}
         </p>
       );
     }
     if (gs.status === 'draw') {
-      return <p className="text-xl font-black text-center text-zinc-400">Draw by {drawReason(gs.termination)}!</p>;
+      return <p className="text-xl font-black text-center text-zinc-400">{t('chess.drawByPre')}{drawReason(gs.termination)}!</p>;
     }
     if (mp.phase === 'ended') {
-      return <p className="text-sm text-rose-400 text-center">Opponent disconnected.</p>;
+      return <p className="text-sm text-rose-400 text-center">{t('game.status.opponentDisconnected')}</p>;
     }
     if (gs.check) {
       return (
         <div className="flex flex-col items-center gap-0.5">
-          <p className="text-rose-400 font-bold text-sm">Check!</p>
+          <p className="text-rose-400 font-bold text-sm">{t('chess.check')}</p>
           <p className="text-xs text-zinc-500">
-            {isMyTurn ? 'You must escape check.' : `${oppNick} must escape check.`}
+            {isMyTurn ? t('chess.mustEscapeCheck') : `${oppNick} ${t('chess.mustEscapeCheckSuffix')}`}
           </p>
         </div>
       );
@@ -891,14 +896,14 @@ export function ChessGame({ wsUrl, gameId, initialRoomCode, quickPlay: isQuickPl
       return (
         <div className="flex items-center gap-2 text-indigo-400 text-sm justify-center font-medium">
           <span className="w-2 h-2 rounded-full bg-indigo-400 animate-pulse" />
-          Your turn ({myColor === 'w' ? 'White' : 'Black'}) — click a piece
+          {t('chess.yourTurn')} ({myColor === 'w' ? t('chess.white') : t('chess.black')}) — {t('chess.clickPiece')}
         </div>
       );
     }
     return (
       <div className="flex items-center gap-2 text-zinc-400 text-sm justify-center">
         <span className="w-2 h-2 rounded-full bg-zinc-400 animate-pulse" />
-        {oppNick}&apos;s turn
+        {oppNick}{t('game.status.turnSuffix')}
       </div>
     );
   }
@@ -920,7 +925,7 @@ export function ChessGame({ wsUrl, gameId, initialRoomCode, quickPlay: isQuickPl
         {mp.isSpectator && (
           <div className="flex items-center gap-1.5 text-xs text-zinc-500 bg-zinc-800/60 border border-zinc-700 rounded-full px-3 py-1">
             <span className="w-1.5 h-1.5 rounded-full bg-zinc-500" />
-            Spectating
+            {t('game.status.spectating')}
           </div>
         )}
 
@@ -929,7 +934,7 @@ export function ChessGame({ wsUrl, gameId, initialRoomCode, quickPlay: isQuickPl
             onClick={() => mp.sendAction({ type: 'chess_resign' })}
             className="px-4 py-1.5 text-xs rounded-lg border border-rose-800/60 text-rose-500 hover:border-rose-600 hover:text-rose-300 transition-colors"
           >
-            Resign
+            {t('chess.resign')}
           </button>
         )}
 
@@ -940,10 +945,10 @@ export function ChessGame({ wsUrl, gameId, initialRoomCode, quickPlay: isQuickPl
               disabled={mp.myVotedRematch}
               className="px-5 py-2 rounded-lg bg-indigo-600 hover:bg-indigo-500 disabled:opacity-50 disabled:cursor-not-allowed text-white font-semibold text-sm transition-colors"
             >
-              {mp.myVotedRematch ? 'Waiting for opponent…' : 'Rematch'}
+              {mp.myVotedRematch ? t('game.actions.waitingRematch') : t('game.actions.rematch')}
             </button>
             {mp.rematchVotes > 0 && !mp.myVotedRematch && (
-              <p className="text-xs text-amber-400">Opponent wants a rematch!</p>
+              <p className="text-xs text-amber-400">{t('game.status.opponentRematch')}</p>
             )}
             {mp.rematchError && (
               <p className="text-xs text-rose-400 bg-rose-950/50 border border-rose-800 rounded-lg px-3 py-1.5">{mp.rematchError}</p>
@@ -956,7 +961,7 @@ export function ChessGame({ wsUrl, gameId, initialRoomCode, quickPlay: isQuickPl
             onClick={mp.leaveRoom}
             className="mt-1 px-4 py-2 text-sm rounded-lg border border-zinc-700 text-zinc-400 hover:border-zinc-500 hover:text-zinc-200 transition-colors"
           >
-            Leave room
+            {t('game.actions.leaveRoom')}
           </button>
         )}
       </div>
@@ -972,7 +977,7 @@ export function ChessGame({ wsUrl, gameId, initialRoomCode, quickPlay: isQuickPl
               mp.connection === 'connecting' ? 'bg-amber-400 animate-pulse' :
               'bg-rose-500'
             }`} />
-            <span className="text-zinc-400 capitalize">{mp.connection}</span>
+            <span className="text-zinc-400">{t(`status.${mp.connection}`)}</span>
           </div>
         </div>
 
@@ -989,10 +994,10 @@ export function ChessGame({ wsUrl, gameId, initialRoomCode, quickPlay: isQuickPl
           <div className="rounded-xl border border-zinc-800 bg-zinc-900 p-4 flex flex-col items-center gap-3">
             <div className="flex items-center gap-2 text-amber-400 text-sm">
               <span className="w-2 h-2 rounded-full bg-amber-400 animate-pulse" />
-              {mp.connection !== 'connected' ? 'Connecting…' : 'Finding a match…'}
+              {mp.connection !== 'connected' ? t('status.connecting') : t('game.lobby.findingMatch')}
             </div>
             <Link href={`/games/${gameId}`} className="text-xs text-zinc-500 hover:text-zinc-300 transition-colors">
-              Cancel
+              {t('common.cancel')}
             </Link>
           </div>
         ) : mp.phase === 'lobby' ? (
@@ -1002,11 +1007,11 @@ export function ChessGame({ wsUrl, gameId, initialRoomCode, quickPlay: isQuickPl
                 <button
                   key={v}
                   onClick={() => setRoomVisibility(v)}
-                  className={`flex-1 py-1.5 text-xs rounded-md font-medium capitalize transition-colors ${
+                  className={`flex-1 py-1.5 text-xs rounded-md font-medium transition-colors ${
                     roomVisibility === v ? 'bg-zinc-700 text-zinc-100' : 'text-zinc-500 hover:text-zinc-300'
                   }`}
                 >
-                  {v}
+                  {t(`game.lobby.${v}`)}
                 </button>
               ))}
             </div>
@@ -1014,7 +1019,7 @@ export function ChessGame({ wsUrl, gameId, initialRoomCode, quickPlay: isQuickPl
               <input
                 value={roomName}
                 onChange={(e) => setRoomName(e.target.value.slice(0, 24))}
-                placeholder="Room name (optional)"
+                placeholder={t('game.lobby.roomName')}
                 maxLength={24}
                 className="bg-zinc-800 border border-zinc-700 rounded-lg px-3 py-2 text-sm text-zinc-100 placeholder-zinc-500 focus:outline-none focus:border-indigo-500"
               />
@@ -1024,13 +1029,13 @@ export function ChessGame({ wsUrl, gameId, initialRoomCode, quickPlay: isQuickPl
               disabled={mp.connection !== 'connected'}
               className="w-full py-2.5 rounded-lg bg-indigo-600 hover:bg-indigo-500 disabled:opacity-40 disabled:cursor-not-allowed text-white font-semibold text-sm transition-colors"
             >
-              Create Room
+              {t('game.lobby.createRoom')}
             </button>
             <div className="flex gap-2">
               <input
                 value={joinInput}
                 onChange={(e) => setJoinInput(e.target.value.toUpperCase().slice(0, 6))}
-                placeholder="Room code"
+                placeholder={t('game.lobby.roomCode')}
                 maxLength={6}
                 className="flex-1 bg-zinc-800 border border-zinc-700 rounded-lg px-3 py-2 text-sm text-zinc-100 placeholder-zinc-500 focus:outline-none focus:border-indigo-500 uppercase tracking-widest font-mono"
               />
@@ -1039,7 +1044,7 @@ export function ChessGame({ wsUrl, gameId, initialRoomCode, quickPlay: isQuickPl
                 disabled={joinInput.length < 4 || mp.connection !== 'connected'}
                 className="px-4 py-2 rounded-lg bg-zinc-700 hover:bg-zinc-600 disabled:opacity-40 disabled:cursor-not-allowed text-white text-sm font-semibold transition-colors"
               >
-                Join
+                {t('game.lobby.join')}
               </button>
             </div>
           </div>
@@ -1048,12 +1053,12 @@ export function ChessGame({ wsUrl, gameId, initialRoomCode, quickPlay: isQuickPl
         {/* Room info */}
         {mp.roomCode && (
           <div className="rounded-xl border border-zinc-800 bg-zinc-900 p-4 flex flex-col gap-3">
-            <p className="text-xs text-zinc-500 uppercase tracking-wider font-semibold">Room</p>
+            <p className="text-xs text-zinc-500 uppercase tracking-wider font-semibold">{t('game.room.title')}</p>
             <div className="flex items-center gap-2">
               <span className="font-mono text-2xl font-black tracking-widest text-zinc-100">{mp.roomCode}</span>
               <span className="text-xs text-zinc-500">{mp.playerCount}/2</span>
               {mp.spectatorCount > 0 && (
-                <span className="text-xs text-zinc-600 ml-1">{mp.spectatorCount} watching</span>
+                <span className="text-xs text-zinc-600 ml-1">{mp.spectatorCount} {t('game.room.watching')}</span>
               )}
             </div>
             <button
@@ -1061,9 +1066,9 @@ export function ChessGame({ wsUrl, gameId, initialRoomCode, quickPlay: isQuickPl
               className="w-full py-2 rounded-lg border border-zinc-700 hover:border-indigo-600 text-sm text-zinc-300 hover:text-indigo-300 transition-colors flex items-center justify-center gap-2"
             >
               {copied ? (
-                <><svg className="w-4 h-4 text-emerald-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" /></svg><span className="text-emerald-400">Copied!</span></>
+                <><svg className="w-4 h-4 text-emerald-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" /></svg><span className="text-emerald-400">{t('game.room.copied')}</span></>
               ) : (
-                <><svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" /></svg>Copy invite link</>
+                <><svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" /></svg>{t('game.room.copyInvite')}</>
               )}
             </button>
             {mp.players.length > 0 && (
@@ -1076,11 +1081,11 @@ export function ChessGame({ wsUrl, gameId, initialRoomCode, quickPlay: isQuickPl
                     <div key={idx} className="flex items-center gap-2 text-xs">
                       <span className={`w-3 h-3 rounded-sm border ${idx === 0 ? 'bg-white border-zinc-400' : 'bg-zinc-900 border-zinc-600'}`} />
                       <span className="text-zinc-300 truncate">{p.nickname}</span>
-                      {isMe && <span className="text-zinc-600 shrink-0">(you)</span>}
+                      {isMe && <span className="text-zinc-600 shrink-0">{t('game.common.you')}</span>}
                     </div>
                   );
                 })}
-                {mp.isSpectator && <p className="text-xs text-zinc-600">Spectator — view only</p>}
+                {mp.isSpectator && <p className="text-xs text-zinc-600">{t('game.room.spectatorLabel')}</p>}
               </div>
             )}
           </div>
@@ -1118,7 +1123,7 @@ export function ChessGame({ wsUrl, gameId, initialRoomCode, quickPlay: isQuickPl
             <svg className="w-3.5 h-3.5 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
               <path strokeLinecap="round" strokeLinejoin="round" d="M8 7v8a2 2 0 002 2h6M8 7V5a2 2 0 012-2h4.586a1 1 0 01.707.293l4.414 4.414a1 1 0 01.293.707V15a2 2 0 01-2 2h-2M8 7H6a2 2 0 00-2 2v10a2 2 0 002 2h8a2 2 0 002-2v-2" />
             </svg>
-            {pgnCopied ? 'PGN copied!' : 'Export PGN'}
+            {pgnCopied ? t('chess.pgn.copied') : t('chess.exportPgn')}
           </button>
         )}
 
@@ -1130,7 +1135,7 @@ export function ChessGame({ wsUrl, gameId, initialRoomCode, quickPlay: isQuickPl
           <svg className="w-3.5 h-3.5 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
             <path strokeLinecap="round" strokeLinejoin="round" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
           </svg>
-          Stats &amp; Rules
+          {t('game.info.statsRules')}
         </button>
       </aside>
 
@@ -1144,15 +1149,15 @@ export function ChessGame({ wsUrl, gameId, initialRoomCode, quickPlay: isQuickPl
         myNickname={mp.myNickname}
         rules={
           <ul className="text-sm text-zinc-400 space-y-1.5 list-disc list-inside">
-            <li>White moves first. Players alternate turns.</li>
-            <li>Put the opponent&apos;s king in checkmate to win.</li>
-            <li>A move is illegal if it leaves your own king in check.</li>
-            <li>No legal moves + in check = checkmate (loss). No legal moves + not in check = stalemate (draw).</li>
-            <li>Castling: king and rook must not have moved; path must be clear; king cannot pass through check.</li>
-            <li>En passant: available immediately after opponent&apos;s pawn advances two squares.</li>
-            <li>Pawn promotion: choose Queen, Rook, Bishop, or Knight when reaching the last rank.</li>
-            <li>Draw by 50-move rule (no pawn move or capture in 50 moves) or threefold repetition.</li>
-            <li>Use ⏮◀▶⏭ in the Moves panel or click any move to replay the game. Export PGN to copy the notation.</li>
+            <li>{t('chess.rules.1')}</li>
+            <li>{t('chess.rules.2')}</li>
+            <li>{t('chess.rules.3')}</li>
+            <li>{t('chess.rules.4')}</li>
+            <li>{t('chess.rules.5')}</li>
+            <li>{t('chess.rules.6')}</li>
+            <li>{t('chess.rules.7')}</li>
+            <li>{t('chess.rules.8')}</li>
+            <li>{t('chess.rules.9')}</li>
           </ul>
         }
       />

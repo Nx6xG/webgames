@@ -1,12 +1,21 @@
 import type { Metadata } from 'next';
+import { readFileSync } from 'fs';
+import { join } from 'path';
 import './globals.css';
 import { NicknameProvider } from '@/components/providers/NicknameProvider';
 import { LanguageProvider } from '@/components/providers/LanguageProvider';
+import { PatchNotesFloatingButton } from '@/components/PatchNotesFloatingButton';
 
 export const metadata: Metadata = {
-  title: 'Web Games Platform',
-  description: 'Real-time multiplayer web games',
+  title: 'Web Games',
+  description: 'Echtzeit-Multiplayer-Spiele im Browser. Spiele zusammen.',
 };
+
+// Read at server-render time. process.cwd() = apps/web/ in both dev and prod.
+const patchNotesContent = readFileSync(
+  join(process.cwd(), 'src/content/patch-notes.md'),
+  'utf-8',
+);
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
@@ -19,6 +28,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
         <LanguageProvider>
           <NicknameProvider>{children}</NicknameProvider>
         </LanguageProvider>
+        <PatchNotesFloatingButton content={patchNotesContent} />
       </body>
     </html>
   );

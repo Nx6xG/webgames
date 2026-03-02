@@ -10,6 +10,7 @@ import { CountdownOverlay } from '@/components/CountdownOverlay';
 import { ChatPanel } from '@/components/chat/ChatPanel';
 import { NicknameEditor } from '@/components/NicknameEditor';
 import { GameInfoModal } from '@/components/GameInfoModal';
+import { useI18n } from '@/components/providers/LanguageProvider';
 
 const PICKS: RpsPick[] = ['rock', 'paper', 'scissors'];
 
@@ -19,15 +20,10 @@ const PICK_ICON: Record<RpsPick, string> = {
   scissors: '✂️',
 };
 
-const PICK_LABEL: Record<RpsPick, string> = {
-  rock:     'Rock',
-  paper:    'Paper',
-  scissors: 'Scissors',
-};
-
 export function RpsGame({ wsUrl, gameId, initialRoomCode, quickPlay: isQuickPlay }: GameComponentProps) {
   const router = useRouter();
   const mp = useMultiplayer<RpsState>(wsUrl, gameId);
+  const { t } = useI18n();
   const [joinInput, setJoinInput]         = useState(initialRoomCode ?? '');
   const [copied, setCopied]               = useState(false);
   const [roomVisibility, setRoomVisibility] = useState<'private' | 'public'>('private');
@@ -75,10 +71,16 @@ export function RpsGame({ wsUrl, gameId, initialRoomCode, quickPlay: isQuickPlay
   const gs    = mp.gameState;
   const myIdx = mp.playerIndex; // 0 | 1 | null
 
-  const p0nick  = mp.players.find((p) => p.index === 0)?.nickname ?? 'Player 1';
-  const p1nick  = mp.players.find((p) => p.index === 1)?.nickname ?? 'Player 2';
+  const p0nick  = mp.players.find((p) => p.index === 0)?.nickname ?? t('game.common.player1');
+  const p1nick  = mp.players.find((p) => p.index === 1)?.nickname ?? t('game.common.player2');
   const myNick  = myIdx !== null ? (mp.players.find((p) => p.index === myIdx)?.nickname  ?? `Player ${myIdx + 1}`) : null;
-  const oppNick = myIdx !== null ? (mp.players.find((p) => p.index !== myIdx)?.nickname ?? 'Opponent')            : null;
+  const oppNick = myIdx !== null ? (mp.players.find((p) => p.index !== myIdx)?.nickname ?? t('game.common.opponent')) : null;
+
+  const PICK_LABEL: Record<RpsPick, string> = {
+    rock:     t('rps.pick.rock'),
+    paper:    t('rps.pick.paper'),
+    scissors: t('rps.pick.scissors'),
+  };
 
   const iHavePicked  = gs !== null && myIdx !== null && gs.hasPicked[myIdx];
   const oppHasPicked = gs !== null && myIdx !== null && gs.hasPicked[myIdx === 0 ? 1 : 0];
@@ -113,7 +115,7 @@ export function RpsGame({ wsUrl, gameId, initialRoomCode, quickPlay: isQuickPlay
     return (
       <div className="flex items-center justify-center gap-4 w-full">
         <span className={`text-sm font-semibold truncate max-w-[100px] ${myIdx === 0 ? 'text-indigo-300' : 'text-zinc-300'}`}>
-          {p0nick}{myIdx === 0 ? ' (you)' : ''}
+          {p0nick}{myIdx === 0 ? ` ${t('game.common.you')}` : ''}
         </span>
         <div className="flex items-center gap-3 shrink-0">
           <span className={`text-3xl font-black tabular-nums ${s0 > s1 ? 'text-indigo-300' : 'text-zinc-400'}`}>{s0}</span>
@@ -121,7 +123,7 @@ export function RpsGame({ wsUrl, gameId, initialRoomCode, quickPlay: isQuickPlay
           <span className={`text-3xl font-black tabular-nums ${s1 > s0 ? 'text-indigo-300' : 'text-zinc-400'}`}>{s1}</span>
         </div>
         <span className={`text-sm font-semibold truncate max-w-[100px] text-right ${myIdx === 1 ? 'text-indigo-300' : 'text-zinc-300'}`}>
-          {p1nick}{myIdx === 1 ? ' (you)' : ''}
+          {p1nick}{myIdx === 1 ? ` ${t('game.common.you')}` : ''}
         </span>
       </div>
     );
@@ -140,16 +142,15 @@ export function RpsGame({ wsUrl, gameId, initialRoomCode, quickPlay: isQuickPlay
     const oppWonRound = res === (myIdx === 0 ? 'p1_wins' : 'p0_wins');
 
     const resultLabel = res === 'draw'
-      ? 'Draw!'
+      ? t('game.status.draw')
       : iWonRound
-        ? '🎉 You win this round!'
-        : '😬 Opponent wins this round!';
+        ? t('rps.roundWin')
+        : t('rps.roundLose');
 
     const resultColor = res === 'draw' ? 'text-zinc-400' : iWonRound ? 'text-emerald-400' : 'text-rose-400';
 
     // Spectator view
     if (mp.isSpectator || myIdx === null) {
-      const p0res = res === 'p0_wins' ? '🎉' : res === 'p1_wins' ? '' : '';
       return (
         <div className="flex flex-col items-center gap-3">
           <div className="flex items-center gap-6">
@@ -164,9 +165,9 @@ export function RpsGame({ wsUrl, gameId, initialRoomCode, quickPlay: isQuickPlay
             </div>
           </div>
           <p className={`text-sm font-semibold ${res === 'draw' ? 'text-zinc-400' : res === 'p0_wins' ? 'text-emerald-400' : 'text-rose-400'}`}>
-            {res === 'draw' ? 'Draw!' : res === 'p0_wins' ? `${p0nick} wins!` : `${p1nick} wins!`}
+            {res === 'draw' ? t('game.status.draw') : res === 'p0_wins' ? `${p0nick} ${t('game.status.wins')}` : `${p1nick} ${t('game.status.wins')}`}
           </p>
-          <p className="text-xs text-zinc-600">Pick for next round…</p>
+          <p className="text-xs text-zinc-600">{t('rps.pickNextRound')}</p>
         </div>
       );
     }
@@ -176,7 +177,7 @@ export function RpsGame({ wsUrl, gameId, initialRoomCode, quickPlay: isQuickPlay
         <div className="flex items-center gap-6">
           <div className="flex flex-col items-center gap-1">
             <span className="text-5xl">{PICK_ICON[leftPick]}</span>
-            <span className="text-xs text-zinc-500">You</span>
+            <span className="text-xs text-zinc-500">{t('rps.you')}</span>
           </div>
           <div className="flex flex-col items-center gap-0.5">
             <span className="text-zinc-600 text-xs uppercase tracking-wider font-semibold">vs</span>
@@ -188,7 +189,7 @@ export function RpsGame({ wsUrl, gameId, initialRoomCode, quickPlay: isQuickPlay
           </div>
         </div>
         {gs.status === 'ongoing' && (
-          <p className="text-xs text-zinc-500">Pick for round {gs.round}…</p>
+          <p className="text-xs text-zinc-500">{t('rps.pickForRoundPre')}{gs.round}…</p>
         )}
       </div>
     );
@@ -224,19 +225,19 @@ export function RpsGame({ wsUrl, gameId, initialRoomCode, quickPlay: isQuickPlay
   // ── Status banner ───────────────────────────────────────────────────────────
   function StatusBanner() {
     if (mp.phase === 'lobby') {
-      return <p className="text-zinc-500 text-sm text-center">Create or join a room to play.</p>;
+      return <p className="text-zinc-500 text-sm text-center">{t('game.lobby.joinPrompt')}</p>;
     }
     if (mp.isSpectator) {
-      if (!gs) return <p className="text-zinc-500 text-sm text-center">Watching…</p>;
+      if (!gs) return <p className="text-zinc-500 text-sm text-center">{t('game.lobby.watching')}</p>;
       if (gs.status === 'win') {
         const winnerIdx = gs.players[0].id === gs.winner ? 0 : 1;
-        return <p className="text-lg font-bold text-center text-yellow-400">{winnerIdx === 0 ? p0nick : p1nick} wins the match!</p>;
+        return <p className="text-lg font-bold text-center text-yellow-400">{winnerIdx === 0 ? p0nick : p1nick} {t('rps.matchWin')}</p>;
       }
-      if (gs.status === 'draw') return <p className="text-lg font-bold text-center text-zinc-400">Match drawn!</p>;
+      if (gs.status === 'draw') return <p className="text-lg font-bold text-center text-zinc-400">{t('rps.matchDrawn')}</p>;
       return (
         <div className="flex items-center gap-2 text-zinc-400 text-sm justify-center">
           <span className="w-2 h-2 rounded-full bg-zinc-400 animate-pulse" />
-          Round {gs.round} of {gs.bestOf}
+          {t('rps.roundLabel')} {gs.round} {t('rps.ofLabel')} {gs.bestOf}
         </div>
       );
     }
@@ -244,7 +245,7 @@ export function RpsGame({ wsUrl, gameId, initialRoomCode, quickPlay: isQuickPlay
       return (
         <div className="flex items-center gap-2 text-amber-400 text-sm justify-center">
           <span className="w-2 h-2 rounded-full bg-amber-400 animate-pulse" />
-          Waiting for opponent to join…
+          {t('game.status.waitingToJoin')}
         </div>
       );
     }
@@ -254,25 +255,25 @@ export function RpsGame({ wsUrl, gameId, initialRoomCode, quickPlay: isQuickPlay
       const iWon = myIdx !== null && gs.winner === gs.players[myIdx]?.id;
       return (
         <p className={`text-xl font-black text-center ${iWon ? 'text-yellow-400' : 'text-zinc-400'}`}>
-          {iWon ? `🏆 ${myNick} wins the match!` : `${oppNick} wins the match!`}
+          {iWon ? `🏆 ${myNick} ${t('rps.matchWin')}` : `${oppNick} ${t('rps.matchWin')}`}
         </p>
       );
     }
     if (gs.status === 'draw') {
-      return <p className="text-xl font-black text-center text-zinc-400">Match drawn!</p>;
+      return <p className="text-xl font-black text-center text-zinc-400">{t('rps.matchDrawn')}</p>;
     }
     if (mp.phase === 'ended') {
-      return <p className="text-sm text-rose-400 text-center">Opponent disconnected.</p>;
+      return <p className="text-sm text-rose-400 text-center">{t('game.status.opponentDisconnected')}</p>;
     }
     if (iHavePicked && !roundResolved) {
       return (
         <div className="flex flex-col items-center gap-1">
           <p className="text-sm font-semibold text-zinc-400">
-            You picked {PICK_ICON[gs.pendingPick0 && myIdx === 0 ? gs.pendingPick0 : gs.pendingPick1!]}
+            {t('rps.youPicked')} {PICK_ICON[gs.pendingPick0 && myIdx === 0 ? gs.pendingPick0 : gs.pendingPick1!]}
           </p>
           <div className="flex items-center gap-2 text-zinc-500 text-xs">
             <span className="w-1.5 h-1.5 rounded-full bg-zinc-500 animate-pulse" />
-            Waiting for {oppNick}…
+            {t('rps.waitingForPre')}{oppNick}…
           </div>
         </div>
       );
@@ -281,7 +282,7 @@ export function RpsGame({ wsUrl, gameId, initialRoomCode, quickPlay: isQuickPlay
       return (
         <div className="flex items-center gap-2 text-indigo-400 text-sm justify-center font-medium">
           <span className="w-2 h-2 rounded-full bg-indigo-400 animate-pulse" />
-          Round {gs.round} of {gs.bestOf} — Choose your weapon!
+          {t('rps.roundLabel')} {gs.round} {t('rps.ofLabel')} {gs.bestOf}{t('rps.chooseWeapon')}
         </div>
       );
     }
@@ -309,7 +310,7 @@ export function RpsGame({ wsUrl, gameId, initialRoomCode, quickPlay: isQuickPlay
             <Scoreboard />
             {gs.status === 'ongoing' && (
               <p className="text-xs text-zinc-600 font-medium uppercase tracking-wider">
-                Best of {gs.bestOf} · First to {gs.winsNeeded} wins
+                {t('rps.bestOfLabel')} {gs.bestOf} · {t('rps.firstToLabel')} {gs.winsNeeded} {t('rps.winsLabel')}
               </p>
             )}
           </div>
@@ -329,7 +330,7 @@ export function RpsGame({ wsUrl, gameId, initialRoomCode, quickPlay: isQuickPlay
         {mp.isSpectator && (
           <div className="flex items-center gap-1.5 text-xs text-zinc-500 bg-zinc-800/60 border border-zinc-700 rounded-full px-3 py-1">
             <span className="w-1.5 h-1.5 rounded-full bg-zinc-500" />
-            Spectating
+            {t('game.status.spectating')}
           </div>
         )}
 
@@ -341,10 +342,10 @@ export function RpsGame({ wsUrl, gameId, initialRoomCode, quickPlay: isQuickPlay
               disabled={mp.myVotedRematch}
               className="px-5 py-2 rounded-lg bg-indigo-600 hover:bg-indigo-500 disabled:opacity-50 disabled:cursor-not-allowed text-white font-semibold text-sm transition-colors"
             >
-              {mp.myVotedRematch ? 'Waiting for opponent…' : 'Rematch'}
+              {mp.myVotedRematch ? t('game.actions.waitingRematch') : t('game.actions.rematch')}
             </button>
             {mp.rematchVotes > 0 && !mp.myVotedRematch && (
-              <p className="text-xs text-amber-400">Opponent wants a rematch!</p>
+              <p className="text-xs text-amber-400">{t('game.status.opponentRematch')}</p>
             )}
             {mp.rematchError && (
               <p className="text-xs text-rose-400 bg-rose-950/50 border border-rose-800 rounded-lg px-3 py-1.5">{mp.rematchError}</p>
@@ -357,7 +358,7 @@ export function RpsGame({ wsUrl, gameId, initialRoomCode, quickPlay: isQuickPlay
             onClick={mp.leaveRoom}
             className="mt-2 px-4 py-2 text-sm rounded-lg border border-zinc-700 text-zinc-400 hover:border-zinc-500 hover:text-zinc-200 transition-colors"
           >
-            Leave room
+            {t('game.actions.leaveRoom')}
           </button>
         )}
       </div>
@@ -373,7 +374,7 @@ export function RpsGame({ wsUrl, gameId, initialRoomCode, quickPlay: isQuickPlay
               mp.connection === 'connecting' ? 'bg-amber-400 animate-pulse' :
               'bg-rose-500'
             }`} />
-            <span className="text-zinc-400 capitalize">{mp.connection}</span>
+            <span className="text-zinc-400">{t(`status.${mp.connection}`)}</span>
           </div>
         </div>
 
@@ -390,10 +391,10 @@ export function RpsGame({ wsUrl, gameId, initialRoomCode, quickPlay: isQuickPlay
           <div className="rounded-xl border border-zinc-800 bg-zinc-900 p-4 flex flex-col items-center gap-3">
             <div className="flex items-center gap-2 text-amber-400 text-sm">
               <span className="w-2 h-2 rounded-full bg-amber-400 animate-pulse" />
-              {mp.connection !== 'connected' ? 'Connecting…' : 'Finding a match…'}
+              {mp.connection !== 'connected' ? t('status.connecting') : t('game.lobby.findingMatch')}
             </div>
             <Link href={`/games/${gameId}`} className="text-xs text-zinc-500 hover:text-zinc-300 transition-colors">
-              Cancel
+              {t('common.cancel')}
             </Link>
           </div>
         ) : mp.phase === 'lobby' ? (
@@ -403,11 +404,11 @@ export function RpsGame({ wsUrl, gameId, initialRoomCode, quickPlay: isQuickPlay
                 <button
                   key={v}
                   onClick={() => setRoomVisibility(v)}
-                  className={`flex-1 py-1.5 text-xs rounded-md font-medium capitalize transition-colors ${
+                  className={`flex-1 py-1.5 text-xs rounded-md font-medium transition-colors ${
                     roomVisibility === v ? 'bg-zinc-700 text-zinc-100' : 'text-zinc-500 hover:text-zinc-300'
                   }`}
                 >
-                  {v}
+                  {t(`game.lobby.${v}`)}
                 </button>
               ))}
             </div>
@@ -415,7 +416,7 @@ export function RpsGame({ wsUrl, gameId, initialRoomCode, quickPlay: isQuickPlay
               <input
                 value={roomName}
                 onChange={(e) => setRoomName(e.target.value.slice(0, 24))}
-                placeholder="Room name (optional)"
+                placeholder={t('game.lobby.roomName')}
                 maxLength={24}
                 className="bg-zinc-800 border border-zinc-700 rounded-lg px-3 py-2 text-sm text-zinc-100 placeholder-zinc-500 focus:outline-none focus:border-indigo-500"
               />
@@ -425,13 +426,13 @@ export function RpsGame({ wsUrl, gameId, initialRoomCode, quickPlay: isQuickPlay
               disabled={mp.connection !== 'connected'}
               className="w-full py-2.5 rounded-lg bg-indigo-600 hover:bg-indigo-500 disabled:opacity-40 disabled:cursor-not-allowed text-white font-semibold text-sm transition-colors"
             >
-              Create Room
+              {t('game.lobby.createRoom')}
             </button>
             <div className="flex gap-2">
               <input
                 value={joinInput}
                 onChange={(e) => setJoinInput(e.target.value.toUpperCase().slice(0, 6))}
-                placeholder="Room code"
+                placeholder={t('game.lobby.roomCode')}
                 maxLength={6}
                 className="flex-1 bg-zinc-800 border border-zinc-700 rounded-lg px-3 py-2 text-sm text-zinc-100 placeholder-zinc-500 focus:outline-none focus:border-indigo-500 uppercase tracking-widest font-mono"
               />
@@ -440,7 +441,7 @@ export function RpsGame({ wsUrl, gameId, initialRoomCode, quickPlay: isQuickPlay
                 disabled={joinInput.length < 4 || mp.connection !== 'connected'}
                 className="px-4 py-2 rounded-lg bg-zinc-700 hover:bg-zinc-600 disabled:opacity-40 disabled:cursor-not-allowed text-white text-sm font-semibold transition-colors"
               >
-                Join
+                {t('game.lobby.join')}
               </button>
             </div>
           </div>
@@ -449,12 +450,12 @@ export function RpsGame({ wsUrl, gameId, initialRoomCode, quickPlay: isQuickPlay
         {/* Room info */}
         {mp.roomCode && (
           <div className="rounded-xl border border-zinc-800 bg-zinc-900 p-4 flex flex-col gap-3">
-            <p className="text-xs text-zinc-500 uppercase tracking-wider font-semibold">Room</p>
+            <p className="text-xs text-zinc-500 uppercase tracking-wider font-semibold">{t('game.room.title')}</p>
             <div className="flex items-center gap-2">
               <span className="font-mono text-2xl font-black tracking-widest text-zinc-100">{mp.roomCode}</span>
               <span className="text-xs text-zinc-500">{mp.playerCount}/2</span>
               {mp.spectatorCount > 0 && (
-                <span className="text-xs text-zinc-600 ml-1">{mp.spectatorCount} watching</span>
+                <span className="text-xs text-zinc-600 ml-1">{mp.spectatorCount} {t('game.room.watching')}</span>
               )}
             </div>
             <button
@@ -462,9 +463,9 @@ export function RpsGame({ wsUrl, gameId, initialRoomCode, quickPlay: isQuickPlay
               className="w-full py-2 rounded-lg border border-zinc-700 hover:border-indigo-600 text-sm text-zinc-300 hover:text-indigo-300 transition-colors flex items-center justify-center gap-2"
             >
               {copied ? (
-                <><svg className="w-4 h-4 text-emerald-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" /></svg><span className="text-emerald-400">Copied!</span></>
+                <><svg className="w-4 h-4 text-emerald-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" /></svg><span className="text-emerald-400">{t('game.room.copied')}</span></>
               ) : (
-                <><svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" /></svg>Copy invite link</>
+                <><svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" /></svg>{t('game.room.copyInvite')}</>
               )}
             </button>
             {mp.players.length > 0 && (
@@ -479,11 +480,11 @@ export function RpsGame({ wsUrl, gameId, initialRoomCode, quickPlay: isQuickPlay
                         {idx === 0 ? '①' : '②'}
                       </span>
                       <span className="text-zinc-300 truncate">{p.nickname}</span>
-                      {isMe && <span className="text-zinc-600 shrink-0">(you)</span>}
+                      {isMe && <span className="text-zinc-600 shrink-0">{t('game.common.you')}</span>}
                     </div>
                   );
                 })}
-                {mp.isSpectator && <p className="text-xs text-zinc-600">Spectator — view only</p>}
+                {mp.isSpectator && <p className="text-xs text-zinc-600">{t('game.room.spectatorLabel')}</p>}
               </div>
             )}
           </div>
@@ -517,7 +518,7 @@ export function RpsGame({ wsUrl, gameId, initialRoomCode, quickPlay: isQuickPlay
           <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
             <path strokeLinecap="round" strokeLinejoin="round" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
           </svg>
-          Stats &amp; Rules
+          {t('game.info.statsRules')}
         </button>
       </aside>
 
@@ -531,10 +532,10 @@ export function RpsGame({ wsUrl, gameId, initialRoomCode, quickPlay: isQuickPlay
         myNickname={mp.myNickname}
         rules={
           <ul className="text-sm text-zinc-400 space-y-1.5 list-disc list-inside">
-            <li>Both players choose simultaneously each round</li>
-            <li>Rock beats Scissors · Scissors beats Paper · Paper beats Rock</li>
-            <li>First to win {gs?.winsNeeded ?? 2} rounds wins the match (best of {gs?.bestOf ?? 3})</li>
-            <li>A drawn round counts for neither player</li>
+            <li>{t('rps.rules.1')}</li>
+            <li>{t('rps.rules.2')}</li>
+            <li>{t('rps.rules.3')}</li>
+            <li>{t('rps.rules.4')}</li>
           </ul>
         }
       />

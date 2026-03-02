@@ -12,8 +12,9 @@
     "next": "^15.1.6",
     "react": "^19.0.0",
     "react-dom": "^19.0.0",
-    "socket.io-client": "^4.8.1",
-    "shared": "workspace:*"
+    "react-markdown": "^10.1.0",
+    "shared": "workspace:*",
+    "socket.io-client": "^4.8.1"
   },
   "devDependencies": {
     "@tailwindcss/postcss": "^4.0.3",

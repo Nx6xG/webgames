@@ -8,8 +8,9 @@ import { rateLimiter } from './rateLimiter.js';
 import { getStats, getAllStats, recordResult } from './stats.js';
 import { addMatch, getHistory } from './matchHistory.js';
 import { recordMatchResult, recordDraw, updateNickname, getEntries } from './leaderboard.js';
-import type { RoomPlayerInfo, OpenRoomInfo, PublicRoomListItem, GameId, Match, ActionErrorCode, ChatMessage, LeaderboardMode } from 'shared';
+import type { RoomPlayerInfo, OpenRoomInfo, PublicRoomListItem, GameId, Match, ActionErrorCode, ChatMessage, LeaderboardMode, AnyGameState } from 'shared';
 import type { Room } from './rooms.js';
+import { projectGameState } from './stateProjection.js';
 import { InMemoryStorage } from './storage/inMemory.js';
 import type { Storage } from './storage/types.js';
 
@@ -146,6 +147,48 @@ function startCountdown(room: Room) {
   io.to(room.code).emit('match_starting', { startsInMs: COUNTDOWN_MS });
 }
 
+/**
+ * Broadcast game_state to every socket in the room with a per-socket projected
+ * state (hides opponent ship positions for Battleship; no-op for other games).
+ */
+function emitGameState(room: Room, state: AnyGameState) {
+  const sockets = io.sockets.adapter.rooms.get(room.code);
+  if (!sockets) return;
+  for (const sid of sockets) {
+    const sock = io.sockets.sockets.get(sid);
+    if (!sock) continue;
+    const isSpec = roomManager.isSpectator(sid);
+    const pIdx = isSpec
+      ? null
+      : (room.players.find((p) => p.socketId === sid)?.index ?? null);
+    sock.emit('game_state', {
+      roomCode: room.code,
+      gameId: room.gameId,
+      state: projectGameState(room.gameId, state, { playerIndex: pIdx, isSpectator: isSpec }),
+      spectatorCount: room.spectators.size,
+    });
+  }
+}
+
+/**
+ * Broadcast rematch_started to every socket in the room with per-socket projection.
+ */
+function emitRematchStarted(room: Room, state: AnyGameState) {
+  const sockets = io.sockets.adapter.rooms.get(room.code);
+  if (!sockets) return;
+  for (const sid of sockets) {
+    const sock = io.sockets.sockets.get(sid);
+    if (!sock) continue;
+    const isSpec = roomManager.isSpectator(sid);
+    const pIdx = isSpec
+      ? null
+      : (room.players.find((p) => p.socketId === sid)?.index ?? null);
+    sock.emit('rematch_started', {
+      state: projectGameState(room.gameId, state, { playerIndex: pIdx, isSpectator: isSpec }),
+    });
+  }
+}
+
 // ── Room-level callbacks (fired outside socket event handlers) ────────────────
 
 roomManager.onPlayerEvicted((room, playerIndex) => {
@@ -197,7 +240,9 @@ io.on('connection', (socket) => {
       playerIndex: player.index,
       playerCount: room.players.length,
       spectatorCount: room.spectators.size,
-      state: room.state,
+      state: room.state
+        ? projectGameState(room.gameId, room.state, { playerIndex: player.index, isSpectator: false })
+        : null,
       players: roomPlayers(room),
     });
 
@@ -217,12 +262,7 @@ io.on('connection', (socket) => {
     // reset to 'playing' (the only client event that updates phase back).
     const { state: reconnectState } = room;
     if (reconnectState) {
-      io.to(room.code).emit('game_state', {
-        roomCode: room.code,
-        gameId: room.gameId,
-        state: reconnectState,
-        spectatorCount: room.spectators.size,
-      });
+      emitGameState(room, reconnectState);
     }
 
     if (room.matchStartsAt && Date.now() < room.matchStartsAt) {
@@ -287,7 +327,9 @@ io.on('connection', (socket) => {
         playerIndex: player.index,
         playerCount: room.players.length,
         spectatorCount: room.spectators.size,
-        state: room.state,
+        state: room.state
+          ? projectGameState(room.gameId, room.state, { playerIndex: player.index, isSpectator: false })
+          : null,
         players: roomPlayers(room),
       });
       socket.emit('chat_history', { scope: 'room', messages: roomChats.get(code) ?? [] });
@@ -300,12 +342,7 @@ io.on('connection', (socket) => {
       // Same phase-reset broadcast as in the identify reconnect path.
       const { state: rejoinState } = room;
       if (rejoinState) {
-        io.to(code).emit('game_state', {
-          roomCode: code,
-          gameId: room.gameId,
-          state: rejoinState,
-          spectatorCount: room.spectators.size,
-        });
+        emitGameState(room, rejoinState);
       }
       return;
     }
@@ -345,18 +382,22 @@ io.on('connection', (socket) => {
         isSpectator: false,
         playerCount: room.players.length,
         spectatorCount: room.spectators.size,
-        state,
+        state: projectGameState(room.gameId, state, { playerIndex: 1, isSpectator: false }),
         players: roomPlayers(room),
       });
       socket.emit('chat_history', { scope: 'room', messages: roomChats.get(code) ?? [] });
-      socket.to(code).emit('player_joined', {
-        playerId: socket.id,
-        playerIndex: 1,
-        playerCount: room.players.length,
-        spectatorCount: room.spectators.size,
-        state,
-        players: roomPlayers(room),
-      });
+      // player_joined goes to player 0 only (no spectators yet when game starts)
+      const p0sock = io.sockets.sockets.get(room.players.find((p) => p.index === 0)?.socketId ?? '');
+      if (p0sock) {
+        p0sock.emit('player_joined', {
+          playerId: socket.id,
+          playerIndex: 1,
+          playerCount: room.players.length,
+          spectatorCount: room.spectators.size,
+          state: projectGameState(room.gameId, state, { playerIndex: 0, isSpectator: false }),
+          players: roomPlayers(room),
+        });
+      }
       if (room.visibility === 'public') broadcastOpenRooms();
       startCountdown(room);
       console.log(`[room] ${socket.id} joined ${code} as player 1`);
@@ -379,7 +420,9 @@ io.on('connection', (socket) => {
       isSpectator: true,
       playerCount: room.players.length,
       spectatorCount: room.spectators.size,
-      state: room.state,
+      state: room.state
+        ? projectGameState(room.gameId, room.state, { playerIndex: null, isSpectator: true })
+        : null,
       players: roomPlayers(room),
     });
     socket.emit('chat_history', { scope: 'room', messages: roomChats.get(code) ?? [] });
@@ -435,7 +478,7 @@ io.on('connection', (socket) => {
       : currentState.currentPlayer;
     if (!connectedTokens.has(turnToken)) {
       console.error(`[sanity] ${code}: turn token ${turnToken} not in connected players ${[...connectedTokens].join(',')}, re-syncing`);
-      io.to(code).emit('game_state', { roomCode: code, gameId: room.gameId, state: currentState, spectatorCount: room.spectators.size });
+      emitGameState(room, currentState);
       return;
     }
 
@@ -447,12 +490,7 @@ io.on('connection', (socket) => {
         playerIndex: player.index,
       });
       room.state = nextState;
-      io.to(code).emit('game_state', {
-        roomCode: code,
-        gameId: room.gameId,
-        state: nextState,
-        spectatorCount: room.spectators.size,
-      });
+      emitGameState(room, nextState);
 
       // Record result and broadcast updated stats when a game just ended
       if (prevStatus === 'ongoing' && nextState.status !== 'ongoing') {
@@ -558,7 +596,7 @@ io.on('connection', (socket) => {
       const state = engine.initialState(playerIds);
       room.state = state;
       room.rematchVotes.clear();
-      io.to(code).emit('rematch_started', { state });
+      emitRematchStarted(room, state);
       console.log(`[rematch] ${code} restarted`);
     } else {
       io.to(code).emit('rematch_requested', { votes: result.votes });
@@ -621,19 +659,23 @@ io.on('connection', (socket) => {
             isSpectator: false,
             playerCount: room.players.length,
             spectatorCount: room.spectators.size,
-            state,
+            state: projectGameState(room.gameId, state, { playerIndex: 1, isSpectator: false }),
             players: roomPlayers(room),
           });
           socket.emit('chat_history', { scope: 'room', messages: roomChats.get(entry.roomCode) ?? [] });
           socket.emit('quick_play_joined', { roomCode: entry.roomCode });
-          socket.to(entry.roomCode).emit('player_joined', {
-            playerId: socket.id,
-            playerIndex: 1,
-            playerCount: room.players.length,
-            spectatorCount: room.spectators.size,
-            state,
-            players: roomPlayers(room),
-          });
+          // player_joined goes to player 0 only (no spectators when game starts)
+          const qp0sock = io.sockets.sockets.get(room.players.find((p) => p.index === 0)?.socketId ?? '');
+          if (qp0sock) {
+            qp0sock.emit('player_joined', {
+              playerId: socket.id,
+              playerIndex: 1,
+              playerCount: room.players.length,
+              spectatorCount: room.spectators.size,
+              state: projectGameState(room.gameId, state, { playerIndex: 0, isSpectator: false }),
+              players: roomPlayers(room),
+            });
+          }
           startCountdown(room);
           console.log(`[quick-play] ${socket.id} joined ${entry.roomCode} (${gameId})`);
           return;

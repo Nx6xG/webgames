@@ -1,10 +1,10 @@
-import type { GameManifest } from './manifest.js';
+import type { GameManifest } from './manifest';
 
 /**
  * Union of every supported game ID.
  * Adding a new game: add its string literal here, then implement engine + UI.
  */
-export type GameId = 'tictactoe' | 'connect4' | 'rps' | 'chess';
+export type GameId = 'tictactoe' | 'connect4' | 'rps' | 'chess' | 'battleship';
 
 /**
  * Compile-time check that every GameId has a manifest entry.

@@ -4,6 +4,7 @@ import { TicTacToeGame } from '@/components/games/tictactoe/TicTacToeGame';
 import { Connect4Game } from '@/components/games/connect4/Connect4Game';
 import { RpsGame } from '@/components/games/rps/RpsGame';
 import { ChessGame } from '@/components/games/chess/ChessGame';
+import { BattleshipGame } from '@/components/games/battleship/BattleshipGame';
 
 /**
  * Props every game component must accept.
@@ -117,5 +118,20 @@ export const webRegistry: Record<GameId, WebGameEntry> = {
     titleKey: 'lobby.games.chess.title',
     descKey:  'lobby.games.chess.desc',
     Component: ChessGame,
+  },
+  battleship: {
+    manifest: {
+      id: 'battleship',
+      name: 'Battleship',
+      description: 'Place your fleet and sink the enemy before they sink you!',
+      categories: ['classic', 'strategy', '2 players'],
+      version: '1.0.0',
+      routeSlug: 'battleship',
+      minPlayers: 2,
+      maxPlayers: 2,
+    },
+    titleKey: 'lobby.games.battleship.title',
+    descKey:  'lobby.games.battleship.desc',
+    Component: BattleshipGame,
   },
 };

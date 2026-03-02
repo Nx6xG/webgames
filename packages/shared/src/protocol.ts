@@ -1,18 +1,19 @@
-import type { TicTacToeState, TicTacToeAction } from './games/tictactoe.js';
-import type { Connect4State, Connect4Action } from './games/connect4.js';
-import type { RpsState, RpsAction } from './games/rps.js';
-import type { ChessState, ChessAction } from './games/chess.js';
-import type { GameId } from './registry.js';
+import type { TicTacToeState, TicTacToeAction } from './games/tictactoe';
+import type { Connect4State, Connect4Action } from './games/connect4';
+import type { RpsState, RpsAction } from './games/rps';
+import type { ChessState, ChessAction } from './games/chess';
+import type { BattleshipState, BattleshipAction } from './games/battleship';
+import type { GameId } from './registry';
 
 // ─── Game-state / action unions ───────────────────────────────────────────────
 // Extend these when adding a new game. Protocol events use these aliases so
 // the rest of the code stays unchanged.
 
 /** Union of all possible game states across every registered game. */
-export type AnyGameState = TicTacToeState | Connect4State | RpsState | ChessState;
+export type AnyGameState = TicTacToeState | Connect4State | RpsState | ChessState | BattleshipState;
 
 /** Union of all possible game actions across every registered game. */
-export type AnyGameAction = TicTacToeAction | Connect4Action | RpsAction | ChessAction;
+export type AnyGameAction = TicTacToeAction | Connect4Action | RpsAction | ChessAction | BattleshipAction;
 
 // ─── Nickname / players ───────────────────────────────────────────────────────
 
