@@ -4,7 +4,7 @@
   "version": "1.0.0",
   "scripts": {
     "dev": "concurrently -c \"cyan.bold,green.bold\" -n \"ws ,web\" --kill-others-on-fail \"pnpm --filter ws dev\" \"pnpm --filter web dev\"",
-    "build": "pnpm --filter ws build && pnpm --filter web build",
+    "build": "pnpm --filter shared build && pnpm --filter ws build && pnpm --filter web build",
     "start": "concurrently -c \"cyan.bold,green.bold\" -n \"ws ,web\" \"pnpm --filter ws start\" \"pnpm --filter web start\"",
     "type-check": "pnpm --filter ws type-check && pnpm --filter web type-check"
   },
