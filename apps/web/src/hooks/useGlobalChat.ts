@@ -1,6 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useRef, useState } from 'react';
+import { getWsUrl } from '@/lib/getWsUrl';
 import { io, type Socket } from 'socket.io-client';
 import type { ServerToClientEvents, ClientToServerEvents, ChatMessage, ChatScope } from 'shared';
 
@@ -29,7 +30,7 @@ export function useGlobalChat(wsUrl: string, nickname: string) {
 
     const token = localStorage.getItem(TOKEN_KEY) ?? 'anonymous';
 
-    const socket: GameSocket = io(wsUrl, {
+    const socket: GameSocket = io(wsUrl || getWsUrl(), {
       autoConnect: false,
       reconnection: true,
       reconnectionDelay: 1_000,

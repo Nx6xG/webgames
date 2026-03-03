@@ -2,13 +2,18 @@
   "name": "shared",
   "version": "1.0.0",
   "private": false,
+  "type": "commonjs",
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
   "exports": {
-    ".": "./dist/index.js"
+    ".": {
+      "require": "./dist/index.js",
+      "default": "./dist/index.js"
+    }
   },
   "scripts": {
     "build": "tsc",
+    "dev": "tsc --watch",
     "type-check": "tsc --noEmit"
   },
   "devDependencies": {

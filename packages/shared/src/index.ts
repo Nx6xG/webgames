@@ -40,7 +40,10 @@ export type {
   ChessResignAction,
   ChessAction,
 } from './games/chess';
-export { SHIP_DEFS, BOARD_SIZE } from './games/battleship';
+import { SHIP_DEFS as _shipDefs, BOARD_SIZE as _boardSize } from './games/battleship';
+/** Exported as const so CJS output uses direct `exports.X = value` (cjs-module-lexer-friendly). */
+export const SHIP_DEFS = _shipDefs;
+export const BOARD_SIZE = _boardSize;
 export type {
   BattleshipState,
   BattleshipAction,

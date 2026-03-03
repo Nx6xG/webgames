@@ -4,14 +4,18 @@ import { useState, useEffect, useCallback } from 'react';
 import { isPatchNotesNew, markPatchNotesSeen } from '@/lib/patchNotes';
 import { PatchNotesDialog } from './PatchNotesDialog';
 
-interface PatchNotesFloatingButtonProps {
-  content: string;
-}
-
-export function PatchNotesFloatingButton({ content }: PatchNotesFloatingButtonProps) {
+export function PatchNotesFloatingButton() {
   const [open, setOpen] = useState(false);
   // Start false (SSR-safe); update after mount once localStorage is available.
   const [isNew, setIsNew] = useState(false);
+  const [content, setContent] = useState('');
+
+  useEffect(() => {
+    fetch('/patch-notes.md')
+      .then((r) => r.text())
+      .then(setContent)
+      .catch(() => {});
+  }, []);
 
   useEffect(() => {
     const newVersion = isPatchNotesNew();

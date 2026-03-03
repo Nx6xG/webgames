@@ -6,8 +6,8 @@
     "moduleResolution": "bundler",
     "baseUrl": ".",
     "paths": {
-      "shared": ["../../packages/shared/src/index.ts"],
-      "shared/*": ["../../packages/shared/src/*"]
+      "shared": ["../../packages/shared/dist/index"],
+      "shared/*": ["../../packages/shared/dist/*"]
     }
   },
   "include": ["src"]

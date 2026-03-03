@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useRef, useState, useCallback } from 'react';
+import { getWsUrl } from '@/lib/getWsUrl';
 import { io, type Socket } from 'socket.io-client';
 import type {
   ServerToClientEvents,
@@ -148,7 +149,7 @@ export function useMultiplayer<TState extends AnyGameState = AnyGameState>(
     tokenRef.current = getOrCreateToken();
     nicknameRef.current = getOrCreateNickname();
 
-    const socket: GameSocket = io(wsUrl, {
+    const socket: GameSocket = io(wsUrl || getWsUrl(), {
       autoConnect: false,
       // Socket.IO built-in reconnection — fires 'connect' again after recovery
       reconnection: true,

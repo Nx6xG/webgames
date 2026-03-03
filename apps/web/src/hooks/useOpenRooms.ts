@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
+import { getWsUrl } from '@/lib/getWsUrl';
 import { io, type Socket } from 'socket.io-client';
 import type { ServerToClientEvents, ClientToServerEvents, PublicRoomListItem } from 'shared';
 
@@ -11,7 +12,7 @@ export function useOpenRooms(wsUrl: string) {
   const [connected, setConnected] = useState(false);
 
   useEffect(() => {
-    const socket: RoomsSocket = io(wsUrl, {
+    const socket: RoomsSocket = io(wsUrl || getWsUrl(), {
       autoConnect: false,
       reconnection: true,
       reconnectionDelay: 2000,

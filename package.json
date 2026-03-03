@@ -3,7 +3,7 @@
   "private": true,
   "version": "1.0.0",
   "scripts": {
-    "dev": "concurrently -c \"cyan.bold,green.bold\" -n \"ws ,web\" --kill-others-on-fail \"pnpm --filter ws dev\" \"pnpm --filter web dev\"",
+    "dev": "pnpm --filter shared build && concurrently -c \"cyan.bold,green.bold\" -n \"ws ,web\" --kill-others-on-fail \"pnpm --filter ws dev\" \"pnpm --filter web dev\"",
     "build": "pnpm -r build",
     "start": "concurrently -c \"cyan.bold,green.bold\" -n \"ws ,web\" \"pnpm --filter ws start\" \"pnpm --filter web start\"",
     "type-check": "pnpm --filter ws type-check && pnpm --filter web type-check"

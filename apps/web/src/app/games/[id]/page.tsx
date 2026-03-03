@@ -55,7 +55,7 @@ export default async function GameRoutePage({ params, searchParams }: Props) {
   }
 
   const { Component } = entry;
-  const wsUrl = process.env.NEXT_PUBLIC_WS_URL ?? 'http://localhost:3001';
+  const wsUrl = process.env.NEXT_PUBLIC_WS_URL ?? '';
 
   return (
     <GamePage title={manifest.name}>

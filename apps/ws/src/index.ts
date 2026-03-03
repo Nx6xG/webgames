@@ -127,7 +127,7 @@ function canChat(token: string): boolean {
 // ─────────────────────────────────────────────────────────────────────────────
 
 const PORT = Number(process.env.PORT ?? 3001);
-const WEB_ORIGIN = process.env.WEB_ORIGIN ?? 'http://localhost:3000';
+const WS_CORS_ORIGIN = process.env.WS_CORS_ORIGIN ?? 'http://localhost:3000';
 
 const httpServer = createServer((_req, res) => {
   res.writeHead(200);
@@ -135,7 +135,7 @@ const httpServer = createServer((_req, res) => {
 });
 
 const io = new Server<ClientToServerEvents, ServerToClientEvents>(httpServer, {
-  cors: { origin: WEB_ORIGIN, methods: ['GET', 'POST'] },
+  cors: { origin: WS_CORS_ORIGIN, methods: ['GET', 'POST'] },
 });
 
 function broadcastOpenRooms() {
@@ -838,5 +838,5 @@ io.on('connection', (socket) => {
 });
 
 httpServer.listen(PORT, () => {
-  console.log(`ws server → http://localhost:${PORT}  (CORS: ${WEB_ORIGIN})`);
+  console.log(`ws server → http://localhost:${PORT}  (CORS: ${WS_CORS_ORIGIN})`);
 });

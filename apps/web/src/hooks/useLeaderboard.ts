@@ -1,6 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useRef, useState } from 'react';
+import { getWsUrl } from '@/lib/getWsUrl';
 import { io, type Socket } from 'socket.io-client';
 import type { ServerToClientEvents, ClientToServerEvents, LeaderboardEntry, LeaderboardMode, GameId } from 'shared';
 
@@ -25,7 +26,7 @@ export function useLeaderboard(wsUrl: string) {
   tabRef.current = tab;
 
   useEffect(() => {
-    const socket: LBSocket = io(wsUrl, {
+    const socket: LBSocket = io(wsUrl || getWsUrl(), {
       autoConnect: false,
       reconnection: true,
       reconnectionDelay: 2000,
