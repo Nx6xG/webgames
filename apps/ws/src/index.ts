@@ -127,7 +127,7 @@ function canChat(token: string): boolean {
 // ─────────────────────────────────────────────────────────────────────────────
 
 const PORT = Number(process.env.PORT ?? 3001);
-const WS_CORS_ORIGIN = process.env.WS_CORS_ORIGIN ?? 'http://localhost:3000';
+const WS_CORS_ORIGIN = process.env.WS_CORS_ORIGIN ?? process.env.WEB_ORIGIN ?? 'http://localhost:3000';
 
 const httpServer = createServer((_req, res) => {
   res.writeHead(200);
@@ -837,6 +837,6 @@ io.on('connection', (socket) => {
   }
 });
 
-httpServer.listen(PORT, () => {
-  console.log(`ws server → http://localhost:${PORT}  (CORS: ${WS_CORS_ORIGIN})`);
+httpServer.listen(PORT, '0.0.0.0', () => {
+  console.log(`ws server → http://0.0.0.0:${PORT}  (CORS: ${WS_CORS_ORIGIN})`);
 });
