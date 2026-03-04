@@ -5,6 +5,7 @@ import { webRegistry } from '@/lib/gameRegistry';
 import type { WebGameEntry } from '@/lib/gameRegistry';
 import { GlobalChatWidget } from '@/components/chat/GlobalChatWidget';
 import { ProfileMenu } from '@/components/ProfileMenu';
+import { OnlineNavChip } from '@/components/social/OnlineNavChip';
 import { useI18n } from '@/components/providers/LanguageProvider';
 
 /** Maps internal category IDs (used as CSS-class keys) to i18n message keys. */
@@ -95,7 +96,7 @@ export default function HomePage() {
             W
           </div>
           <span className="font-bold text-lg tracking-tight">Web Games</span>
-          <nav className="ml-auto flex items-center gap-5">
+          <nav className="ml-auto flex items-center gap-4">
             <Link href="/rooms" className="text-sm text-zinc-400 hover:text-zinc-100 transition-colors">
               {t('nav.rooms')}
             </Link>
@@ -103,6 +104,7 @@ export default function HomePage() {
               {t('nav.leaderboard')}
             </Link>
             <div className="w-px h-4 bg-zinc-700 shrink-0" aria-hidden />
+            <OnlineNavChip />
             <ProfileMenu />
           </nav>
         </div>

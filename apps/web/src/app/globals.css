@@ -89,3 +89,14 @@ body {
 .cd-overlay {
   animation: cd-fadein 180ms ease-out forwards;
 }
+
+/* ── Invite accepted countdown bar ────────────────────────────────────────── */
+
+@keyframes invite-timer-shrink {
+  from { width: 100%; }
+  to   { width: 0%; }
+}
+
+.invite-timer-bar {
+  animation: invite-timer-shrink 3s linear forwards;
+}

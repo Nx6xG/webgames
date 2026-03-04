@@ -80,4 +80,6 @@ export type {
   ChatMessage,
   LeaderboardMode,
   LeaderboardEntry,
+  OnlineUser,
+  InvitePayload,
 } from './protocol';

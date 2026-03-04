@@ -8,6 +8,7 @@ import { useMultiplayer } from '@/hooks/useMultiplayer';
 import type { GameComponentProps } from '@/lib/gameRegistry';
 import { TicTacToeBoard } from './TicTacToeBoard';
 import { CountdownOverlay } from '@/components/CountdownOverlay';
+import { WaitingForConnectionOverlay } from '@/components/WaitingForConnectionOverlay';
 import { ChatPanel } from '@/components/chat/ChatPanel';
 import { NicknameEditor } from '@/components/NicknameEditor';
 import { GameInfoModal } from '@/components/GameInfoModal';
@@ -82,6 +83,7 @@ export function TicTacToeGame({ wsUrl, gameId, initialRoomCode, quickPlay: isQui
   const boardDisabled =
     mp.isSpectator ||
     mp.phase !== 'playing' ||
+    !mp.roomReady ||
     !isMyTurn ||
     gs?.status !== 'ongoing' ||
     mp.matchCountdown !== null;
@@ -167,6 +169,10 @@ export function TicTacToeGame({ wsUrl, gameId, initialRoomCode, quickPlay: isQui
       {/* ── Board area ─────────────────────────────────────────────────────── */}
       <div className="relative flex-1 flex flex-col items-center justify-center gap-6 min-h-[380px]">
         <CountdownOverlay countdown={mp.matchCountdown} />
+        <WaitingForConnectionOverlay
+          show={mp.phase === 'playing' && !mp.roomReady && !mp.isSpectator}
+          label={t('game.ready.waiting')}
+        />
         <StatusBanner />
         <TicTacToeBoard
           board={gs?.board ?? Array(9).fill(null)}

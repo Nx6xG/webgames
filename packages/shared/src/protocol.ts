@@ -15,6 +15,30 @@ export type AnyGameState = TicTacToeState | Connect4State | RpsState | ChessStat
 /** Union of all possible game actions across every registered game. */
 export type AnyGameAction = TicTacToeAction | Connect4Action | RpsAction | ChessAction | BattleshipAction;
 
+// ─── Invites ─────────────────────────────────────────────────────────────────
+
+export interface InvitePayload {
+  /** Server-generated unique id for this invite. */
+  id: string;
+  fromToken: string;
+  fromName: string;
+  toToken: string;
+  gameId: GameId;
+  roomCode: string;
+  /** Unix ms when the invite was created (used by client-side 60 s expiry). */
+  createdAt: number;
+}
+
+// ─── Presence ────────────────────────────────────────────────────────────────
+
+/** A user currently online (at least one active socket for their token). */
+export interface OnlineUser {
+  playerToken: string;
+  nickname: string;
+  /** Number of active socket connections for this token (multi-tab). */
+  connections: number;
+}
+
 // ─── Nickname / players ───────────────────────────────────────────────────────
 
 /** Lightweight player descriptor sent in room events */
@@ -248,6 +272,24 @@ export interface ServerToClientEvents {
 
   /** Response to leaderboard_get */
   leaderboard_data: (data: { mode: LeaderboardMode; gameId?: string; entries: LeaderboardEntry[] }) => void;
+
+  /** Broadcast to all sockets when the online user list changes; also sent in response to get_online_users */
+  online_users: (data: { users: OnlineUser[] }) => void;
+
+  /** Delivered to the receiver of an invite. */
+  invite_received: (payload: InvitePayload) => void;
+  /** Delivered to the sender when the room is ready (includes roomCode for navigation). */
+  invite_sent: (payload: { id: string; roomCode: string; gameId: GameId }) => void;
+  /** Delivered to the sender when invite creation fails. */
+  invite_error: (payload: { message: string }) => void;
+  /** Delivered to the invite sender when the receiver accepts. */
+  invite_accepted: (payload: { id: string; gameId: GameId; roomCode: string; byName: string }) => void;
+  /**
+   * Emitted to all sockets in a room when the set of connected game sockets changes.
+   * `ready` is true when both player 0 and player 1 have an active game-page socket.
+   * The countdown will only start (and gameplay will only be enabled) when ready === true.
+   */
+  room_ready: (payload: { roomCode: string; ready: boolean; players: { p0: boolean; p1: boolean } }) => void;
 }
 
 // ─── Client → Server ─────────────────────────────────────────────────────────
@@ -297,4 +339,14 @@ export interface ClientToServerEvents {
 
   /** Request leaderboard data (server replies with leaderboard_data). */
   leaderboard_get: (data: { mode: LeaderboardMode; gameId?: string }) => void;
+
+  /** Request current online user list (server replies with online_users to requester only). */
+  get_online_users: () => void;
+
+  /** Create an invite for toToken to join a game room. Server replies with invite_sent or invite_error. */
+  invite_create: (payload: { toToken: string; gameId: GameId }) => void;
+  /** Notify server the invite was declined (optional; no server action required). */
+  invite_decline: (payload: { id: string }) => void;
+  /** Accept an incoming invite; server notifies the original sender. */
+  invite_accept: (payload: { id: string; fromToken: string; gameId: GameId; roomCode: string }) => void;
 }

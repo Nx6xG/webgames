@@ -8,6 +8,7 @@ import { SHIP_DEFS, BOARD_SIZE } from 'shared';
 import { useMultiplayer } from '@/hooks/useMultiplayer';
 import type { GameComponentProps } from '@/lib/gameRegistry';
 import { CountdownOverlay } from '@/components/CountdownOverlay';
+import { WaitingForConnectionOverlay } from '@/components/WaitingForConnectionOverlay';
 import { ChatPanel } from '@/components/chat/ChatPanel';
 import { NicknameEditor } from '@/components/NicknameEditor';
 import { GameInfoModal } from '@/components/GameInfoModal';
@@ -719,7 +720,7 @@ export function BattleshipGame({ wsUrl, gameId, initialRoomCode, quickPlay: isQu
   // currentTurn is now a player token (UUID), not a BsSlot.
   const myPlayerId = gs && myIdx !== null ? gs.playerIds[myIdx] : null;
   const isMyTurn = !mp.isSpectator && gs?.phase === 'playing' && myPlayerId !== null && gs.currentTurn === myPlayerId;
-  const canFire  = isMyTurn && mp.matchCountdown === null;
+  const canFire  = isMyTurn && mp.roomReady && mp.matchCountdown === null;
 
   // Stable key that is non-empty only once per finished match (ignored on repeated pushes).
   const finishKey = gs?.phase === 'finished' && gs?.winner && !mp.isSpectator && myIdx !== null
@@ -1387,6 +1388,10 @@ export function BattleshipGame({ wsUrl, gameId, initialRoomCode, quickPlay: isQu
           </div>
         )}
         <CountdownOverlay countdown={mp.matchCountdown} />
+        <WaitingForConnectionOverlay
+          show={mp.phase === 'playing' && !mp.roomReady && !mp.isSpectator}
+          label={t('game.ready.waiting')}
+        />
         <StatusBanner />
 
         {/* ── Setup phase ──────────────────────────────────────────────────── */}

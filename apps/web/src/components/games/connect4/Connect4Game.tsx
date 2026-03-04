@@ -7,6 +7,7 @@ import type { Connect4Cell, Connect4State } from 'shared';
 import { useMultiplayer } from '@/hooks/useMultiplayer';
 import type { GameComponentProps } from '@/lib/gameRegistry';
 import { CountdownOverlay } from '@/components/CountdownOverlay';
+import { WaitingForConnectionOverlay } from '@/components/WaitingForConnectionOverlay';
 import { ChatPanel } from '@/components/chat/ChatPanel';
 import { NicknameEditor } from '@/components/NicknameEditor';
 import { GameInfoModal } from '@/components/GameInfoModal';
@@ -90,7 +91,7 @@ export function Connect4Game({ wsUrl, gameId, initialRoomCode, quickPlay: isQuic
     gs.currentPlayer === gs.players[mp.playerIndex!]?.id;
 
   const boardDisabled =
-    mp.isSpectator || mp.phase !== 'playing' || !isMyTurn || gs?.status !== 'ongoing' || mp.matchCountdown !== null;
+    mp.isSpectator || mp.phase !== 'playing' || !mp.roomReady || !isMyTurn || gs?.status !== 'ongoing' || mp.matchCountdown !== null;
 
   // Detect newly placed piece to trigger fall animation (local + remote moves)
   useEffect(() => {
@@ -205,6 +206,10 @@ export function Connect4Game({ wsUrl, gameId, initialRoomCode, quickPlay: isQuic
       {/* Board area */}
       <div className="relative flex-1 flex flex-col items-center justify-center gap-5 min-h-[480px]">
         <CountdownOverlay countdown={mp.matchCountdown} />
+        <WaitingForConnectionOverlay
+          show={mp.phase === 'playing' && !mp.roomReady && !mp.isSpectator}
+          label={t('game.ready.waiting')}
+        />
         <StatusBanner />
 
         <div className="select-none">

@@ -48,6 +48,11 @@ export interface MultiplayerState<TState extends AnyGameState = AnyGameState> {
   myNickname: string;
   /** Current countdown label ('3'|'2'|'1'|'Go!'|null). Non-null while pre-game countdown is running. */
   matchCountdown: string | null;
+  /**
+   * True when both players have an active game-page socket in the room.
+   * Countdown and gameplay are only enabled when this is true.
+   */
+  roomReady: boolean;
   /** Chat messages for the current room (cleared on leave). */
   roomMessages: ChatMessage[];
   /** Platform-wide global chat messages. */
@@ -90,6 +95,7 @@ function makeLobbyState<TState extends AnyGameState>(): MultiplayerState<TState>
     history: [],
     myNickname: '',
     matchCountdown: null,
+    roomReady: false,
     roomMessages: [],
     globalMessages: [],
     chatError: null,
@@ -194,6 +200,7 @@ export function useMultiplayer<TState extends AnyGameState = AnyGameState>(
         playerCount: 1,
         spectatorCount: 0,
         players,
+        roomReady: false,
         error: null,
       })),
     );
@@ -254,15 +261,26 @@ export function useMultiplayer<TState extends AnyGameState = AnyGameState>(
     socket.on('player_left', ({ playerIndex, playerCount }) =>
       set((prev) => {
         const nick = prev.players.find((p) => p.index === playerIndex)?.nickname ?? `Player ${playerIndex + 1}`;
+        // If room wasn't ready yet (e.g. invite sender's online socket briefly disconnected
+        // before their game socket could claim the session), stay in waiting phase so the
+        // reconnect flow can restore the room without showing a spurious "game ended" screen.
+        if (!prev.roomReady) {
+          return { ...prev, playerCount, roomReady: false };
+        }
         return {
           ...prev,
           phase: 'ended',
           playerCount,
+          roomReady: false,
           rematchVotes: 0,
           myVotedRematch: false,
           error: `${nick} disconnected.`,
         };
       }),
+    );
+
+    socket.on('room_ready', ({ ready }) =>
+      set((prev) => ({ ...prev, roomReady: ready })),
     );
 
     socket.on('game_state', ({ state, spectatorCount }) =>

@@ -7,6 +7,7 @@ import type { ChessState, ChessPiece, ChessColor, ChessPieceType, ChessPromoPiec
 import { useMultiplayer } from '@/hooks/useMultiplayer';
 import type { GameComponentProps } from '@/lib/gameRegistry';
 import { CountdownOverlay } from '@/components/CountdownOverlay';
+import { WaitingForConnectionOverlay } from '@/components/WaitingForConnectionOverlay';
 import { ChatPanel } from '@/components/chat/ChatPanel';
 import { NicknameEditor } from '@/components/NicknameEditor';
 import { GameInfoModal } from '@/components/GameInfoModal';
@@ -375,7 +376,7 @@ export function ChessGame({ wsUrl, gameId, initialRoomCode, quickPlay: isQuickPl
   };
 
   const isMyTurn      = gs !== null && myColor !== null && gs.turn === myColor && gs.status === 'ongoing';
-  const boardDisabled = replayMode || mp.isSpectator || mp.phase !== 'playing' || !isMyTurn || mp.matchCountdown !== null;
+  const boardDisabled = replayMode || mp.isSpectator || mp.phase !== 'playing' || !mp.roomReady || !isMyTurn || mp.matchCountdown !== null;
 
   // Captured pieces (respects replay step when in replay mode)
   const { capturedByWhite, capturedByBlack } = useMemo(() => {
@@ -915,6 +916,10 @@ export function ChessGame({ wsUrl, gameId, initialRoomCode, quickPlay: isQuickPl
       {/* ── Game area ───────────────────────────────────────────────────── */}
       <div className="relative min-w-0 flex flex-col items-center justify-center gap-2 min-h-[520px]">
         <CountdownOverlay countdown={mp.matchCountdown} />
+        <WaitingForConnectionOverlay
+          show={mp.phase === 'playing' && !mp.roomReady && !mp.isSpectator}
+          label={t('game.ready.waiting')}
+        />
 
         {mp.phase !== 'lobby' && <PlayerLabel color={flipped ? 'w' : 'b'} />}
         {mp.phase !== 'lobby' && <Board />}

@@ -7,6 +7,7 @@ import type { RpsState, RpsPick } from 'shared';
 import { useMultiplayer } from '@/hooks/useMultiplayer';
 import type { GameComponentProps } from '@/lib/gameRegistry';
 import { CountdownOverlay } from '@/components/CountdownOverlay';
+import { WaitingForConnectionOverlay } from '@/components/WaitingForConnectionOverlay';
 import { ChatPanel } from '@/components/chat/ChatPanel';
 import { NicknameEditor } from '@/components/NicknameEditor';
 import { GameInfoModal } from '@/components/GameInfoModal';
@@ -89,6 +90,7 @@ export function RpsGame({ wsUrl, gameId, initialRoomCode, quickPlay: isQuickPlay
   const canPick =
     !mp.isSpectator &&
     mp.phase === 'playing' &&
+    mp.roomReady &&
     gs?.status === 'ongoing' &&
     !iHavePicked &&
     mp.matchCountdown === null;
@@ -303,6 +305,10 @@ export function RpsGame({ wsUrl, gameId, initialRoomCode, quickPlay: isQuickPlay
       {/* ── Game area ──────────────────────────────────────────────────────── */}
       <div className="relative flex-1 flex flex-col items-center justify-center gap-6 min-h-[420px]">
         <CountdownOverlay countdown={mp.matchCountdown} />
+        <WaitingForConnectionOverlay
+          show={mp.phase === 'playing' && !mp.roomReady && !mp.isSpectator}
+          label={t('game.ready.waiting')}
+        />
 
         {/* Score + round info */}
         {gs && mp.phase !== 'lobby' && (

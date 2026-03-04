@@ -154,6 +154,7 @@ export const messages: Record<Lang, Record<string, string>> = {
     'game.room.spectatorLabel':      'Zuschauer — nur ansehen',
     'game.status.waitingToJoin':     'Warte auf Gegner…',
     'game.status.waiting':           'Warte auf Gegner…',
+    'game.ready.waiting':            'Verbinde…',
     'game.status.opponentDisconnected': 'Gegner getrennt.',
     'game.status.spectating':        'Zuschauend',
     'game.status.draw':              'Unentschieden!',
@@ -258,6 +259,23 @@ export const messages: Record<Lang, Record<string, string>> = {
     'chat.room':            'Raum',
     'chat.send':            'Senden',
     'chat.placeholder':     'Nachricht…',
+
+    // ── Online presence ────────────────────────────────────────────────────
+    'online.title':         'Online',
+    'online.empty':         'Niemand online',
+    'online.you':           'du',
+
+    // ── Invites ────────────────────────────────────────────────────────────
+    'invite.title':         'Einladen',
+    'invite.send':          'Einladung senden',
+    'invite.accept':        'Beitreten',
+    'invite.decline':       'Ablehnen',
+    'invite.receivedPre':   'lädt dich ein zu',
+    'invite.sentNotice':    'Einladung gesendet',
+    'invite.goToGame':      'Zum Spiel',
+    'invite.chooseGame':    'Spiel wählen',
+    'invite.accepted':      'hat deine Einladung angenommen',
+    'invite.joinGame':      'Spiel beitreten',
   },
 
   en: {
@@ -412,6 +430,7 @@ export const messages: Record<Lang, Record<string, string>> = {
     'game.room.spectatorLabel':      'Spectator — view only',
     'game.status.waitingToJoin':     'Waiting for opponent to join…',
     'game.status.waiting':           'Waiting for opponent…',
+    'game.ready.waiting':            'Connecting…',
     'game.status.opponentDisconnected': 'Opponent disconnected.',
     'game.status.spectating':        'Spectating',
     'game.status.draw':              'Draw!',
@@ -516,5 +535,22 @@ export const messages: Record<Lang, Record<string, string>> = {
     'chat.room':            'Room',
     'chat.send':            'Send',
     'chat.placeholder':     'Message…',
+
+    // ── Online presence ────────────────────────────────────────────────────
+    'online.title':         'Online',
+    'online.empty':         'No one online',
+    'online.you':           'you',
+
+    // ── Invites ────────────────────────────────────────────────────────────
+    'invite.title':         'Invite',
+    'invite.send':          'Send invite',
+    'invite.accept':        'Join',
+    'invite.decline':       'Decline',
+    'invite.receivedPre':   'invites you to',
+    'invite.sentNotice':    'Invite sent',
+    'invite.goToGame':      'Go to game',
+    'invite.chooseGame':    'Choose game',
+    'invite.accepted':      'accepted your invite',
+    'invite.joinGame':      'Join game',
   },
 };

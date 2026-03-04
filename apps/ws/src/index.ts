@@ -8,7 +8,7 @@ import { rateLimiter } from './rateLimiter.js';
 import { getStats, getAllStats, recordResult } from './stats.js';
 import { addMatch, getHistory } from './matchHistory.js';
 import { recordMatchResult, recordDraw, updateNickname, getEntries } from './leaderboard.js';
-import type { RoomPlayerInfo, OpenRoomInfo, PublicRoomListItem, GameId, Match, ActionErrorCode, ChatMessage, LeaderboardMode, AnyGameState } from 'shared';
+import type { RoomPlayerInfo, OpenRoomInfo, PublicRoomListItem, GameId, Match, ActionErrorCode, ChatMessage, LeaderboardMode, AnyGameState, InvitePayload } from 'shared';
 import type { Room } from './rooms.js';
 import { projectGameState } from './stateProjection.js';
 import { InMemoryStorage } from './storage/inMemory.js';
@@ -30,6 +30,56 @@ const quickPlayQueue = new Map<GameId, OpenRoomInfo>();
 
 /** socketId → nickname for all identified sockets */
 const nicknameMap = new Map<string, string>();
+
+// ── Presence (online users) ───────────────────────────────────────────────────
+
+/** playerToken → { nickname, sockets: Set of active socketIds } */
+const presence = new Map<string, { nickname: string; sockets: Set<string> }>();
+
+function buildPresenceList() {
+  return [...presence.entries()]
+    .map(([playerToken, { nickname, sockets }]) => ({ playerToken, nickname, connections: sockets.size }))
+    .sort((a, b) => a.nickname.localeCompare(b.nickname, undefined, { sensitivity: 'base' }));
+}
+
+function broadcastPresence() {
+  io.emit('online_users', { users: buildPresenceList() });
+}
+
+// ── Invite rate limiter ───────────────────────────────────────────────────────
+
+/** playerToken → timestamp of last invite sent (ms) */
+const inviteRateLimit = new Map<string, number>();
+
+// ── Per-room game-socket presence ─────────────────────────────────────────────
+/**
+ * Tracks which players have an active GAME-PAGE socket in each room.
+ * Only sockets from create_room / join_room / quick_play / identify→claimSession
+ * are tracked.  The invite_create online socket is intentionally excluded so that
+ * the countdown cannot start until the inviting player actually navigates to the
+ * game page.
+ */
+const roomGamePresence = new Map<string, { p0: Set<string>; p1: Set<string> }>();
+
+function getRoomPresence(roomCode: string): { p0: Set<string>; p1: Set<string> } {
+  let rp = roomGamePresence.get(roomCode);
+  if (!rp) { rp = { p0: new Set(), p1: new Set() }; roomGamePresence.set(roomCode, rp); }
+  return rp;
+}
+
+function emitRoomReady(room: Room) {
+  const rp = roomGamePresence.get(room.code);
+  const p0 = (rp?.p0.size ?? 0) > 0;
+  const p1 = (rp?.p1.size ?? 0) > 0;
+  io.to(room.code).emit('room_ready', { roomCode: room.code, ready: p0 && p1, players: { p0, p1 } });
+}
+
+function tryStartCountdown(room: Room) {
+  const rp = roomGamePresence.get(room.code);
+  if (!rp || rp.p0.size === 0 || rp.p1.size === 0) return; // both must be present
+  if (room.matchStartsAt) return; // already issued
+  startCountdown(room);
+}
 
 // ── Public room rate limiter (per IP, in-memory) ──────────────────────────────
 const PUBLIC_ROOM_RATE_LIMIT = 3;
@@ -207,6 +257,8 @@ roomManager.onRoomCleaned((room) => {
   if (room.visibility === 'public') broadcastOpenRooms();
   // Free the room's chat buffer
   roomChats.delete(room.code);
+  // Free presence map entry
+  roomGamePresence.delete(room.code);
 });
 
 // ── Per-connection logic ──────────────────────────────────────────────────────
@@ -228,11 +280,31 @@ io.on('connection', (socket) => {
     if (!profiles.has(playerToken)) profiles.set(playerToken, { nickname });
     socket.emit('session_info', { token: playerToken, nickname });
 
+    // Update presence
+    const presEntry = presence.get(playerToken);
+    if (presEntry) {
+      presEntry.sockets.add(socket.id);
+      presEntry.nickname = nickname; // prefer latest nickname
+    } else {
+      presence.set(playerToken, { nickname, sockets: new Set([socket.id]) });
+    }
+    broadcastPresence();
+
     const result = roomManager.claimSession(playerToken, socket.id, nickname);
     if (!result) return; // no live session → client stays in lobby
 
     const { room, player } = result;
     socket.join(room.code);
+
+    // Register game-page socket presence; may trigger countdown if other player was waiting
+    {
+      const rp = getRoomPresence(room.code);
+      const wasReady = rp.p0.size > 0 && rp.p1.size > 0;
+      if (player.index === 0) { rp.p0.clear(); rp.p0.add(socket.id); }
+      else { rp.p1.clear(); rp.p1.add(socket.id); }
+      emitRoomReady(room);
+      if (!wasReady) tryStartCountdown(room);
+    }
 
     socket.emit('room_rejoined', {
       roomCode: room.code,
@@ -301,6 +373,7 @@ io.on('connection', (socket) => {
 
     const room = roomManager.createRoom(socket.id, playerToken, gameId, nickname, visibility, sanitizedName);
     socket.join(room.code);
+    getRoomPresence(room.code).p0.add(socket.id);
     socket.emit('room_created', { roomCode: room.code, playerIndex: 0, gameId: room.gameId, players: roomPlayers(room) });
     // Empty history for the brand-new room
     socket.emit('chat_history', { scope: 'room', messages: [] });
@@ -321,6 +394,14 @@ io.on('connection', (socket) => {
     if (rejoin && rejoin.room.code === code) {
       const { room, player } = rejoin;
       socket.join(code);
+      {
+        const rp = getRoomPresence(code);
+        const wasReady = rp.p0.size > 0 && rp.p1.size > 0;
+        if (player.index === 0) { rp.p0.clear(); rp.p0.add(socket.id); }
+        else { rp.p1.clear(); rp.p1.add(socket.id); }
+        emitRoomReady(room);
+        if (!wasReady) tryStartCountdown(room);
+      }
       socket.emit('room_rejoined', {
         roomCode: code,
         gameId: room.gameId,
@@ -375,6 +456,7 @@ io.on('connection', (socket) => {
       room.state = state;
 
       socket.join(code);
+      getRoomPresence(code).p1.add(socket.id);
       socket.emit('room_joined', {
         roomCode: code,
         gameId: room.gameId,
@@ -399,7 +481,8 @@ io.on('connection', (socket) => {
         });
       }
       if (room.visibility === 'public') broadcastOpenRooms();
-      startCountdown(room);
+      emitRoomReady(room);
+      tryStartCountdown(room);
       console.log(`[room] ${socket.id} joined ${code} as player 1`);
       return;
     }
@@ -652,6 +735,7 @@ io.on('connection', (socket) => {
           room.state = state;
 
           socket.join(entry.roomCode);
+          getRoomPresence(room.code).p1.add(socket.id);
           socket.emit('room_joined', {
             roomCode: entry.roomCode,
             gameId: room.gameId,
@@ -676,7 +760,8 @@ io.on('connection', (socket) => {
               players: roomPlayers(room),
             });
           }
-          startCountdown(room);
+          emitRoomReady(room);
+          tryStartCountdown(room);
           console.log(`[quick-play] ${socket.id} joined ${entry.roomCode} (${gameId})`);
           return;
         }
@@ -691,6 +776,7 @@ io.on('connection', (socket) => {
     quickPlayQueue.set(gameId, { roomCode: room.code, gameId, hostNickname: nickname, createdAt: Date.now() });
     broadcastOpenRooms();
     socket.join(room.code);
+    getRoomPresence(room.code).p0.add(socket.id);
     socket.emit('room_created', {
       roomCode: room.code,
       playerIndex: 0,
@@ -722,6 +808,13 @@ io.on('connection', (socket) => {
     nicknameMap.set(socket.id, clean);
     updateNickname(token, clean);
     socket.emit('nickname_set', { nickname: clean });
+
+    // Sync presence nickname
+    const presEntry = presence.get(token);
+    if (presEntry) {
+      presEntry.nickname = clean;
+      broadcastPresence();
+    }
 
     // Update nickname in any room the player is currently in
     const room = roomManager.getRoomBySocket(socket.id);
@@ -786,6 +879,105 @@ io.on('connection', (socket) => {
     }
   });
 
+  // ── get_online_users ──────────────────────────────────────────────────────
+  socket.on('get_online_users', () => {
+    socket.emit('online_users', { users: buildPresenceList() });
+  });
+
+  // ── invite_create ─────────────────────────────────────────────────────────
+  socket.on('invite_create', ({ toToken, gameId }) => {
+    const fromToken = identifiedTokens.get(socket.id);
+    if (!fromToken) {
+      socket.emit('invite_error', { message: 'Nicht identifiziert.' });
+      return;
+    }
+
+    // Rate limit: 2 s between invites per sender
+    const lastAt = inviteRateLimit.get(fromToken) ?? 0;
+    if (Date.now() - lastAt < 2_000) {
+      socket.emit('invite_error', { message: 'Warte kurz bevor du erneut einlädst.' });
+      return;
+    }
+    inviteRateLimit.set(fromToken, Date.now());
+
+    if (toToken === fromToken) {
+      socket.emit('invite_error', { message: 'Du kannst dich nicht selbst einladen.' });
+      return;
+    }
+
+    const receiverEntry = presence.get(toToken);
+    if (!receiverEntry || receiverEntry.sockets.size === 0) {
+      socket.emit('invite_error', { message: 'Nutzer ist nicht mehr online.' });
+      return;
+    }
+
+    if (!(gameId in engineRegistry)) {
+      socket.emit('invite_error', { message: 'Ungültiges Spiel.' });
+      return;
+    }
+    const validGameId = gameId as GameId;
+
+    const fromName = nicknameMap.get(socket.id) ?? profiles.get(fromToken)?.nickname ?? 'Unknown';
+
+    // Leave any current room so the sender can become player 0 in the invite room
+    const existing = roomManager.getRoomBySocket(socket.id);
+    if (existing) {
+      const leaveResult = roomManager.removeSocket(socket.id);
+      socket.leave(existing.code);
+      if (leaveResult?.type === 'player') {
+        io.to(existing.code).emit('player_left', {
+          playerId: socket.id,
+          playerIndex: leaveResult.player.index,
+          playerCount: existing.players.length,
+        });
+        if (existing.players.length === 0) {
+          for (const [gid, entry] of quickPlayQueue) {
+            if (entry.roomCode === existing.code) { quickPlayQueue.delete(gid); break; }
+          }
+        }
+      }
+      if (existing.visibility === 'public') broadcastOpenRooms();
+    }
+
+    // Create a private room with sender as player 0 (no room_created emitted — sender navigates manually)
+    const room = roomManager.createRoom(socket.id, fromToken, validGameId, fromName, 'private');
+    socket.join(room.code);
+    socket.emit('chat_history', { scope: 'room', messages: [] });
+
+    const invite: InvitePayload = {
+      id: randomUUID(),
+      fromToken,
+      fromName,
+      toToken,
+      gameId: validGameId,
+      roomCode: room.code,
+      createdAt: Date.now(),
+    };
+
+    // Deliver to all receiver sockets (multi-tab support)
+    for (const sid of receiverEntry.sockets) {
+      io.to(sid).emit('invite_received', invite);
+    }
+    socket.emit('invite_sent', { id: invite.id, roomCode: room.code, gameId: validGameId });
+    console.log(`[invite] ${fromName} → ${receiverEntry.nickname} (${validGameId}, room ${room.code})`);
+  });
+
+  // ── invite_decline (optional ack) ────────────────────────────────────────
+  socket.on('invite_decline', () => {
+    // No server-side action required; included for protocol completeness.
+  });
+
+  // ── invite_accept ─────────────────────────────────────────────────────────
+  socket.on('invite_accept', ({ id, fromToken, gameId, roomCode }) => {
+    const byName = nicknameMap.get(socket.id) ?? profiles.get(identifiedTokens.get(socket.id) ?? '')?.nickname ?? 'Someone';
+    const senderEntry = presence.get(fromToken);
+    if (!senderEntry || senderEntry.sockets.size === 0) return; // sender went offline
+    for (const sid of senderEntry.sockets) {
+      io.to(sid).emit('invite_accepted', { id, gameId, roomCode, byName });
+    }
+    console.log(`[invite] ${byName} accepted → ${senderEntry.nickname} (${gameId}, room ${roomCode})`);
+  });
+
   // ── leaderboard_get ───────────────────────────────────────────────────────
   socket.on('leaderboard_get', ({ mode, gameId }) => {
     const lbMode = (mode === 'game' ? 'game' : 'overall') as LeaderboardMode;
@@ -802,6 +994,18 @@ io.on('connection', (socket) => {
     console.log(`[-] ${socket.id}`);
     rateLimiter.clear(socket.id);
     nicknameMap.delete(socket.id);
+
+    // Update presence before deleting the token mapping
+    const disconnectedToken = identifiedTokens.get(socket.id);
+    if (disconnectedToken) {
+      const presEntry = presence.get(disconnectedToken);
+      if (presEntry) {
+        presEntry.sockets.delete(socket.id);
+        if (presEntry.sockets.size === 0) presence.delete(disconnectedToken);
+      }
+      broadcastPresence();
+    }
+
     identifiedTokens.delete(socket.id);
     handleLeave();
   });
@@ -814,6 +1018,13 @@ io.on('connection', (socket) => {
     socket.leave(room.code);
 
     if (result.type === 'player') {
+      // Update game-socket presence before broadcasting
+      const rp = roomGamePresence.get(room.code);
+      if (rp) {
+        if (result.player.index === 0) rp.p0.delete(socket.id);
+        else rp.p1.delete(socket.id);
+        emitRoomReady(room);
+      }
       // Broadcast immediately; eviction callback will fire again after 30 s if they don't return
       io.to(room.code).emit('player_left', {
         playerId: socket.id,
