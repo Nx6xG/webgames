@@ -302,7 +302,7 @@ export interface ClientToServerEvents {
   identify: (data: { playerToken: string; nickname: string }) => void;
 
   /** playerToken is stored server-side so the seat can survive a refresh */
-  create_room: (data: { playerToken: string; gameId?: GameId; nickname: string; visibility?: RoomVisibility; roomName?: string }) => void;
+  create_room: (data: { playerToken: string; gameId?: GameId; nickname: string; visibility?: RoomVisibility; roomName?: string; rpsConfig?: { mode: string; bestOf?: number } }) => void;
 
   /** If the room is full the socket joins as spectator instead */
   join_room: (data: { roomCode: string; playerToken: string; nickname: string }) => void;

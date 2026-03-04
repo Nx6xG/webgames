@@ -24,6 +24,8 @@ export interface Room {
   gameId: GameId;
   visibility: RoomVisibility;
   roomName?: string;
+  /** Game-specific config stored at room creation (currently only used by RPS). */
+  gameConfig?: { mode?: string; bestOf?: number };
   /** Only currently-connected players. Max 2. */
   players: RoomPlayer[];
   /** Socket IDs of spectators (no seat, read-only). */
@@ -78,6 +80,7 @@ class RoomManager {
     nickname = 'Player 1',
     visibility: RoomVisibility = 'private',
     roomName?: string,
+    gameConfig?: { mode?: string; bestOf?: number },
   ): Room {
     const code = this.generateCode();
     const room: Room = {
@@ -85,6 +88,7 @@ class RoomManager {
       gameId,
       visibility,
       roomName,
+      gameConfig,
       players: [{ socketId, index: 0, playerToken, nickname }],
       spectators: new Set(),
       state: null,

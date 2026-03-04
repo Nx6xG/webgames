@@ -24,6 +24,7 @@ export type {
 export type {
   RpsState,
   RpsPick,
+  RpsMode,
   RpsAction,
   RpsPlayer,
   RpsPickAction,

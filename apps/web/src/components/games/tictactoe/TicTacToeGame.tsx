@@ -165,9 +165,9 @@ export function TicTacToeGame({ wsUrl, gameId, initialRoomCode, quickPlay: isQui
 
   // ── Layout ─────────────────────────────────────────────────────────────────
   return (
-    <div className="flex flex-col lg:flex-row gap-6 w-full">
+    <div className="grid gap-6 lg:grid-cols-[1fr_360px] w-full items-start">
       {/* ── Board area ─────────────────────────────────────────────────────── */}
-      <div className="relative flex-1 flex flex-col items-center justify-center gap-6 min-h-[380px]">
+      <div className="relative min-w-0 flex flex-col items-center justify-center gap-6 min-h-[380px]">
         <CountdownOverlay countdown={mp.matchCountdown} />
         <WaitingForConnectionOverlay
           show={mp.phase === 'playing' && !mp.roomReady && !mp.isSpectator}
@@ -217,7 +217,7 @@ export function TicTacToeGame({ wsUrl, gameId, initialRoomCode, quickPlay: isQui
       </div>
 
       {/* ── Side panel ─────────────────────────────────────────────────────── */}
-      <aside className="lg:w-72 flex flex-col gap-3">
+      <aside className="flex flex-col gap-3 lg:sticky lg:top-24 h-fit">
 
         {/* Connection status */}
         <div className="rounded-xl border border-zinc-800 bg-zinc-900 px-4 py-3">

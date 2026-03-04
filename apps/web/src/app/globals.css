@@ -44,6 +44,12 @@
 
 /* ── Base styles ───────────────────────────────────────────────────────────── */
 
+html {
+  /* Always reserve scrollbar gutter space so the layout never shifts when a
+     scrollbar appears or disappears (e.g. during Battleship shot animations). */
+  scrollbar-gutter: stable;
+}
+
 body {
   background: var(--bg);
   color: var(--fg);

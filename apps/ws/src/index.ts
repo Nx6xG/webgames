@@ -344,7 +344,7 @@ io.on('connection', (socket) => {
   });
 
   // ── create_room ───────────────────────────────────────────────────────────
-  socket.on('create_room', ({ playerToken, gameId = 'tictactoe', nickname, visibility = 'private', roomName }) => {
+  socket.on('create_room', ({ playerToken, gameId = 'tictactoe', nickname, visibility = 'private', roomName, rpsConfig }) => {
     identifiedTokens.set(socket.id, playerToken);
     nicknameMap.set(socket.id, nickname);
     if (!profiles.has(playerToken)) profiles.set(playerToken, { nickname });
@@ -371,7 +371,8 @@ io.on('connection', (socket) => {
     // Sanitize room name: strip whitespace, cap at 24 chars
     const sanitizedName = roomName?.trim().slice(0, 24) || undefined;
 
-    const room = roomManager.createRoom(socket.id, playerToken, gameId, nickname, visibility, sanitizedName);
+    const gameConfig = gameId === 'rps' && rpsConfig ? rpsConfig : undefined;
+    const room = roomManager.createRoom(socket.id, playerToken, gameId, nickname, visibility, sanitizedName, gameConfig);
     socket.join(room.code);
     getRoomPresence(room.code).p0.add(socket.id);
     socket.emit('room_created', { roomCode: room.code, playerIndex: 0, gameId: room.gameId, players: roomPlayers(room) });
@@ -452,7 +453,8 @@ io.on('connection', (socket) => {
         .sort((a, b) => a.index - b.index)
         .map((p) => p.playerToken) as [string, string];
       const engine = engineRegistry[room.gameId];
-      const state = engine.initialState(playerIds);
+      const startingPlayerIndex: 0 | 1 = Math.random() < 0.5 ? 0 : 1;
+      const state = engine.initialState(playerIds, startingPlayerIndex, room.gameConfig);
       room.state = state;
 
       socket.join(code);
@@ -676,7 +678,8 @@ io.on('connection', (socket) => {
         .slice()
         .sort((a, b) => a.index - b.index)
         .map((p) => p.playerToken) as [string, string];
-      const state = engine.initialState(playerIds);
+      const startingPlayerIndex: 0 | 1 = Math.random() < 0.5 ? 0 : 1;
+      const state = engine.initialState(playerIds, startingPlayerIndex, room.gameConfig);
       room.state = state;
       room.rematchVotes.clear();
       emitRematchStarted(room, state);
@@ -731,7 +734,8 @@ io.on('connection', (socket) => {
             .slice()
             .sort((a, b) => a.index - b.index)
             .map((p) => p.playerToken) as [string, string];
-          const state = engineRegistry[room.gameId].initialState(playerIds);
+          const startingPlayerIndex: 0 | 1 = Math.random() < 0.5 ? 0 : 1;
+          const state = engineRegistry[room.gameId].initialState(playerIds, startingPlayerIndex, room.gameConfig);
           room.state = state;
 
           socket.join(entry.roomCode);

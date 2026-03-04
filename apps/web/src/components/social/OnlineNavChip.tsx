@@ -1,10 +1,11 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useOnlineUsers } from '@/hooks/useOnlineUsers';
 import { useI18n } from '@/components/providers/LanguageProvider';
+import { useClickOutside, useEscape } from '@/hooks/useClickOutside';
 import { OnlineUsersDrawer } from './OnlineUsersDrawer';
 import { InviteDialog } from './InviteDialog';
 import type { InvitePayload, GameId } from 'shared';
@@ -34,6 +35,15 @@ export function OnlineNavChip({ wsUrl = '' }: { wsUrl?: string }) {
   const [open, setOpen]               = useState(false);
   const [myToken, setMyToken]         = useState('');
   const [inviteTarget, setInviteTarget] = useState<{ token: string; nickname: string } | null>(null);
+
+  // Refs covering every "inside" element: the chip trigger + the drawer panel.
+  // useClickOutside fires when pointerdown lands outside ALL of them.
+  const chipRef        = useRef<HTMLButtonElement>(null);
+  const drawerPanelRef = useRef<HTMLDivElement>(null);
+
+  const closeDrawer = () => setOpen(false);
+  useClickOutside([chipRef, drawerPanelRef], closeDrawer, open);
+  useEscape(closeDrawer, open);
 
   // Read token after mount to avoid SSR mismatch
   useEffect(() => {
@@ -90,8 +100,10 @@ export function OnlineNavChip({ wsUrl = '' }: { wsUrl?: string }) {
     <>
       {/* ── Chip button ───────────────────────────────────────────────────── */}
       <button
-        onClick={() => setOpen(true)}
+        ref={chipRef}
+        onClick={() => setOpen((o) => !o)}
         aria-label="Show online users"
+        aria-expanded={open}
         className="inline-flex items-center gap-1.5 rounded-full border border-zinc-800 bg-zinc-900/40 px-2.5 py-1 text-xs text-zinc-300 hover:bg-zinc-800 hover:text-zinc-100 transition-colors"
       >
         <span
@@ -107,11 +119,12 @@ export function OnlineNavChip({ wsUrl = '' }: { wsUrl?: string }) {
       {/* ── Online users drawer ───────────────────────────────────────────── */}
       <OnlineUsersDrawer
         open={open}
-        onClose={() => setOpen(false)}
+        onClose={closeDrawer}
         users={users}
         connected={connected}
         myToken={myToken}
         onInvite={handleOpenInviteDialog}
+        panelRef={drawerPanelRef}
       />
 
       {/* ── Invite dialog (game picker) ───────────────────────────────────── */}

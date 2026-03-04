@@ -3,7 +3,7 @@
 import { useEffect, useState, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
-import type { RpsState, RpsPick } from 'shared';
+import type { RpsState, RpsPick, RpsMode } from 'shared';
 import { useMultiplayer } from '@/hooks/useMultiplayer';
 import type { GameComponentProps } from '@/lib/gameRegistry';
 import { CountdownOverlay } from '@/components/CountdownOverlay';
@@ -21,6 +21,8 @@ const PICK_ICON: Record<RpsPick, string> = {
   scissors: '✂️',
 };
 
+const BEST_OF_OPTIONS = [3, 5, 7, 9];
+
 export function RpsGame({ wsUrl, gameId, initialRoomCode, quickPlay: isQuickPlay }: GameComponentProps) {
   const router = useRouter();
   const mp = useMultiplayer<RpsState>(wsUrl, gameId);
@@ -29,6 +31,8 @@ export function RpsGame({ wsUrl, gameId, initialRoomCode, quickPlay: isQuickPlay
   const [copied, setCopied]               = useState(false);
   const [roomVisibility, setRoomVisibility] = useState<'private' | 'public'>('private');
   const [roomName, setRoomName]           = useState('');
+  const [rpsMode, setRpsMode]             = useState<RpsMode>('best_of');
+  const [bestOfChoice, setBestOfChoice]   = useState(3);
   const [showInfo, setShowInfo]           = useState(false);
   const [chatOpen, setChatOpen]           = useState(false);
   const [unread, setUnread]               = useState(0);
@@ -83,8 +87,8 @@ export function RpsGame({ wsUrl, gameId, initialRoomCode, quickPlay: isQuickPlay
     scissors: t('rps.pick.scissors'),
   };
 
+  const isShowdown   = gs?.mode === 'showdown';
   const iHavePicked  = gs !== null && myIdx !== null && gs.hasPicked[myIdx];
-  const oppHasPicked = gs !== null && myIdx !== null && gs.hasPicked[myIdx === 0 ? 1 : 0];
   const roundResolved = gs !== null && gs.picks[0] !== null && gs.picks[1] !== null;
 
   const canPick =
@@ -114,6 +118,28 @@ export function RpsGame({ wsUrl, gameId, initialRoomCode, quickPlay: isQuickPlay
     if (!gs) return null;
     const s0 = gs.scores[0];
     const s1 = gs.scores[1];
+
+    if (isShowdown) {
+      // In showdown, scores are always 0-0; show draws instead
+      const draws = gs.round - 1;
+      return (
+        <div className="flex flex-col items-center gap-1 w-full">
+          <div className="flex items-center gap-3">
+            <span className={`text-sm font-semibold truncate max-w-[100px] ${myIdx === 0 ? 'text-indigo-300' : 'text-zinc-300'}`}>
+              {p0nick}{myIdx === 0 ? ` ${t('game.common.you')}` : ''}
+            </span>
+            <span className="text-zinc-600 text-sm font-medium">vs</span>
+            <span className={`text-sm font-semibold truncate max-w-[100px] text-right ${myIdx === 1 ? 'text-indigo-300' : 'text-zinc-300'}`}>
+              {p1nick}{myIdx === 1 ? ` ${t('game.common.you')}` : ''}
+            </span>
+          </div>
+          {draws > 0 && (
+            <p className="text-xs text-zinc-600">{draws} {t('rps.drawRounds')}</p>
+          )}
+        </div>
+      );
+    }
+
     return (
       <div className="flex items-center justify-center gap-4 w-full">
         <span className={`text-sm font-semibold truncate max-w-[100px] ${myIdx === 0 ? 'text-indigo-300' : 'text-zinc-300'}`}>
@@ -141,7 +167,6 @@ export function RpsGame({ wsUrl, gameId, initialRoomCode, quickPlay: isQuickPlay
     const leftPick  = myIdx === 1 ? p1pick : p0pick;
     const rightPick = myIdx === 1 ? p0pick : p1pick;
     const iWonRound  = res === (myIdx === 0 ? 'p0_wins' : 'p1_wins');
-    const oppWonRound = res === (myIdx === 0 ? 'p1_wins' : 'p0_wins');
 
     const resultLabel = res === 'draw'
       ? t('game.status.draw')
@@ -169,7 +194,9 @@ export function RpsGame({ wsUrl, gameId, initialRoomCode, quickPlay: isQuickPlay
           <p className={`text-sm font-semibold ${res === 'draw' ? 'text-zinc-400' : res === 'p0_wins' ? 'text-emerald-400' : 'text-rose-400'}`}>
             {res === 'draw' ? t('game.status.draw') : res === 'p0_wins' ? `${p0nick} ${t('game.status.wins')}` : `${p1nick} ${t('game.status.wins')}`}
           </p>
-          <p className="text-xs text-zinc-600">{t('rps.pickNextRound')}</p>
+          {gs.status === 'ongoing' && (
+            <p className="text-xs text-zinc-600">{t('rps.pickNextRound')}</p>
+          )}
         </div>
       );
     }
@@ -191,17 +218,74 @@ export function RpsGame({ wsUrl, gameId, initialRoomCode, quickPlay: isQuickPlay
           </div>
         </div>
         {gs.status === 'ongoing' && (
-          <p className="text-xs text-zinc-500">{t('rps.pickForRoundPre')}{gs.round}…</p>
+          isShowdown
+            ? <p className="text-xs text-zinc-500">{t('rps.pickNextRound')}</p>
+            : <p className="text-xs text-zinc-500">{t('rps.pickForRoundPre')}{gs.round}…</p>
         )}
+      </div>
+    );
+  }
+
+  // ── Last-round summary (shown permanently once match ends) ──────────────────
+  function LastRoundSummary() {
+    if (!gs) return null;
+    if (gs.status !== 'win' && gs.status !== 'draw') return null;
+    if (!gs.lastRound) return null;
+
+    const { p0Pick, p1Pick, result } = gs.lastRound;
+
+    if (mp.isSpectator || myIdx === null) {
+      const roundLabel = result === 'draw'
+        ? t('game.status.draw')
+        : result === 'p0_wins'
+          ? `${p0nick} ${t('game.status.wins')}`
+          : `${p1nick} ${t('game.status.wins')}`;
+      const color = result === 'draw' ? 'text-zinc-400' : 'text-indigo-300';
+      return (
+        <div className="bg-zinc-900/40 border border-zinc-800 rounded-xl px-4 py-3 flex flex-col items-center gap-3">
+          <p className="text-xs text-zinc-500 uppercase tracking-wider font-semibold">{t('rps.lastRound')}</p>
+          <div className="flex items-center gap-6">
+            <div className="flex flex-col items-center gap-1">
+              <span className="text-4xl">{PICK_ICON[p0Pick]}</span>
+              <span className="text-xs text-zinc-500">{p0nick}</span>
+            </div>
+            <span className="text-zinc-600 text-sm">vs</span>
+            <div className="flex flex-col items-center gap-1">
+              <span className="text-4xl">{PICK_ICON[p1Pick]}</span>
+              <span className="text-xs text-zinc-500">{p1nick}</span>
+            </div>
+          </div>
+          <span className={`text-xs font-semibold px-2 py-1 rounded-lg bg-zinc-800 ${color}`}>{roundLabel}</span>
+        </div>
+      );
+    }
+
+    const myPick    = myIdx === 0 ? p0Pick : p1Pick;
+    const oppPick   = myIdx === 0 ? p1Pick : p0Pick;
+    const iWonRound = result === (myIdx === 0 ? 'p0_wins' : 'p1_wins');
+    const roundLabel = result === 'draw' ? t('game.status.draw') : iWonRound ? t('rps.roundWin') : t('rps.roundLose');
+    const color = result === 'draw' ? 'text-zinc-400' : iWonRound ? 'text-emerald-400' : 'text-rose-400';
+    return (
+      <div className="bg-zinc-900/40 border border-zinc-800 rounded-xl px-4 py-3 flex flex-col items-center gap-3">
+        <p className="text-xs text-zinc-500 uppercase tracking-wider font-semibold">{t('rps.lastRound')}</p>
+        <div className="flex items-center gap-6">
+          <div className="flex flex-col items-center gap-1">
+            <span className="text-5xl">{PICK_ICON[myPick]}</span>
+            <span className="text-xs text-zinc-500">{t('rps.you')}</span>
+          </div>
+          <span className="text-zinc-600 text-sm">vs</span>
+          <div className="flex flex-col items-center gap-1">
+            <span className="text-5xl">{PICK_ICON[oppPick]}</span>
+            <span className="text-xs text-zinc-500">{oppNick ?? t('game.common.opponent')}</span>
+          </div>
+        </div>
+        <span className={`text-xs font-semibold px-2 py-1 rounded-lg bg-zinc-800 ${color}`}>{roundLabel}</span>
       </div>
     );
   }
 
   // ── Pick buttons ────────────────────────────────────────────────────────────
   function PickButtons() {
-    // Always render; canPick drives the enabled/disabled state.
-    // Do NOT gate on roundResolved — after resolution hasPicked resets to [false,false]
-    // so players must be able to pick for the next round immediately.
     return (
       <div className="flex gap-4">
         {PICKS.map((pick) => (
@@ -236,6 +320,14 @@ export function RpsGame({ wsUrl, gameId, initialRoomCode, quickPlay: isQuickPlay
         return <p className="text-lg font-bold text-center text-yellow-400">{winnerIdx === 0 ? p0nick : p1nick} {t('rps.matchWin')}</p>;
       }
       if (gs.status === 'draw') return <p className="text-lg font-bold text-center text-zinc-400">{t('rps.matchDrawn')}</p>;
+      if (isShowdown) {
+        return (
+          <div className="flex items-center gap-2 text-amber-400 text-sm justify-center">
+            <span className="w-2 h-2 rounded-full bg-amber-400 animate-pulse" />
+            {t('rps.showdown.label')}
+          </div>
+        );
+      }
       return (
         <div className="flex items-center gap-2 text-zinc-400 text-sm justify-center">
           <span className="w-2 h-2 rounded-full bg-zinc-400 animate-pulse" />
@@ -281,6 +373,17 @@ export function RpsGame({ wsUrl, gameId, initialRoomCode, quickPlay: isQuickPlay
       );
     }
     if (!iHavePicked && !roundResolved) {
+      if (isShowdown) {
+        return (
+          <div className="flex flex-col items-center gap-1">
+            <div className="flex items-center gap-2 text-amber-400 text-sm justify-center font-bold">
+              <span className="w-2 h-2 rounded-full bg-amber-400 animate-pulse" />
+              {t('rps.showdown.label')}
+            </div>
+            <p className="text-xs text-zinc-600">{t('rps.showdown.subtitle')}</p>
+          </div>
+        );
+      }
       return (
         <div className="flex items-center gap-2 text-indigo-400 text-sm justify-center font-medium">
           <span className="w-2 h-2 rounded-full bg-indigo-400 animate-pulse" />
@@ -291,19 +394,58 @@ export function RpsGame({ wsUrl, gameId, initialRoomCode, quickPlay: isQuickPlay
     return null;
   }
 
-  // ── Waiting indicator for opponent who hasn't picked ────────────────────────
-  function PickingStatus() {
-    if (!gs || roundResolved || gs.status !== 'ongoing' || mp.isSpectator || myIdx === null) return null;
-    const oppPicked = oppHasPicked;
-    if (iHavePicked && !oppPicked) return null; // already shown in StatusBanner
-    return null;
+  // ── Lobby mode selector ─────────────────────────────────────────────────────
+  function LobbyModeSelector() {
+    return (
+      <div className="flex flex-col gap-2">
+        <p className="text-xs text-zinc-500 font-semibold uppercase tracking-wider">{t('rps.mode.label')}</p>
+        {/* Mode tabs */}
+        <div className="flex gap-1 p-1 bg-zinc-800 rounded-lg">
+          {(['best_of', 'showdown'] as RpsMode[]).map((mode) => (
+            <button
+              key={mode}
+              onClick={() => setRpsMode(mode)}
+              className={`flex-1 py-1.5 text-xs rounded-md font-medium transition-colors ${
+                rpsMode === mode ? 'bg-zinc-700 text-zinc-100' : 'text-zinc-500 hover:text-zinc-300'
+              }`}
+            >
+              {mode === 'best_of' ? t('rps.mode.bestOf') : t('rps.mode.showdown')}
+            </button>
+          ))}
+        </div>
+
+        {/* Best-of round count selector */}
+        {rpsMode === 'best_of' && (
+          <div className="flex gap-1">
+            {BEST_OF_OPTIONS.map((n) => (
+              <button
+                key={n}
+                onClick={() => setBestOfChoice(n)}
+                className={`flex-1 py-1.5 text-xs rounded-md font-medium border transition-colors ${
+                  bestOfChoice === n
+                    ? 'border-indigo-500 bg-indigo-900/40 text-indigo-300'
+                    : 'border-zinc-700 bg-transparent text-zinc-500 hover:border-zinc-500 hover:text-zinc-300'
+                }`}
+              >
+                {n}
+              </button>
+            ))}
+          </div>
+        )}
+
+        {/* Showdown description */}
+        {rpsMode === 'showdown' && (
+          <p className="text-xs text-zinc-600 px-1">{t('rps.mode.showdownDesc')}</p>
+        )}
+      </div>
+    );
   }
 
   // ── Layout ──────────────────────────────────────────────────────────────────
   return (
-    <div className="flex flex-col lg:flex-row gap-6 w-full">
+    <div className="grid gap-6 lg:grid-cols-[1fr_360px] w-full items-start">
       {/* ── Game area ──────────────────────────────────────────────────────── */}
-      <div className="relative flex-1 flex flex-col items-center justify-center gap-6 min-h-[420px]">
+      <div className="relative min-w-0 flex flex-col items-center justify-center gap-6 min-h-[420px]">
         <CountdownOverlay countdown={mp.matchCountdown} />
         <WaitingForConnectionOverlay
           show={mp.phase === 'playing' && !mp.roomReady && !mp.isSpectator}
@@ -314,7 +456,7 @@ export function RpsGame({ wsUrl, gameId, initialRoomCode, quickPlay: isQuickPlay
         {gs && mp.phase !== 'lobby' && (
           <div className="flex flex-col items-center gap-2 w-full">
             <Scoreboard />
-            {gs.status === 'ongoing' && (
+            {gs.status === 'ongoing' && !isShowdown && (
               <p className="text-xs text-zinc-600 font-medium uppercase tracking-wider">
                 {t('rps.bestOfLabel')} {gs.bestOf} · {t('rps.firstToLabel')} {gs.winsNeeded} {t('rps.winsLabel')}
               </p>
@@ -323,13 +465,13 @@ export function RpsGame({ wsUrl, gameId, initialRoomCode, quickPlay: isQuickPlay
         )}
 
         <StatusBanner />
-        <PickingStatus />
 
         {/* Main interactive area */}
         {mp.phase === 'playing' && gs && (
           <div className="flex flex-col items-center gap-6">
-            {roundResolved ? <RoundReveal /> : null}
-            <PickButtons />
+            {roundResolved && gs.status === 'ongoing' && <RoundReveal />}
+            {(gs.status === 'win' || gs.status === 'draw') && <LastRoundSummary />}
+            {gs.status === 'ongoing' && <PickButtons />}
           </div>
         )}
 
@@ -370,7 +512,7 @@ export function RpsGame({ wsUrl, gameId, initialRoomCode, quickPlay: isQuickPlay
       </div>
 
       {/* ── Side panel ─────────────────────────────────────────────────────── */}
-      <aside className="lg:w-72 flex flex-col gap-3">
+      <aside className="flex flex-col gap-3 lg:sticky lg:top-24 h-fit">
 
         {/* Connection status */}
         <div className="rounded-xl border border-zinc-800 bg-zinc-900 px-4 py-3">
@@ -405,6 +547,7 @@ export function RpsGame({ wsUrl, gameId, initialRoomCode, quickPlay: isQuickPlay
           </div>
         ) : mp.phase === 'lobby' ? (
           <div className="rounded-xl border border-zinc-800 bg-zinc-900 p-4 flex flex-col gap-3">
+            {/* Visibility */}
             <div className="flex gap-1 p-1 bg-zinc-800 rounded-lg">
               {(['private', 'public'] as const).map((v) => (
                 <button
@@ -427,8 +570,16 @@ export function RpsGame({ wsUrl, gameId, initialRoomCode, quickPlay: isQuickPlay
                 className="bg-zinc-800 border border-zinc-700 rounded-lg px-3 py-2 text-sm text-zinc-100 placeholder-zinc-500 focus:outline-none focus:border-indigo-500"
               />
             )}
+
+            {/* Mode selector */}
+            <LobbyModeSelector />
+
             <button
-              onClick={() => mp.createRoom({ visibility: roomVisibility, roomName: roomName.trim() || undefined })}
+              onClick={() => mp.createRoom({
+                visibility: roomVisibility,
+                roomName: roomName.trim() || undefined,
+                rpsConfig: { mode: rpsMode, bestOf: rpsMode === 'best_of' ? bestOfChoice : undefined },
+              })}
               disabled={mp.connection !== 'connected'}
               className="w-full py-2.5 rounded-lg bg-indigo-600 hover:bg-indigo-500 disabled:opacity-40 disabled:cursor-not-allowed text-white font-semibold text-sm transition-colors"
             >
@@ -460,10 +611,18 @@ export function RpsGame({ wsUrl, gameId, initialRoomCode, quickPlay: isQuickPlay
             <div className="flex items-center gap-2">
               <span className="font-mono text-2xl font-black tracking-widest text-zinc-100">{mp.roomCode}</span>
               <span className="text-xs text-zinc-500">{mp.playerCount}/2</span>
+              {gs && isShowdown && (
+                <span className="text-xs font-bold text-amber-400 bg-amber-950/40 border border-amber-800 rounded-full px-2 py-0.5">
+                  {t('rps.showdown.label')}
+                </span>
+              )}
               {mp.spectatorCount > 0 && (
                 <span className="text-xs text-zinc-600 ml-1">{mp.spectatorCount} {t('game.room.watching')}</span>
               )}
             </div>
+            {gs && !isShowdown && (
+              <p className="text-xs text-zinc-600">{t('rps.bestOfLabel')} {gs.bestOf}</p>
+            )}
             <button
               onClick={copyInvite}
               className="w-full py-2 rounded-lg border border-zinc-700 hover:border-indigo-600 text-sm text-zinc-300 hover:text-indigo-300 transition-colors flex items-center justify-center gap-2"

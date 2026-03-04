@@ -3,7 +3,7 @@
 import { useState, useEffect, useMemo, useRef, type CSSProperties } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
-import type { BattleshipState, BattleshipShip, Coord, Orientation, ShipId, BsSlot } from 'shared';
+import type { BattleshipState, BattleshipShip, Coord, Orientation, ShipId, BsSlot, ShotRecord } from 'shared';
 import { SHIP_DEFS, BOARD_SIZE } from 'shared';
 import { useMultiplayer } from '@/hooks/useMultiplayer';
 import type { GameComponentProps } from '@/lib/gameRegistry';
@@ -68,7 +68,7 @@ function buildSetupCells(
 }
 
 /** 100-entry CellView array for the player's own board during play. */
-function buildOwnCells(player: BattleshipState['players'][0]): CellView[] {
+function buildOwnCells(player: BattleshipState['players'][0], oppShots: ShotRecord[] = []): CellView[] {
   return Array.from({ length: BOARD_SIZE * BOARD_SIZE }, (_, idx): CellView => {
     const coord: Coord = { x: idx % BOARD_SIZE, y: Math.floor(idx / BOARD_SIZE) };
 
@@ -80,6 +80,9 @@ function buildOwnCells(player: BattleshipState['players'][0]): CellView[] {
         return 'ship';
       }
     }
+    // Show where the opponent already fired and missed on my board.
+    const shot = oppShots.find((s) => coordEq(s.at, coord));
+    if (shot?.result === 'miss') return 'miss-rx';
     return 'empty';
   });
 }
@@ -869,9 +872,9 @@ export function BattleshipGame({ wsUrl, gameId, initialRoomCode, quickPlay: isQu
   }, [gs, myIdx, previewCells, isPreviewValid]);
 
   const ownCells = useMemo((): CellView[] => {
-    if (!gs || myIdx === null) return Array(BOARD_SIZE * BOARD_SIZE).fill('empty') as CellView[];
-    return buildOwnCells(gs.players[myIdx]);
-  }, [gs, myIdx]);
+    if (!gs || myIdx === null || oppIdx === null) return Array(BOARD_SIZE * BOARD_SIZE).fill('empty') as CellView[];
+    return buildOwnCells(gs.players[myIdx], gs.shotsFired[oppIdx]);
+  }, [gs, myIdx, oppIdx]);
 
   const oppCells = useMemo((): CellView[] => {
     if (!gs || myIdx === null || oppIdx === null) return Array(BOARD_SIZE * BOARD_SIZE).fill('empty') as CellView[];
@@ -1220,9 +1223,9 @@ export function BattleshipGame({ wsUrl, gameId, initialRoomCode, quickPlay: isQu
   // ── Render ──────────────────────────────────────────────────────────────────
 
   return (
-    <div className="flex flex-col lg:flex-row gap-6 w-full">
+    <div className="grid gap-6 lg:grid-cols-[1fr_360px] w-full items-start">
       {/* ── Game area ──────────────────────────────────────────────────────── */}
-      <div className="relative flex-1 flex flex-col items-center gap-4 min-h-[400px]">
+      <div className="relative min-w-0 flex flex-col items-center gap-4 min-h-[400px]">
         {/* Keyframe for shot-result pop overlay */}
         <style>{`
           @keyframes bs-shot-pop {
@@ -1468,7 +1471,7 @@ export function BattleshipGame({ wsUrl, gameId, initialRoomCode, quickPlay: isQu
                       popCoord={!isFxOnRight && shotFx?.phase === 'impact' ? { x: shotFx.x, y: shotFx.y } : null}
                       sunkPulseKeys={!isFxOnRight ? sunkPulseKeys : undefined}
                     />
-                    <div className="pointer-events-none absolute inset-0">
+                    <div className="pointer-events-none absolute inset-0 overflow-hidden rounded-xl">
                       {renderShotFxLayer(false)}
                     </div>
                   </div>
@@ -1485,7 +1488,7 @@ export function BattleshipGame({ wsUrl, gameId, initialRoomCode, quickPlay: isQu
                       popCoord={isFxOnRight && shotFx?.phase === 'impact' ? { x: shotFx.x, y: shotFx.y } : null}
                       sunkPulseKeys={isFxOnRight ? sunkPulseKeys : undefined}
                     />
-                    <div className="pointer-events-none absolute inset-0">
+                    <div className="pointer-events-none absolute inset-0 overflow-hidden rounded-xl">
                       {renderShotFxLayer(true)}
                     </div>
                   </div>
@@ -1506,7 +1509,7 @@ export function BattleshipGame({ wsUrl, gameId, initialRoomCode, quickPlay: isQu
                       popCoord={!isFxOnRight && shotFx?.phase === 'impact' ? { x: shotFx.x, y: shotFx.y } : null}
                       sunkPulseKeys={!isFxOnRight ? sunkPulseKeys : undefined}
                     />
-                    <div className="pointer-events-none absolute inset-0">
+                    <div className="pointer-events-none absolute inset-0 overflow-hidden rounded-xl">
                       {renderShotFxLayer(false)}
                     </div>
                   </div>
@@ -1532,7 +1535,7 @@ export function BattleshipGame({ wsUrl, gameId, initialRoomCode, quickPlay: isQu
                       popCoord={isFxOnRight && shotFx?.phase === 'impact' ? { x: shotFx.x, y: shotFx.y } : null}
                       sunkPulseKeys={isFxOnRight ? sunkPulseKeys : undefined}
                     />
-                    <div className="pointer-events-none absolute inset-0">
+                    <div className="pointer-events-none absolute inset-0 overflow-hidden rounded-xl">
                       {renderShotFxLayer(true)}
                     </div>
                   </div>
@@ -1573,7 +1576,7 @@ export function BattleshipGame({ wsUrl, gameId, initialRoomCode, quickPlay: isQu
       </div>
 
       {/* ── Side panel ─────────────────────────────────────────────────────── */}
-      <aside className="lg:w-72 flex flex-col gap-3">
+      <aside className="flex flex-col gap-3 lg:sticky lg:top-24 h-fit">
         {/* Connection */}
         <div className="rounded-xl border border-zinc-800 bg-zinc-900 px-4 py-3">
           <div className="flex items-center gap-2 text-xs">

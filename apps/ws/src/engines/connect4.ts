@@ -37,10 +37,11 @@ function findWinnerCells(
 }
 
 export const connect4Engine: GameEngine<Connect4State, Connect4Action> = {
-  initialState([p0, p1]): Connect4State {
+  initialState([p0, p1]: [string, string], startingPlayerIndex: 0 | 1 = 0): Connect4State {
+    const first = startingPlayerIndex === 0 ? p0 : p1;
     return {
       board: Array.from({ length: ROWS }, () => Array<Connect4Cell>(COLS).fill(0)),
-      currentPlayer: p0,
+      currentPlayer: first,
       players: [
         { id: p0, piece: 1 },
         { id: p1, piece: 2 },

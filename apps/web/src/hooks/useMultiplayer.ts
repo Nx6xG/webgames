@@ -62,7 +62,7 @@ export interface MultiplayerState<TState extends AnyGameState = AnyGameState> {
 }
 
 export interface MultiplayerActions {
-  createRoom: (options?: { visibility?: RoomVisibility; roomName?: string }) => void;
+  createRoom: (options?: { visibility?: RoomVisibility; roomName?: string; rpsConfig?: { mode: string; bestOf?: number } }) => void;
   joinRoom: (code: string) => void;
   /** Join the per-gameId matchmaking queue. Server assigns a room automatically. */
   quickPlay: () => void;
@@ -382,7 +382,7 @@ export function useMultiplayer<TState extends AnyGameState = AnyGameState>(
     };
   }, [wsUrl]);
 
-  const createRoom = useCallback((options?: { visibility?: RoomVisibility; roomName?: string }) => {
+  const createRoom = useCallback((options?: { visibility?: RoomVisibility; roomName?: string; rpsConfig?: { mode: string; bestOf?: number } }) => {
     set((prev) => ({ ...prev, error: null }));
     socketRef.current?.emit('create_room', {
       playerToken: tokenRef.current,
@@ -390,6 +390,7 @@ export function useMultiplayer<TState extends AnyGameState = AnyGameState>(
       nickname: nicknameRef.current,
       visibility: options?.visibility ?? 'private',
       roomName: options?.roomName,
+      rpsConfig: options?.rpsConfig,
     });
   }, []);
 

@@ -408,17 +408,21 @@ function initialBoard(): (ChessPiece | null)[] {
 // ── Engine ─────────────────────────────────────────────────────────────────────
 
 export const chessEngine: GameEngine<ChessState, ChessAction> = {
-  initialState([p0, p1]): ChessState {
-    const board    = initialBoard();
-    const castling = { w: { kingSide: true, queenSide: true }, b: { kingSide: true, queenSide: true } };
-    const initKey  = positionKey(board, 'w', castling, null);
+  initialState([p0, p1]: [string, string], startingPlayerIndex: 0 | 1 = 0): ChessState {
+    const board      = initialBoard();
+    const castling   = { w: { kingSide: true, queenSide: true }, b: { kingSide: true, queenSide: true } };
+    // players[0] is always White; players[1] is always Black.
+    // startingPlayerIndex decides which seat moves first — normally White (0),
+    // but can be Black (1) when the server randomizes the starting player.
+    const startColor: 'w' | 'b' = startingPlayerIndex === 0 ? 'w' : 'b';
+    const initKey    = positionKey(board, startColor, castling, null);
     return {
       board,
-      turn:            'w',
+      turn:            startColor,
       players:         [{ id: p0 }, { id: p1 }],
       status:          'ongoing',
       check:           false,
-      currentTurn:     p0,
+      currentTurn:     startingPlayerIndex === 0 ? p0 : p1,
       castling,
       enPassantTarget: null,
       halfmoveClock:   0,

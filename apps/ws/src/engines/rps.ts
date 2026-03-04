@@ -1,7 +1,13 @@
 import type { GameEngine, ActionContext, StatusResult } from 'shared';
-import type { RpsState, RpsAction, RpsPick } from 'shared';
+import type { RpsState, RpsAction, RpsPick, RpsMode } from 'shared';
 
 const VALID_PICKS = new Set<string>(['rock', 'paper', 'scissors']);
+
+export interface RpsEngineConfig {
+  mode?: RpsMode;
+  /** Only used in best_of mode. Must be odd. Default: 3. */
+  bestOf?: number;
+}
 
 function resolveRound(p0: RpsPick, p1: RpsPick): 'p0_wins' | 'p1_wins' | 'draw' {
   if (p0 === p1) return 'draw';
@@ -14,19 +20,27 @@ function resolveRound(p0: RpsPick, p1: RpsPick): 'p0_wins' | 'p1_wins' | 'draw' 
 }
 
 export const rpsEngine: GameEngine<RpsState, RpsAction> = {
-  initialState([p0, p1]): RpsState {
+  initialState([p0, p1]: [string, string], startingPlayerIndex: 0 | 1 = 0, config?: unknown): RpsState {
+    const cfg = config as RpsEngineConfig | undefined;
+    const mode: RpsMode = cfg?.mode === 'showdown' ? 'showdown' : 'best_of';
+    // showdown: no round cap; best_of: use provided value (must be odd), default 3
+    const rawBestOf = typeof cfg?.bestOf === 'number' && cfg.bestOf > 0 ? cfg.bestOf : 3;
+    const bestOf    = mode === 'showdown' ? 0 : (rawBestOf % 2 === 0 ? rawBestOf + 1 : rawBestOf);
+    const winsNeeded = mode === 'showdown' ? 1 : Math.ceil(bestOf / 2);
+    const first = startingPlayerIndex === 0 ? p0 : p1;
     return {
+      mode,
       players:         [{ id: p0 }, { id: p1 }],
       scores:          [0, 0],
       round:           1,
-      bestOf:          3,
-      winsNeeded:      2,
+      bestOf,
+      winsNeeded,
       pendingPick0:    null,
       pendingPick1:    null,
       hasPicked:       [false, false],
       picks:           [null, null],
       lastRoundResult: null,
-      currentTurn:     p0,
+      currentTurn:     first,
       status:          'ongoing',
     };
   },
@@ -80,19 +94,29 @@ export const rpsEngine: GameEngine<RpsState, RpsAction> = {
     let matchStatus: 'ongoing' | 'win' | 'draw' = 'ongoing';
     let matchWinner: string | undefined;
 
-    if (newScores[0] >= state.winsNeeded) {
-      matchStatus = 'win';
-      matchWinner = state.players[0].id;
-    } else if (newScores[1] >= state.winsNeeded) {
-      matchStatus = 'win';
-      matchWinner = state.players[1].id;
-    } else if (newRound > state.bestOf) {
-      // Exhausted all rounds without a decisive winner
-      if (newScores[0] === newScores[1]) {
-        matchStatus = 'draw';
-      } else {
+    if (state.mode === 'showdown') {
+      // Showdown: first non-draw round decides the winner; draws keep going
+      if (roundResult !== 'draw') {
         matchStatus = 'win';
-        matchWinner = newScores[0] > newScores[1] ? state.players[0].id : state.players[1].id;
+        matchWinner = roundResult === 'p0_wins' ? state.players[0].id : state.players[1].id;
+      }
+      // draw → matchStatus stays 'ongoing', play another round
+    } else {
+      // Best-of: standard first-to-winsNeeded logic
+      if (newScores[0] >= state.winsNeeded) {
+        matchStatus = 'win';
+        matchWinner = state.players[0].id;
+      } else if (newScores[1] >= state.winsNeeded) {
+        matchStatus = 'win';
+        matchWinner = state.players[1].id;
+      } else if (newRound > state.bestOf) {
+        // Exhausted all rounds without a decisive winner
+        if (newScores[0] === newScores[1]) {
+          matchStatus = 'draw';
+        } else {
+          matchStatus = 'win';
+          matchWinner = newScores[0] > newScores[1] ? state.players[0].id : state.players[1].id;
+        }
       }
     }
 
@@ -101,6 +125,8 @@ export const rpsEngine: GameEngine<RpsState, RpsAction> = {
     // what each player chose. hasPicked[] and pendingPick* are cleared
     // immediately so both players can pick as soon as the reveal is shown.
     // The UI must use hasPicked[] (not picks[]) to decide if a player can act.
+    // lastRound is set here and never cleared on match end — the match summary
+    // screen reads from it so it is always available regardless of timing.
     return {
       ...state,
       pendingPick0:    null,
@@ -110,6 +136,7 @@ export const rpsEngine: GameEngine<RpsState, RpsAction> = {
       scores:          newScores,
       round:           matchStatus === 'ongoing' ? newRound : state.round,
       lastRoundResult: roundResult,
+      lastRound:       { p0Pick: p0pick, p1Pick: p1pick, result: roundResult },
       currentTurn:     state.players[0].id, // reset for next round
       status:          matchStatus,
       winner:          matchWinner,

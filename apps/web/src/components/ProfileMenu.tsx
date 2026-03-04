@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from 'react';
 import { useNickname } from '@/components/providers/NicknameProvider';
 import { useI18n } from '@/components/providers/LanguageProvider';
 import { generateRandomNickname, sanitizeNickname } from '@/lib/nickname';
+import { useClickOutside, useEscape } from '@/hooks/useClickOutside';
 
 const THEME_KEY = 'webgames:theme';
 type Theme = 'dark' | 'light';
@@ -25,7 +26,13 @@ export function ProfileMenu() {
   const [value, setValue] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [theme, setTheme] = useState<Theme>('dark');
+
   const inputRef = useRef<HTMLInputElement>(null);
+  // Wraps both the trigger button and the floating panel.
+  // useClickOutside checks whether the click target is a DOM descendant of
+  // this element; the panel is `position:fixed` but remains a child in the
+  // DOM tree, so containment checks work correctly.
+  const containerRef = useRef<HTMLDivElement>(null);
 
   // Sync theme state with localStorage on mount
   useEffect(() => {
@@ -63,17 +70,12 @@ export function ProfileMenu() {
     setTheme(th);
   }
 
-  // Close on Escape
-  useEffect(() => {
-    if (!open) return;
-    function onKey(e: KeyboardEvent) {
-      if (e.key === 'Escape') closeMenu();
-    }
-    window.addEventListener('keydown', onKey);
-    return () => window.removeEventListener('keydown', onKey);
-  }, [open]);
+  // Close when clicking outside the container (trigger + panel) or on Escape.
+  // Enabled only while open so the listener is detached when the panel is closed.
+  useClickOutside(containerRef, closeMenu, open);
+  useEscape(closeMenu, open);
 
-  // Auto-focus input when panel opens
+  // Auto-focus nickname input when panel opens
   useEffect(() => {
     if (open) {
       const id = setTimeout(() => inputRef.current?.focus(), 0);
@@ -84,11 +86,13 @@ export function ProfileMenu() {
   const initial = nickname.charAt(0).toUpperCase() || '?';
 
   return (
-    <>
-      {/* Trigger button */}
+    // containerRef wraps trigger + panel — clicks inside either are "inside"
+    <div ref={containerRef} className="relative">
+      {/* Trigger button — toggles the menu open/closed */}
       <button
-        onClick={openMenu}
+        onClick={() => (open ? closeMenu() : openMenu())}
         aria-label="Open profile menu"
+        aria-expanded={open}
         className="flex items-center gap-2 rounded-lg px-2 py-1 hover:bg-zinc-800 transition-colors group"
       >
         <span className="w-7 h-7 rounded-full bg-indigo-600 flex items-center justify-center text-xs font-black text-white shrink-0 select-none">
@@ -99,12 +103,7 @@ export function ProfileMenu() {
         </span>
       </button>
 
-      {/* Backdrop */}
-      {open && (
-        <div className="fixed inset-0 z-40" onClick={closeMenu} aria-hidden />
-      )}
-
-      {/* Dropdown panel */}
+      {/* Dropdown panel — no backdrop needed; useClickOutside handles outside clicks */}
       {open && (
         <div className="fixed top-14 right-4 z-50 w-72 rounded-xl border border-zinc-700 bg-zinc-900 shadow-2xl p-4 flex flex-col gap-3">
 
@@ -211,6 +210,6 @@ export function ProfileMenu() {
           </div>
         </div>
       )}
-    </>
+    </div>
   );
 }

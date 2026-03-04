@@ -185,10 +185,22 @@ export const messages: Record<Lang, Record<string, string>> = {
     'rps.bestOfLabel':               'Best of',
     'rps.firstToLabel':              'Erster mit',
     'rps.winsLabel':                 'Siegen gewinnt',
+    'rps.lastRound':                 'Letzte Runde',
     'rps.rules.1':                   'Beide Spieler wählen gleichzeitig pro Runde',
     'rps.rules.2':                   'Stein schlägt Schere · Schere schlägt Papier · Papier schlägt Stein',
     'rps.rules.3':                   'Erster mit 2 Siegen gewinnt das Match (best of 3)',
     'rps.rules.4':                   'Eine Unentschieden-Runde zählt für keinen Spieler',
+
+    // ── RPS mode selection ────────────────────────────────────────────────────
+    'rps.mode.label':                'Spielmodus',
+    'rps.mode.bestOf':               'Best of',
+    'rps.mode.showdown':             'Showdown',
+    'rps.mode.showdownDesc':         'Erste entscheidende Runde gewinnt',
+    'rps.mode.rounds':               'Runden',
+    'rps.showdown.label':            'SHOWDOWN',
+    'rps.showdown.subtitle':         'Erste entscheidende Runde gewinnt · Unentschieden werden wiederholt',
+    'rps.draws':                     'Unentschieden',
+    'rps.drawRounds':                'Runde(n) unentschieden',
 
     // ── Tic-Tac-Toe ───────────────────────────────────────────────────────
     'ttt.rules.1':                   'Zwei Spieler setzen abwechselnd Zeichen',
@@ -461,10 +473,22 @@ export const messages: Record<Lang, Record<string, string>> = {
     'rps.bestOfLabel':               'Best of',
     'rps.firstToLabel':              'First to',
     'rps.winsLabel':                 'wins',
+    'rps.lastRound':                 'Last Round',
     'rps.rules.1':                   'Both players choose simultaneously each round',
     'rps.rules.2':                   'Rock beats Scissors · Scissors beats Paper · Paper beats Rock',
     'rps.rules.3':                   'First to win 2 rounds wins the match (best of 3)',
     'rps.rules.4':                   'A drawn round counts for neither player',
+
+    // ── RPS mode selection ────────────────────────────────────────────────────
+    'rps.mode.label':                'Game mode',
+    'rps.mode.bestOf':               'Best of',
+    'rps.mode.showdown':             'Showdown',
+    'rps.mode.showdownDesc':         'First decisive round wins',
+    'rps.mode.rounds':               'Rounds',
+    'rps.showdown.label':            'SHOWDOWN',
+    'rps.showdown.subtitle':         'First decisive round wins · Draws are replayed',
+    'rps.draws':                     'Draws',
+    'rps.drawRounds':                'round(s) drawn',
 
     // ── Tic-Tac-Toe ───────────────────────────────────────────────────────
     'ttt.rules.1':                   'Two players take turns placing marks',

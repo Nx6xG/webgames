@@ -972,7 +972,7 @@ export function ChessGame({ wsUrl, gameId, initialRoomCode, quickPlay: isQuickPl
       </div>
 
       {/* ── Side panel ──────────────────────────────────────────────────── */}
-      <aside className="flex flex-col gap-3 min-w-0">
+      <aside className="flex flex-col gap-3 lg:sticky lg:top-24 h-fit">
 
         {/* Connection status */}
         <div className="rounded-xl border border-zinc-800 bg-zinc-900 px-4 py-3">

@@ -202,9 +202,9 @@ export function Connect4Game({ wsUrl, gameId, initialRoomCode, quickPlay: isQuic
 
   // ── Board ──────────────────────────────────────────────────────────────────
   return (
-    <div className="flex flex-col lg:flex-row gap-6 w-full">
+    <div className="grid gap-6 lg:grid-cols-[1fr_360px] w-full items-start">
       {/* Board area */}
-      <div className="relative flex-1 flex flex-col items-center justify-center gap-5 min-h-[480px]">
+      <div className="relative min-w-0 flex flex-col items-center justify-center gap-5 min-h-[480px]">
         <CountdownOverlay countdown={mp.matchCountdown} />
         <WaitingForConnectionOverlay
           show={mp.phase === 'playing' && !mp.roomReady && !mp.isSpectator}
@@ -212,8 +212,11 @@ export function Connect4Game({ wsUrl, gameId, initialRoomCode, quickPlay: isQuic
         />
         <StatusBanner />
 
-        <div className="select-none">
-          {/* Column drop buttons — aligned to grid cells via matching padding/gap */}
+        <div
+          className="select-none"
+          onMouseLeave={() => setHoveredCol(null)}
+        >
+          {/* Column drop buttons — show ghost piece above board; also set hover column */}
           <div
             className="grid mb-1"
             style={{ gridTemplateColumns: `repeat(${COLS}, 44px)`, gap: '6px', paddingInline: '10px' }}
@@ -222,9 +225,8 @@ export function Connect4Game({ wsUrl, gameId, initialRoomCode, quickPlay: isQuic
               <button
                 key={col}
                 onClick={() => handleDrop(col)}
-                onMouseEnter={() => setHoveredCol(col)}
-                onMouseLeave={() => setHoveredCol(null)}
                 disabled={boardDisabled}
+                onMouseEnter={() => setHoveredCol(col)}
                 aria-label={`Drop in column ${col + 1}`}
                 className="h-8 rounded-lg flex items-center justify-center transition-colors disabled:cursor-default"
                 style={{
@@ -250,11 +252,12 @@ export function Connect4Game({ wsUrl, gameId, initialRoomCode, quickPlay: isQuic
             ))}
           </div>
 
-          {/* Board */}
+          {/* Board — relative so the overlay can be positioned inside it */}
           <div
-            className="rounded-2xl shadow-2xl"
+            className="relative rounded-2xl shadow-2xl overflow-hidden"
             style={{ backgroundColor: '#1e1b5e', padding: '10px' }}
           >
+            {/* Grid cells (visual only — pointer events handled by overlay below) */}
             <div
               style={{ display: 'grid', gridTemplateColumns: `repeat(${COLS}, 44px)`, gap: '6px' }}
             >
@@ -298,6 +301,30 @@ export function Connect4Game({ wsUrl, gameId, initialRoomCode, quickPlay: isQuic
                 }),
               )}
             </div>
+
+            {/* Full-height column overlay — covers entire board height so hover + click
+                work no matter where in the column the cursor is */}
+            <div
+              className="absolute inset-0 z-10"
+              style={{
+                display: 'grid',
+                gridTemplateColumns: `repeat(${COLS}, 1fr)`,
+                padding: '10px',
+              }}
+            >
+              {Array.from({ length: COLS }, (_, col) => {
+                const colFull = gs?.board ? gs.board[0][col] !== 0 : false;
+                const isDisabled = boardDisabled || colFull;
+                return (
+                  <div
+                    key={col}
+                    onMouseEnter={() => setHoveredCol(col)}
+                    onClick={() => { if (!isDisabled) handleDrop(col); }}
+                    style={{ cursor: !isDisabled ? 'pointer' : 'default' }}
+                  />
+                );
+              })}
+            </div>
           </div>
         </div>
 
@@ -331,7 +358,7 @@ export function Connect4Game({ wsUrl, gameId, initialRoomCode, quickPlay: isQuic
       </div>
 
       {/* Side panel */}
-      <aside className="lg:w-72 flex flex-col gap-3">
+      <aside className="flex flex-col gap-3 lg:sticky lg:top-24 h-fit">
         {/* Connection */}
         <div className="rounded-xl border border-zinc-800 bg-zinc-900 px-4 py-3">
           <div className="flex items-center gap-2 text-xs">

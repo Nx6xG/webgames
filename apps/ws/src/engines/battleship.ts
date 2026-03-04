@@ -44,13 +44,14 @@ function emptyPlayer(): BsPlayerState {
 
 export const battleshipEngine: GameEngine<BattleshipState, BattleshipAction> = {
 
-  initialState([p0, p1]): BattleshipState {
+  initialState([p0, p1]: [string, string], startingPlayerIndex: 0 | 1 = 0): BattleshipState {
+    const first = startingPlayerIndex === 0 ? p0 : p1;
     return {
       phase:       'setup',
       playerIds:   [p0, p1],
       players:     [emptyPlayer(), emptyPlayer()],
       shotsFired:  [[], []],
-      currentTurn: p0,  // slot-A's token; satisfies server sanity guard during setup
+      currentTurn: first,  // satisfies server sanity guard; also determines who fires first
       winner:      null,
       lastShot:    null,
       status:      'ongoing',
