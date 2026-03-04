@@ -3,7 +3,7 @@
 import { useState, useEffect, useMemo, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
-import type { BattleshipState, Coord, Orientation, ShipId, BsSlot } from 'shared';
+import type { BattleshipState, BattleshipShip, Coord, Orientation, ShipId, BsSlot } from 'shared';
 import { SHIP_DEFS, BOARD_SIZE } from 'shared';
 import { useMultiplayer } from '@/hooks/useMultiplayer';
 import type { GameComponentProps } from '@/lib/gameRegistry';
@@ -134,6 +134,103 @@ function cellBg(view: CellView): string {
   }
 }
 
+/** Subtle gradient overlay that gives cells a tactile "deck plating" feel.
+ *  Returns undefined for states where clarity matters more than texture. */
+function cellTexture(view: CellView): string | undefined {
+  switch (view) {
+    case 'ship':
+    case 'preview-ok':
+      // Light diagonal hatching → metal deck
+      return 'repeating-linear-gradient(45deg, rgba(255,255,255,0.07) 0px, rgba(255,255,255,0.07) 2px, transparent 2px, transparent 9px)';
+    case 'sunk':
+    case 'shot-sunk':
+      // Darker hatching → wrecked hull
+      return 'repeating-linear-gradient(45deg, rgba(0,0,0,0.35) 0px, rgba(0,0,0,0.35) 2px, transparent 2px, transparent 8px)';
+    case 'empty':
+      // Very faint crosshatch → open sea
+      return 'repeating-linear-gradient(135deg, rgba(255,255,255,0.02) 0px, rgba(255,255,255,0.02) 1px, transparent 1px, transparent 7px)';
+    default:
+      return undefined;
+  }
+}
+
+// ── Ship segment helpers (bow / mid / stern SVG overlay) ─────────────────────
+
+interface ShipSegmentInfo {
+  segment: 'bow' | 'mid' | 'stern' | 'single';
+  dir:     'H' | 'V';
+  sunk:    boolean;
+}
+
+/**
+ * Build a Map from cell-index → ShipSegmentInfo for every cell that belongs to
+ * a ship with known positions (cells present).  Ships without cells are skipped
+ * (projected opponent ships that are not yet sunk).
+ */
+function buildSegmentMap(ships: BattleshipShip[]): Map<number, ShipSegmentInfo> {
+  const map = new Map<number, ShipSegmentInfo>();
+  for (const ship of ships) {
+    const cells = ship.cells;
+    if (!cells || cells.length === 0) continue;
+    const allSameY = cells.every((c: Coord) => c.y === cells[0].y);
+    const dir: 'H' | 'V' = allSameY ? 'H' : 'V';
+    const sorted = [...cells].sort((a, b) => dir === 'H' ? a.x - b.x : a.y - b.y);
+    const len = sorted.length;
+    for (let i = 0; i < len; i++) {
+      const coord = sorted[i];
+      const cellIdx = coord.y * BOARD_SIZE + coord.x;
+      let segment: ShipSegmentInfo['segment'];
+      if (len === 1) segment = 'single';
+      else if (i === 0) segment = 'bow';
+      else if (i === len - 1) segment = 'stern';
+      else segment = 'mid';
+      map.set(cellIdx, { segment, dir, sunk: ship.sunk });
+    }
+  }
+  return map;
+}
+
+/** Returns a CSS url() data-URI for the ship hull segment SVG overlay. */
+function shipSegmentBg(segment: ShipSegmentInfo['segment'], dir: 'H' | 'V', sunk: boolean): string {
+  const fo  = sunk ? '0.07' : '0.14'; // fill-opacity
+  const so  = sunk ? '0.12' : '0.22'; // stroke-opacity
+  const fom = sunk ? '0.05' : '0.10'; // mid fill-opacity (slightly lower)
+
+  let path: string;
+  if (dir === 'H') {
+    switch (segment) {
+      case 'bow':
+        path = `<path d='M2,5 L3.5,2.5 L10,2.5 L10,7.5 L3.5,7.5 Z' fill='white' fill-opacity='${fo}'/><line x1='3.5' y1='5' x2='9' y2='5' stroke='white' stroke-width='0.6' stroke-opacity='${so}'/>`;
+        break;
+      case 'stern':
+        path = `<path d='M0,2.5 L7,2.5 Q10,2.5 10,5 Q10,7.5 7,7.5 L0,7.5 Z' fill='white' fill-opacity='${fo}'/><line x1='1' y1='5' x2='7' y2='5' stroke='white' stroke-width='0.6' stroke-opacity='${so}'/>`;
+        break;
+      case 'single':
+        path = `<ellipse cx='5' cy='5' rx='3.8' ry='2.3' fill='white' fill-opacity='${fo}'/><line x1='1.5' y1='5' x2='8.5' y2='5' stroke='white' stroke-width='0.6' stroke-opacity='${so}'/>`;
+        break;
+      default: // mid
+        path = `<rect x='0' y='2.5' width='10' height='5' fill='white' fill-opacity='${fom}'/><line x1='0' y1='5' x2='10' y2='5' stroke='white' stroke-width='0.6' stroke-opacity='${so}'/>`;
+    }
+  } else { // V
+    switch (segment) {
+      case 'bow':
+        path = `<path d='M5,2 L2.5,3.5 L2.5,10 L7.5,10 L7.5,3.5 Z' fill='white' fill-opacity='${fo}'/><line x1='5' y1='3.5' x2='5' y2='9' stroke='white' stroke-width='0.6' stroke-opacity='${so}'/>`;
+        break;
+      case 'stern':
+        path = `<path d='M2.5,0 L2.5,7 Q2.5,10 5,10 Q7.5,10 7.5,7 L7.5,0 Z' fill='white' fill-opacity='${fo}'/><line x1='5' y1='1' x2='5' y2='7' stroke='white' stroke-width='0.6' stroke-opacity='${so}'/>`;
+        break;
+      case 'single':
+        path = `<ellipse cx='5' cy='5' rx='2.3' ry='3.8' fill='white' fill-opacity='${fo}'/><line x1='5' y1='1.5' x2='5' y2='8.5' stroke='white' stroke-width='0.6' stroke-opacity='${so}'/>`;
+        break;
+      default: // mid
+        path = `<rect x='2.5' y='0' width='5' height='10' fill='white' fill-opacity='${fom}'/><line x1='5' y1='0' x2='5' y2='10' stroke='white' stroke-width='0.6' stroke-opacity='${so}'/>`;
+    }
+  }
+
+  const svg = `<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 10 10'>${path}</svg>`;
+  return `url("data:image/svg+xml;charset=utf-8,${encodeURIComponent(svg)}")`;
+}
+
 // ── BsGrid ────────────────────────────────────────────────────────────────────
 
 interface BsGridProps {
@@ -144,9 +241,11 @@ interface BsGridProps {
   hoverCoord?: Coord | null;
   cellSize?:   number;
   label?:      string;
+  /** Per-cell ship segment metadata for hull-segment SVG overlay. */
+  segments?:   Map<number, ShipSegmentInfo>;
 }
 
-function BsGrid({ cells, onCell, onHover, disabled, hoverCoord, cellSize = 28, label }: BsGridProps) {
+function BsGrid({ cells, onCell, onHover, disabled, hoverCoord, cellSize = 28, label, segments }: BsGridProps) {
   const boardPx = BOARD_SIZE * cellSize + (BOARD_SIZE - 1) * 2; // cells + 2px gaps
 
   return (
@@ -173,6 +272,12 @@ function BsGrid({ cells, onCell, onHover, disabled, hoverCoord, cellSize = 28, l
             const isHovered = hoverCoord ? coordEq(hoverCoord, coord) : false;
             const canClick   = !disabled && (view === 'empty' || view === 'preview-ok' || view === 'preview-bad');
 
+            // Layer: texture (top) → segment SVG (bottom, behind texture)
+            const seg       = segments?.get(idx);
+            const segBg     = seg ? shipSegmentBg(seg.segment, seg.dir, seg.sunk) : undefined;
+            const textureBg = cellTexture(view);
+            const bgImage   = [textureBg, segBg].filter(Boolean).join(', ') || undefined;
+
             return (
               <div
                 key={idx}
@@ -183,6 +288,7 @@ function BsGrid({ cells, onCell, onHover, disabled, hoverCoord, cellSize = 28, l
                   width:           cellSize,
                   height:          cellSize,
                   backgroundColor: cellBg(view),
+                  backgroundImage: bgImage,
                   borderRadius:    3,
                   cursor:          canClick ? 'pointer' : 'default',
                   position:        'relative',
@@ -293,22 +399,27 @@ function ShipRoster({ placedIds, activeShipId, onSelect, orientation, onRotate, 
 
       {/* Action buttons */}
       {!isReady && (
-        <div className="flex gap-2 mt-1">
-          <button
-            onClick={onRotate}
-            disabled={disabled}
-            className="flex-1 py-1.5 text-xs rounded-lg border border-zinc-700 bg-zinc-800 hover:bg-zinc-700 text-zinc-300 disabled:opacity-40 transition-colors"
-          >
-            {t('battleship.setup.rotate')} {orientation === 'H' ? '→' : '↓'}
-          </button>
-          <button
-            onClick={onReset}
-            disabled={disabled || placedIds.size === 0}
-            className="flex-1 py-1.5 text-xs rounded-lg border border-zinc-700 bg-zinc-800 hover:bg-zinc-700 text-zinc-300 disabled:opacity-40 transition-colors"
-          >
-            {t('battleship.setup.reset')}
-          </button>
-        </div>
+        <>
+          <div className="flex gap-2 mt-1">
+            <button
+              onClick={onRotate}
+              disabled={disabled}
+              className="flex-1 py-1.5 text-xs rounded-lg border border-zinc-700 bg-zinc-800 hover:bg-zinc-700 text-zinc-300 disabled:opacity-40 transition-colors"
+            >
+              {t('battleship.setup.rotate')} {orientation === 'H' ? '→' : '↓'}
+            </button>
+            <button
+              onClick={onReset}
+              disabled={disabled || placedIds.size === 0}
+              className="flex-1 py-1.5 text-xs rounded-lg border border-zinc-700 bg-zinc-800 hover:bg-zinc-700 text-zinc-300 disabled:opacity-40 transition-colors"
+            >
+              {t('battleship.setup.reset')}
+            </button>
+          </div>
+          <p className="text-[10px] text-zinc-600 text-center mt-0.5">
+            {t('battleship.setup.rotateHint')}
+          </p>
+        </>
       )}
 
       {canReady && !isReady && (
@@ -360,6 +471,7 @@ export function BattleshipGame({ wsUrl, gameId, initialRoomCode, quickPlay: isQu
   const [unread,          setUnread]           = useState(0);
   const [placeError,      setPlaceError]       = useState<string | null>(null);
   const placeErrorTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const [shotOverlay, setShotOverlay] = useState<{ text: string; kind: 'hit' | 'miss' | 'sunk' } | null>(null);
 
   // Setup phase state (client-only)
   const [orientation,   setOrientation]  = useState<Orientation>('H');
@@ -475,6 +587,51 @@ export function BattleshipGame({ wsUrl, gameId, initialRoomCode, quickPlay: isQu
     return !previewCells.some((c) => occupied.some((o) => coordEq(c, o)));
   }, [previewCells, gs, myIdx, activeShipId]);
 
+  // Stable string key that changes exactly when a new shot arrives (used as effect dep).
+  const lastShotKey = (gs?.lastShot && gs.phase !== 'setup')
+    ? `${gs.lastShot.by}|${gs.lastShot.at.x}|${gs.lastShot.at.y}|${gs.lastShot.result}`
+    : null;
+
+  // Keyboard shortcut: R / r toggles orientation during ship placement
+  useEffect(() => {
+    if (!gs || gs.phase !== 'setup' || isMyReady || mp.isSpectator) return;
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key !== 'r' && e.key !== 'R') return;
+      const target = e.target as HTMLElement;
+      if (
+        target.tagName === 'INPUT' ||
+        target.tagName === 'TEXTAREA' ||
+        target.isContentEditable
+      ) return;
+      setOrientation((o) => (o === 'H' ? 'V' : 'H'));
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [gs?.phase, isMyReady, mp.isSpectator]);
+
+  // Transient big-overlay feedback whenever a new shot arrives
+  useEffect(() => {
+    if (!lastShotKey || !gs?.lastShot) return;
+    const { lastShot } = gs;
+    let text: string;
+    let kind: 'hit' | 'miss' | 'sunk';
+    if (lastShot.sunkShipId) {
+      text = `${t('battleship.shot.sunk')} ${t(`battleship.ship.${lastShot.sunkShipId}`)}`;
+      kind = 'sunk';
+    } else if (lastShot.result === 'hit') {
+      text = t('battleship.shot.hit');
+      kind = 'hit';
+    } else {
+      text = t('battleship.shot.miss');
+      kind = 'miss';
+    }
+    setShotOverlay({ text, kind });
+    const timer = setTimeout(() => setShotOverlay(null), 1100);
+    return () => clearTimeout(timer);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [lastShotKey]);
+
   // Board cell arrays
   const setupCells = useMemo((): CellView[] => {
     if (!gs || myIdx === null) return Array(BOARD_SIZE * BOARD_SIZE).fill('empty') as CellView[];
@@ -502,6 +659,20 @@ export function BattleshipGame({ wsUrl, gameId, initialRoomCode, quickPlay: isQu
   const specP1Cells = useMemo(
     () => gs ? buildOppCells(gs.shotsFired[0], gs.players[1].ships) : Array(100).fill('empty') as CellView[],
     [gs],
+  );
+
+  // Ship segment maps for hull-texture overlay.
+  // myShipSegments: own ships (always have cells); used for setup + own board.
+  // oppShipSegments: opponent ships — buildSegmentMap skips ships without cells,
+  //   so only sunk ships (which have cells revealed by projection) get entries.
+  const myShipSegments = useMemo(
+    () => gs && myIdx !== null ? buildSegmentMap(gs.players[myIdx].ships) : new Map<number, ShipSegmentInfo>(),
+    [gs, myIdx], // eslint-disable-line react-hooks/exhaustive-deps
+  );
+
+  const oppShipSegments = useMemo(
+    () => gs && oppIdx !== null ? buildSegmentMap(gs.players[oppIdx].ships) : new Map<number, ShipSegmentInfo>(),
+    [gs, oppIdx], // eslint-disable-line react-hooks/exhaustive-deps
   );
 
   // ── Handlers ───────────────────────────────────────────────────────────────
@@ -611,8 +782,8 @@ export function BattleshipGame({ wsUrl, gameId, initialRoomCode, quickPlay: isQu
     if (mp.phase === 'ended') return <p className="text-sm text-rose-400 text-center">{t('game.status.opponentDisconnected')}</p>;
 
     if (isMyTurn) return (
-      <div className="flex items-center gap-2 text-indigo-300 text-sm justify-center font-medium">
-        <span className="w-2 h-2 rounded-full animate-pulse bg-indigo-400" />
+      <div className="flex items-center gap-2 text-indigo-200 text-sm justify-center font-semibold px-4 py-1.5 rounded-lg bg-indigo-950/60 border border-indigo-700/50">
+        <span className="w-2 h-2 rounded-full animate-pulse bg-indigo-400 shrink-0" />
         {t('battleship.play.yourTurn')}
       </div>
     );
@@ -656,19 +827,107 @@ export function BattleshipGame({ wsUrl, gameId, initialRoomCode, quickPlay: isQu
     );
   }
 
+  // ── Fleet status panel ─────────────────────────────────────────────────────
+
+  function FleetPanel() {
+    if (!gs || (gs.phase !== 'playing' && gs.phase !== 'finished')) return null;
+
+    const leftShips  = mp.isSpectator ? gs.players[0].ships : (myIdx  !== null ? gs.players[myIdx].ships  : null);
+    const rightShips = mp.isSpectator ? gs.players[1].ships : (oppIdx !== null ? gs.players[oppIdx].ships : null);
+    const leftTitle  = mp.isSpectator ? p0nick : t('battleship.fleet.titleYou');
+    const rightTitle = mp.isSpectator ? p1nick : t('battleship.fleet.titleEnemy');
+
+    if (!leftShips || !rightShips) return null;
+
+    function renderColumn(title: string, ships: BattleshipShip[]) {
+      return (
+        <div className="flex-1 rounded-xl border border-zinc-800 bg-zinc-900/60 px-3 py-2.5 min-w-0">
+          <p className="text-[10px] text-zinc-500 font-semibold uppercase tracking-wider mb-2 truncate">{title}</p>
+          <div className="flex flex-col gap-1.5">
+            {SHIP_DEFS.map((def) => {
+              const ship = ships.find((s) => s.id === def.id);
+              const sunk = ship?.sunk ?? false;
+              return (
+                <div key={def.id} className={`flex items-center gap-1.5 text-xs transition-opacity ${sunk ? 'opacity-55' : ''}`}>
+                  <div className="flex gap-[2px] shrink-0">
+                    {Array.from({ length: def.length }, (_, i) => (
+                      <span
+                        key={i}
+                        style={{ width: 5, height: 5, borderRadius: 1, display: 'block',
+                          backgroundColor: sunk ? '#881337' : '#4338ca' }}
+                      />
+                    ))}
+                  </div>
+                  <span className={`flex-1 truncate ${sunk ? 'line-through text-zinc-600' : 'text-zinc-400'}`}>
+                    {t(`battleship.ship.${def.id}`)}
+                  </span>
+                  {sunk ? (
+                    <span className="text-[9px] font-bold text-rose-600 shrink-0">{t('battleship.fleet.sunk')}</span>
+                  ) : (
+                    <span className="text-[9px] text-zinc-600 shrink-0">{t('battleship.fleet.alive')}</span>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      );
+    }
+
+    return (
+      <div className="flex gap-3 w-full max-w-xl">
+        {renderColumn(leftTitle, leftShips)}
+        {renderColumn(rightTitle, rightShips)}
+      </div>
+    );
+  }
+
   // ── Render ──────────────────────────────────────────────────────────────────
 
   return (
     <div className="flex flex-col lg:flex-row gap-6 w-full">
       {/* ── Game area ──────────────────────────────────────────────────────── */}
       <div className="relative flex-1 flex flex-col items-center gap-4 min-h-[400px]">
+        {/* Keyframe for shot-result pop overlay */}
+        <style>{`
+          @keyframes bs-shot-pop {
+            0%   { opacity: 0; transform: scale(0.75); }
+            18%  { opacity: 1; transform: scale(1.04); }
+            35%  { opacity: 1; transform: scale(1);    }
+            80%  { opacity: 1; transform: scale(1);    }
+            100% { opacity: 0; transform: scale(0.95); }
+          }
+          .bs-shot-anim { animation: bs-shot-pop 1s ease-out forwards; }
+        `}</style>
+
+        {/* Big transient shot-result overlay (pointer-events-none so it never blocks clicks) */}
+        {shotOverlay && (
+          <div
+            style={{ position: 'absolute', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', pointerEvents: 'none', zIndex: 20 }}
+            aria-live="polite"
+            aria-atomic="true"
+          >
+            <div className={`bs-shot-anim px-7 py-5 rounded-2xl border backdrop-blur-sm text-center shadow-2xl ${
+              shotOverlay.kind === 'miss'
+                ? 'bg-zinc-800/85 border-zinc-600/60 text-zinc-100'
+                : shotOverlay.kind === 'sunk'
+                ? 'bg-rose-950/90 border-rose-600/70 text-rose-100'
+                : 'bg-rose-900/85 border-rose-600/60 text-white'
+            }`}>
+              <p className={`font-bold leading-tight ${shotOverlay.kind === 'sunk' ? 'text-3xl' : 'text-2xl'}`}>
+                {shotOverlay.text}
+              </p>
+            </div>
+          </div>
+        )}
+
         <CountdownOverlay countdown={mp.matchCountdown} />
         <StatusBanner />
 
         {/* ── Setup phase ──────────────────────────────────────────────────── */}
         {gs?.phase === 'setup' && !mp.isSpectator && myIdx !== null && (
           <div className="flex flex-col sm:flex-row gap-6 items-start justify-center w-full">
-            <div className="flex flex-col items-center gap-2">
+            <div className="flex flex-col items-center gap-2 rounded-xl border border-zinc-800 bg-zinc-950/40 px-4 py-3">
               <BsGrid
                 cells={setupCells}
                 onCell={handlePlaceShip}
@@ -676,6 +935,7 @@ export function BattleshipGame({ wsUrl, gameId, initialRoomCode, quickPlay: isQu
                 disabled={isMyReady}
                 hoverCoord={isMyReady ? null : hoverCoord}
                 cellSize={30}
+                segments={myShipSegments}
               />
               {placeError && (
                 <div className="text-xs text-rose-300 bg-rose-950/60 border border-rose-800/60 rounded-lg px-3 py-1.5 w-full text-center">
@@ -725,39 +985,52 @@ export function BattleshipGame({ wsUrl, gameId, initialRoomCode, quickPlay: isQu
             <div className="flex flex-col sm:flex-row gap-6 items-start justify-center w-full overflow-x-auto">
               {mp.isSpectator ? (
                 <>
-                  <BsGrid
-                    cells={specP0Cells}
-                    label={`${p0nick} ${t('game.room.watching')}`}
-                    disabled
-                    cellSize={26}
-                  />
-                  <BsGrid
-                    cells={specP1Cells}
-                    label={`${p1nick} ${t('game.room.watching')}`}
-                    disabled
-                    cellSize={26}
-                  />
+                  <div className="rounded-xl border border-zinc-800 bg-zinc-950/40 px-4 py-3">
+                    <BsGrid
+                      cells={specP0Cells}
+                      label={`${p0nick} ${t('game.room.watching')}`}
+                      disabled
+                      cellSize={26}
+                    />
+                  </div>
+                  <div className="rounded-xl border border-zinc-800 bg-zinc-950/40 px-4 py-3">
+                    <BsGrid
+                      cells={specP1Cells}
+                      label={`${p1nick} ${t('game.room.watching')}`}
+                      disabled
+                      cellSize={26}
+                    />
+                  </div>
                 </>
               ) : (
                 <>
-                  <BsGrid
-                    cells={ownCells}
-                    disabled
-                    cellSize={26}
-                    label={t('battleship.play.yourBoard')}
-                  />
-                  <BsGrid
-                    cells={oppCells}
-                    onCell={handleFire}
-                    onHover={canFire ? setHoverCoord : undefined}
-                    disabled={!canFire}
-                    hoverCoord={canFire ? hoverCoord : null}
-                    cellSize={26}
-                    label={t('battleship.play.enemyBoard')}
-                  />
+                  <div className="rounded-xl border border-zinc-800 bg-zinc-950/40 px-4 py-3">
+                    <BsGrid
+                      cells={ownCells}
+                      disabled
+                      cellSize={26}
+                      label={t('battleship.play.yourBoard')}
+                      segments={myShipSegments}
+                    />
+                  </div>
+                  <div className={`rounded-xl border px-4 py-3 transition-colors ${
+                    canFire ? 'border-indigo-700/60 bg-indigo-950/20' : 'border-zinc-800 bg-zinc-950/40'
+                  }`}>
+                    <BsGrid
+                      cells={oppCells}
+                      onCell={handleFire}
+                      onHover={canFire ? setHoverCoord : undefined}
+                      disabled={!canFire}
+                      hoverCoord={canFire ? hoverCoord : null}
+                      cellSize={26}
+                      label={t('battleship.play.enemyBoard')}
+                      segments={oppShipSegments}
+                    />
+                  </div>
                 </>
               )}
             </div>
+            <FleetPanel />
           </div>
         )}
 

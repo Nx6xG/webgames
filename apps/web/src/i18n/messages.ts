@@ -209,6 +209,7 @@ export const messages: Record<Lang, Record<string, string>> = {
     'battleship.setup.title':          'Schiffe platzieren',
     'battleship.setup.placing':        'Platziere:',
     'battleship.setup.rotate':         'Drehen',
+    'battleship.setup.rotateHint':     'Tipp: Drücke R zum Drehen',
     'battleship.setup.reset':          'Zurücksetzen',
     'battleship.setup.ready':          'Bereit!',
     'battleship.setup.allPlaced':      'Alle Schiffe platziert!',
@@ -240,6 +241,11 @@ export const messages: Record<Lang, Record<string, string>> = {
     'battleship.spectator.setup':      'Spieler platzieren ihre Schiffe…',
     'battleship.spectator.p0board':    'Brett Spieler 1',
     'battleship.spectator.p1board':    'Brett Spieler 2',
+
+    'battleship.fleet.titleYou':       'Deine Flotte',
+    'battleship.fleet.titleEnemy':     'Gegnerische Flotte',
+    'battleship.fleet.sunk':           'Versenkt',
+    'battleship.fleet.alive':          'Intakt',
 
     // ── Chat ───────────────────────────────────────────────────────────────
     'chat.title':           'Chat',
@@ -456,6 +462,7 @@ export const messages: Record<Lang, Record<string, string>> = {
     'battleship.setup.title':          'Place your ships',
     'battleship.setup.placing':        'Placing:',
     'battleship.setup.rotate':         'Rotate',
+    'battleship.setup.rotateHint':     'Tip: Press R to rotate',
     'battleship.setup.reset':          'Reset',
     'battleship.setup.ready':          'Ready!',
     'battleship.setup.allPlaced':      'All ships placed!',
@@ -487,6 +494,11 @@ export const messages: Record<Lang, Record<string, string>> = {
     'battleship.spectator.setup':      'Players are placing their ships…',
     'battleship.spectator.p0board':    'Player 1\'s board',
     'battleship.spectator.p1board':    'Player 2\'s board',
+
+    'battleship.fleet.titleYou':       'Your Fleet',
+    'battleship.fleet.titleEnemy':     'Enemy Fleet',
+    'battleship.fleet.sunk':           'Sunk',
+    'battleship.fleet.alive':          'Afloat',
 
     // ── Chat ───────────────────────────────────────────────────────────────
     'chat.title':           'Chat',
