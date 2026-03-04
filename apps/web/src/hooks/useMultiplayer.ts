@@ -175,6 +175,7 @@ export function useMultiplayer<TState extends AnyGameState = AnyGameState>(
     socket.on('connect', () => {
       set((prev) => ({ ...prev, connection: 'connected', error: null, myNickname: nicknameRef.current }));
       socket.emit('identify', { playerToken: tokenRef.current, nickname: nicknameRef.current });
+      socket.emit('presence_update', { activity: { kind: 'game', gameId: gameIdRef.current } });
       socket.emit('get_stats', { gameId: gameIdRef.current });
       socket.emit('get_history');
     });

@@ -52,6 +52,15 @@ const SINGLEPLAYER_GAMES = [
     tags:         ['singleplayer', 'arcade', 'classic'],
     bestScoreKey: '',
   },
+  {
+    id:           'flappy',
+    titleKey:     'lobby.games.flappy.title',
+    descKey:      'lobby.games.flappy.desc',
+    emoji:        '🐦',
+    href:         '/games/flappy',
+    tags:         ['singleplayer', 'arcade', 'classic'],
+    bestScoreKey: 'webgames.flappy.highscores',
+  },
 ] as const;
 import { GlobalChatWidget } from '@/components/chat/GlobalChatWidget';
 import { ProfileMenu } from '@/components/ProfileMenu';

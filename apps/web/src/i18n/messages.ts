@@ -83,6 +83,8 @@ export const messages: Record<Lang, Record<string, string>> = {
     // ── Tetris ───────────────────────────────────────────────────────────
     'lobby.games.tetris.title':    'Tetris',
     'lobby.games.tetris.desc':     'Stapele fallende Blöcke und räume Reihen ab – Arcade-Klassiker!',
+    'lobby.games.flappy.title':    'Flappy Bird',
+    'lobby.games.flappy.desc':     'Fliege durch die Röhren – ein Tap reicht!',
     'tetris.highscores':           'Top 10',
     'tetris.best':                 'Bester',
     'tetris.games':                'Spiele',
@@ -256,6 +258,9 @@ export const messages: Record<Lang, Record<string, string>> = {
     'game.actions.rematch':          'Revanche',
     'game.actions.waitingRematch':   'Warte auf Gegner…',
     'game.actions.leaveRoom':        'Raum verlassen',
+    'game.paused':                   'Pausiert',
+    'game.resume':                   'Weiter',
+    'game.restart':                  'Nochmal',
     'game.info.statsRules':          'Statistiken & Regeln',
 
     // ── Rock Paper Scissors ────────────────────────────────────────────────
@@ -368,6 +373,8 @@ export const messages: Record<Lang, Record<string, string>> = {
     'online.title':         'Online',
     'online.empty':         'Niemand online',
     'online.you':           'du',
+    'online.activity.home': 'Im Menü',
+    'online.join':          'Beitreten',
 
     // ── Invites ────────────────────────────────────────────────────────────
     'invite.title':         'Einladen',
@@ -463,6 +470,8 @@ export const messages: Record<Lang, Record<string, string>> = {
     // ── Tetris ───────────────────────────────────────────────────────────
     'lobby.games.tetris.title':    'Tetris',
     'lobby.games.tetris.desc':     'Stack falling blocks and clear rows — arcade classic!',
+    'lobby.games.flappy.title':    'Flappy Bird',
+    'lobby.games.flappy.desc':     'Fly through the pipes — one tap is all it takes!',
     'tetris.highscores':           'Top 10',
     'tetris.best':                 'Best',
     'tetris.games':                'Games',
@@ -636,6 +645,9 @@ export const messages: Record<Lang, Record<string, string>> = {
     'game.actions.rematch':          'Rematch',
     'game.actions.waitingRematch':   'Waiting for opponent…',
     'game.actions.leaveRoom':        'Leave room',
+    'game.paused':                   'Paused',
+    'game.resume':                   'Resume',
+    'game.restart':                  'Restart',
     'game.info.statsRules':          'Stats & Rules',
 
     // ── Rock Paper Scissors ────────────────────────────────────────────────
@@ -748,6 +760,8 @@ export const messages: Record<Lang, Record<string, string>> = {
     'online.title':         'Online',
     'online.empty':         'No one online',
     'online.you':           'you',
+    'online.activity.home': 'In Menu',
+    'online.join':          'Join',
 
     // ── Invites ────────────────────────────────────────────────────────────
     'invite.title':         'Invite',

@@ -94,6 +94,11 @@ export function OnlineNavChip({ wsUrl = '' }: { wsUrl?: string }) {
     router.push(`/games/${invite.gameId}?room=${invite.roomCode}`);
   }
 
+  function handleJoinRoom(gameId: GameId, roomCode: string) {
+    setOpen(false);
+    router.push(`/games/${gameId}?room=${roomCode}`);
+  }
+
   const hasNotifications = incomingInvites.length > 0 || !!sentInvite || !!inviteError || !!acceptedInvite;
 
   return (
@@ -124,6 +129,7 @@ export function OnlineNavChip({ wsUrl = '' }: { wsUrl?: string }) {
         connected={connected}
         myToken={myToken}
         onInvite={handleOpenInviteDialog}
+        onJoinRoom={handleJoinRoom}
         panelRef={drawerPanelRef}
       />
 

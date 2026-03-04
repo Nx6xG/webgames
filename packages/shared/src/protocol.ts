@@ -32,12 +32,20 @@ export interface InvitePayload {
 
 // ─── Presence ────────────────────────────────────────────────────────────────
 
+/** What a player is currently doing (derived per-socket, most specific wins). */
+export type PresenceActivity =
+  | { kind: 'home' }
+  | { kind: 'game'; gameId: GameId }
+  | { kind: 'room'; gameId: GameId; roomCode: string; isPublic?: boolean };
+
 /** A user currently online (at least one active socket for their token). */
 export interface OnlineUser {
   playerToken: string;
   nickname: string;
   /** Number of active socket connections for this token (multi-tab). */
   connections: number;
+  /** Most specific activity across all of this token's sockets. */
+  activity?: PresenceActivity;
 }
 
 // ─── Nickname / players ───────────────────────────────────────────────────────
@@ -348,6 +356,9 @@ export interface ClientToServerEvents {
 
   /** Request current online user list (server replies with online_users to requester only). */
   get_online_users: () => void;
+
+  /** Update this socket's activity (page-level presence). */
+  presence_update: (data: { activity: PresenceActivity }) => void;
 
   /** Create an invite for toToken to join a game room. Server replies with invite_sent or invite_error. */
   invite_create: (payload: { toToken: string; gameId: GameId }) => void;

@@ -232,189 +232,185 @@ export function TetrisGame() {
   const best = stats?.bestScore ?? 0;
 
   return (
-    <div className="flex flex-col items-center gap-6">
-      {/* Main layout: sidebar-left + board + sidebar-right */}
-      <div className="flex gap-4 items-start">
-        {/* Left sidebar — Hold + Stats */}
-        <div className="hidden sm:flex flex-col gap-3 w-[90px]">
-          {/* Hold */}
-          <div className="bg-zinc-900 border border-zinc-800 rounded-lg p-3">
-            <div className="text-[10px] uppercase tracking-widest text-zinc-500 mb-2">Hold</div>
-            <div className="flex items-center justify-center h-[56px]">
+    <div className="flex flex-col items-center gap-3">
+      {/* ── Game area — viewport-fitted ─────────────────────────────── */}
+      <div className="flex flex-col items-center gap-2 sm:gap-3 w-full h-[calc(100dvh-7.5rem)]">
+        {/* Board row: sidebars + board — fills available height */}
+        <div className="flex-1 min-h-0 flex gap-3 sm:gap-4 items-stretch justify-center w-full">
+          {/* Left sidebar — Hold + Stats */}
+          <div className="hidden sm:flex flex-col gap-2 w-[90px] shrink-0">
+            <div className="bg-zinc-900 border border-zinc-800 rounded-lg p-2.5">
+              <div className="text-[10px] uppercase tracking-widest text-zinc-500 mb-1.5">Hold</div>
+              <div className="flex items-center justify-center h-[50px]">
+                {state.holdKind ? (
+                  <MiniPiece kind={state.holdKind} />
+                ) : (
+                  <span className="text-zinc-700 text-xs">—</span>
+                )}
+              </div>
+            </div>
+            <div className="bg-zinc-900 border border-zinc-800 rounded-lg p-2.5 space-y-1.5">
+              <StatRow label="Score" value={state.score} />
+              <StatRow label="Lines" value={state.lines} />
+              <StatRow label="Level" value={state.level} />
+              <StatRow label={t('tetris.best')} value={best} />
+            </div>
+          </div>
+
+          {/* Board — height-driven, width derived from aspect ratio */}
+          <div className="relative h-full" style={{ aspectRatio: `${BOARD_COLS} / ${BOARD_ROWS}`, maxWidth: '100%' }}>
+            <div
+              className="grid h-full w-full border-2 border-zinc-700 bg-zinc-950 rounded"
+              style={{ gridTemplateColumns: `repeat(${BOARD_COLS}, 1fr)` }}
+            >
+              {Array.from({ length: BOARD_ROWS }, (_, row) =>
+                Array.from({ length: BOARD_COLS }, (_, col) => {
+                  const key = `${row},${col}`;
+                  const boardVal = state.board[row][col];
+                  const isActive = activeMap.has(key);
+                  const isGhost = !isActive && ghostMap.has(key);
+                  const isFlash = flashRows.has(row);
+
+                  let bg = 'bg-zinc-950';
+                  if (isFlash) {
+                    bg = 'bg-white';
+                  } else if (isActive) {
+                    bg = PIECE_COLOURS[activeIdx];
+                  } else if (isGhost) {
+                    bg = GHOST_COLOURS[activeIdx];
+                  } else if (boardVal > 0) {
+                    bg = PIECE_COLOURS[boardVal];
+                  }
+
+                  return (
+                    <div
+                      key={key}
+                      className={`aspect-square border border-zinc-900/50 ${bg} ${isFlash ? 'animate-pulse' : ''}`}
+                    />
+                  );
+                })
+              )}
+            </div>
+
+            {/* Countdown overlay */}
+            {state.status === 'countdown' && (
+              <div className="absolute inset-0 bg-black/70 flex items-center justify-center rounded">
+                <span className="text-7xl font-black text-white tabular-nums animate-bounce">
+                  {countdown}
+                </span>
+              </div>
+            )}
+
+            {/* Pause overlay */}
+            {state.status === 'paused' && (
+              <div className="absolute inset-0 bg-black/70 flex items-center justify-center rounded">
+                <div className="text-center">
+                  <span className="text-3xl font-bold text-white">Paused</span>
+                  <p className="text-zinc-400 text-sm mt-2">Press P to resume</p>
+                </div>
+              </div>
+            )}
+
+            {/* Game over overlay */}
+            {state.status === 'gameover' && (
+              <div className="absolute inset-0 bg-black/80 flex items-center justify-center rounded">
+                <div className="text-center space-y-4">
+                  <p className="text-3xl font-bold text-white">Game Over</p>
+                  <p className="text-zinc-300">
+                    Score: <span className="font-bold text-white">{state.score}</span>
+                  </p>
+                  <div className="flex gap-3 justify-center">
+                    <button
+                      onClick={handleRestart}
+                      className="px-4 py-2 bg-indigo-600 hover:bg-indigo-500 text-white rounded-lg text-sm font-medium transition-colors"
+                    >
+                      Restart
+                    </button>
+                    <a
+                      href="/"
+                      className="px-4 py-2 bg-zinc-700 hover:bg-zinc-600 text-white rounded-lg text-sm font-medium transition-colors"
+                    >
+                      Back
+                    </a>
+                  </div>
+                </div>
+              </div>
+            )}
+          </div>
+
+          {/* Right sidebar — Next queue */}
+          <div className="hidden sm:flex flex-col gap-2 w-[90px] shrink-0">
+            <div className="bg-zinc-900 border border-zinc-800 rounded-lg p-2.5">
+              <div className="text-[10px] uppercase tracking-widest text-zinc-500 mb-1.5">Next</div>
+              <div className="flex flex-col items-center gap-2">
+                {state.nextQueue.slice(0, 5).map((kind, i) => (
+                  <div key={i} className="flex items-center justify-center h-[38px]">
+                    <MiniPiece kind={kind} />
+                  </div>
+                ))}
+              </div>
+            </div>
+          </div>
+        </div>
+
+        {/* Mobile stats bar (visible below sm) */}
+        <div className="shrink-0 flex sm:hidden gap-2 w-full justify-between">
+          <div className="bg-zinc-900 border border-zinc-800 rounded-lg px-2 py-1.5 flex-1 text-center">
+            <div className="text-[9px] uppercase tracking-widest text-zinc-500">Score</div>
+            <div className="text-sm font-bold text-white tabular-nums">{state.score}</div>
+          </div>
+          <div className="bg-zinc-900 border border-zinc-800 rounded-lg px-2 py-1.5 flex-1 text-center">
+            <div className="text-[9px] uppercase tracking-widest text-zinc-500">Lines</div>
+            <div className="text-sm font-bold text-white tabular-nums">{state.lines}</div>
+          </div>
+          <div className="bg-zinc-900 border border-zinc-800 rounded-lg px-2 py-1.5 flex-1 text-center">
+            <div className="text-[9px] uppercase tracking-widest text-zinc-500">Level</div>
+            <div className="text-sm font-bold text-white tabular-nums">{state.level}</div>
+          </div>
+          <div className="bg-zinc-900 border border-zinc-800 rounded-lg px-2 py-1.5 flex-1 text-center">
+            <div className="text-[9px] uppercase tracking-widest text-zinc-500">Hold</div>
+            <div className="flex items-center justify-center h-[20px]">
               {state.holdKind ? (
-                <MiniPiece kind={state.holdKind} />
+                <span className="text-xs font-bold text-zinc-200">{state.holdKind}</span>
               ) : (
                 <span className="text-zinc-700 text-xs">—</span>
               )}
             </div>
           </div>
+        </div>
 
-          {/* Live stats */}
-          <div className="bg-zinc-900 border border-zinc-800 rounded-lg p-3 space-y-2">
-            <StatRow label="Score" value={state.score} />
-            <StatRow label="Lines" value={state.lines} />
-            <StatRow label="Level" value={state.level} />
-            <StatRow label={t('tetris.best')} value={best} />
+        {/* Mobile controls */}
+        <div className="shrink-0 flex sm:hidden flex-col gap-1.5 w-full">
+          <div className="flex gap-1.5 justify-center">
+            <MobileBtn label="Hold" onPress={() => dispatch({ type: 'hold' })} />
+            <MobileBtn label="Rotate" onPress={() => dispatch({ type: 'rotateCW' })} />
+            <MobileBtn
+              label={state.status === 'paused' ? 'Resume' : 'Pause'}
+              onPress={() => dispatch({ type: 'togglePause' })}
+            />
+          </div>
+          <div className="flex gap-1.5 justify-center">
+            <MobileBtn label="←" onPress={() => dispatch({ type: 'moveLeft' })} wide />
+            <MobileBtn label="↓" onPress={() => dispatch({ type: 'softDrop' })} wide />
+            <MobileBtn label="→" onPress={() => dispatch({ type: 'moveRight' })} wide />
+          </div>
+          <div className="flex gap-1.5 justify-center">
+            <MobileBtn label="Hard Drop" onPress={() => dispatch({ type: 'hardDrop' })} full />
           </div>
         </div>
 
-        {/* Board */}
-        <div className="relative">
-          <div
-            className="grid border-2 border-zinc-700 bg-zinc-950 rounded"
-            style={{
-              gridTemplateColumns: `repeat(${BOARD_COLS}, 1fr)`,
-              width: 'min(420px, calc(100vw - 32px))',
-              aspectRatio: `${BOARD_COLS} / ${BOARD_ROWS}`,
-            }}
-          >
-            {Array.from({ length: BOARD_ROWS }, (_, row) =>
-              Array.from({ length: BOARD_COLS }, (_, col) => {
-                const key = `${row},${col}`;
-                const boardVal = state.board[row][col];
-                const isActive = activeMap.has(key);
-                const isGhost = !isActive && ghostMap.has(key);
-                const isFlash = flashRows.has(row);
-
-                let bg = 'bg-zinc-950';
-                if (isFlash) {
-                  bg = 'bg-white';
-                } else if (isActive) {
-                  bg = PIECE_COLOURS[activeIdx];
-                } else if (isGhost) {
-                  bg = GHOST_COLOURS[activeIdx];
-                } else if (boardVal > 0) {
-                  bg = PIECE_COLOURS[boardVal];
-                }
-
-                return (
-                  <div
-                    key={key}
-                    className={`aspect-square border border-zinc-900/50 ${bg} ${isFlash ? 'animate-pulse' : ''}`}
-                  />
-                );
-              })
-            )}
-          </div>
-
-          {/* Countdown overlay */}
-          {state.status === 'countdown' && (
-            <div className="absolute inset-0 bg-black/70 flex items-center justify-center rounded">
-              <span className="text-7xl font-black text-white tabular-nums animate-bounce">
-                {countdown}
-              </span>
-            </div>
-          )}
-
-          {/* Pause overlay */}
-          {state.status === 'paused' && (
-            <div className="absolute inset-0 bg-black/70 flex items-center justify-center rounded">
-              <div className="text-center">
-                <span className="text-3xl font-bold text-white">Paused</span>
-                <p className="text-zinc-400 text-sm mt-2">Press P to resume</p>
-              </div>
-            </div>
-          )}
-
-          {/* Game over overlay */}
-          {state.status === 'gameover' && (
-            <div className="absolute inset-0 bg-black/80 flex items-center justify-center rounded">
-              <div className="text-center space-y-4">
-                <p className="text-3xl font-bold text-white">Game Over</p>
-                <p className="text-zinc-300">
-                  Score: <span className="font-bold text-white">{state.score}</span>
-                </p>
-                <div className="flex gap-3 justify-center">
-                  <button
-                    onClick={handleRestart}
-                    className="px-4 py-2 bg-indigo-600 hover:bg-indigo-500 text-white rounded-lg text-sm font-medium transition-colors"
-                  >
-                    Restart
-                  </button>
-                  <a
-                    href="/"
-                    className="px-4 py-2 bg-zinc-700 hover:bg-zinc-600 text-white rounded-lg text-sm font-medium transition-colors"
-                  >
-                    Back
-                  </a>
-                </div>
-              </div>
-            </div>
-          )}
-        </div>
-
-        {/* Right sidebar — Next queue */}
-        <div className="hidden sm:flex flex-col gap-3 w-[90px]">
-          <div className="bg-zinc-900 border border-zinc-800 rounded-lg p-3">
-            <div className="text-[10px] uppercase tracking-widest text-zinc-500 mb-2">Next</div>
-            <div className="flex flex-col items-center gap-3">
-              {state.nextQueue.slice(0, 5).map((kind, i) => (
-                <div key={i} className="flex items-center justify-center h-[42px]">
-                  <MiniPiece kind={kind} />
-                </div>
-              ))}
-            </div>
-          </div>
+        {/* Controls hint (desktop only) */}
+        <div className="shrink-0 hidden sm:block text-center text-[11px] text-zinc-600 space-x-3">
+          <span>← → Move</span>
+          <span>↓ Soft Drop</span>
+          <span>Space Hard Drop</span>
+          <span>Z / X Rotate</span>
+          <span>C Hold</span>
+          <span>P Pause</span>
         </div>
       </div>
 
-      {/* Mobile stats bar (visible below sm) */}
-      <div className="flex sm:hidden gap-3 w-full max-w-[420px] justify-between">
-        <div className="bg-zinc-900 border border-zinc-800 rounded-lg px-3 py-2 flex-1 text-center">
-          <div className="text-[9px] uppercase tracking-widest text-zinc-500">Score</div>
-          <div className="text-sm font-bold text-white tabular-nums">{state.score}</div>
-        </div>
-        <div className="bg-zinc-900 border border-zinc-800 rounded-lg px-3 py-2 flex-1 text-center">
-          <div className="text-[9px] uppercase tracking-widest text-zinc-500">Lines</div>
-          <div className="text-sm font-bold text-white tabular-nums">{state.lines}</div>
-        </div>
-        <div className="bg-zinc-900 border border-zinc-800 rounded-lg px-3 py-2 flex-1 text-center">
-          <div className="text-[9px] uppercase tracking-widest text-zinc-500">Level</div>
-          <div className="text-sm font-bold text-white tabular-nums">{state.level}</div>
-        </div>
-        <div className="bg-zinc-900 border border-zinc-800 rounded-lg px-3 py-2 flex-1 text-center">
-          <div className="text-[9px] uppercase tracking-widest text-zinc-500">Hold</div>
-          <div className="flex items-center justify-center h-[20px]">
-            {state.holdKind ? (
-              <span className="text-xs font-bold text-zinc-200">{state.holdKind}</span>
-            ) : (
-              <span className="text-zinc-700 text-xs">—</span>
-            )}
-          </div>
-        </div>
-      </div>
-
-      {/* Mobile controls */}
-      <div className="flex sm:hidden flex-col gap-2 w-full max-w-[420px]">
-        <div className="flex gap-2 justify-center">
-          <MobileBtn label="Hold" onPress={() => dispatch({ type: 'hold' })} />
-          <MobileBtn label="Rotate" onPress={() => dispatch({ type: 'rotateCW' })} />
-          <MobileBtn
-            label={state.status === 'paused' ? 'Resume' : 'Pause'}
-            onPress={() => dispatch({ type: 'togglePause' })}
-          />
-        </div>
-        <div className="flex gap-2 justify-center">
-          <MobileBtn label="←" onPress={() => dispatch({ type: 'moveLeft' })} wide />
-          <MobileBtn label="↓" onPress={() => dispatch({ type: 'softDrop' })} wide />
-          <MobileBtn label="→" onPress={() => dispatch({ type: 'moveRight' })} wide />
-        </div>
-        <div className="flex gap-2 justify-center">
-          <MobileBtn label="Hard Drop" onPress={() => dispatch({ type: 'hardDrop' })} full />
-        </div>
-      </div>
-
-      {/* Controls hint (desktop only) */}
-      <div className="hidden sm:block text-center text-[11px] text-zinc-600 space-x-3">
-        <span>← → Move</span>
-        <span>↓ Soft Drop</span>
-        <span>Space Hard Drop</span>
-        <span>Z / X Rotate</span>
-        <span>C Hold</span>
-        <span>P Pause</span>
-      </div>
-
-      {/* Highscores + persistent stats panel */}
+      {/* ── Highscores — below the viewport-fitted game area ────── */}
       {stats && (
         <div className="w-full max-w-[420px] bg-zinc-900 border border-zinc-800 rounded-lg p-4 space-y-4">
           {/* Summary row */}
@@ -527,7 +523,7 @@ function MobileBtn({
         select-none touch-manipulation
         bg-zinc-800 active:bg-zinc-700 border border-zinc-700
         text-zinc-200 text-sm font-medium rounded-lg
-        py-3
+        py-2.5
         ${full ? 'flex-1' : wide ? 'flex-1' : 'px-4'}
         transition-colors
       `}

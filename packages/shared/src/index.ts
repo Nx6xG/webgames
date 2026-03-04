@@ -111,5 +111,6 @@ export type {
   LeaderboardMode,
   LeaderboardEntry,
   OnlineUser,
+  PresenceActivity,
   InvitePayload,
 } from './protocol';

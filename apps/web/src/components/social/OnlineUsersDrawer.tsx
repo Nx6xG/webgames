@@ -1,7 +1,7 @@
 'use client';
 
 import type { RefObject } from 'react';
-import type { OnlineUser } from 'shared';
+import type { OnlineUser, GameId } from 'shared';
 import { useI18n } from '@/components/providers/LanguageProvider';
 import { OnlineUsersPanel } from './OnlineUsersPanel';
 
@@ -12,11 +12,12 @@ interface OnlineUsersDrawerProps {
   connected: boolean;
   myToken: string;
   onInvite?: (token: string, nickname: string) => void;
+  onJoinRoom?: (gameId: GameId, roomCode: string) => void;
   /** Ref forwarded from the parent so useClickOutside can treat the panel as "inside". */
   panelRef?: RefObject<HTMLDivElement | null>;
 }
 
-export function OnlineUsersDrawer({ open, onClose, users, connected, myToken, onInvite, panelRef }: OnlineUsersDrawerProps) {
+export function OnlineUsersDrawer({ open, onClose, users, connected, myToken, onInvite, onJoinRoom, panelRef }: OnlineUsersDrawerProps) {
   const { t } = useI18n();
   // Escape + click-outside are handled by the parent (OnlineNavChip) via
   // useEscape / useClickOutside so we avoid the stale-closure trap of an
@@ -64,7 +65,7 @@ export function OnlineUsersDrawer({ open, onClose, users, connected, myToken, on
 
         {/* List */}
         <div className="flex-1 min-h-0 overflow-y-auto px-5 py-4">
-          <OnlineUsersPanel users={users} myToken={myToken} variant="drawer" onInvite={onInvite} />
+          <OnlineUsersPanel users={users} myToken={myToken} variant="drawer" onInvite={onInvite} onJoinRoom={onJoinRoom} />
         </div>
       </div>
     </>

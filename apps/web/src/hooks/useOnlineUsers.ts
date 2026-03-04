@@ -46,6 +46,7 @@ export function useOnlineUsers(wsUrl: string) {
     socket.on('connect', () => {
       setConnected(true);
       socket.emit('identify', { playerToken: token, nickname: nick });
+      socket.emit('presence_update', { activity: { kind: 'home' } });
       socket.emit('get_online_users');
     });
     socket.on('disconnect',    () => setConnected(false));

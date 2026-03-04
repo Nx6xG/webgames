@@ -8,7 +8,7 @@ import { rateLimiter } from './rateLimiter.js';
 import { getStats, getAllStats, recordResult } from './stats.js';
 import { addMatch, getHistory } from './matchHistory.js';
 import { recordMatchResult, recordDraw, updateNickname, getEntries } from './leaderboard.js';
-import type { RoomPlayerInfo, OpenRoomInfo, PublicRoomListItem, GameId, Match, ActionErrorCode, ChatMessage, LeaderboardMode, AnyGameState, InvitePayload } from 'shared';
+import type { RoomPlayerInfo, OpenRoomInfo, PublicRoomListItem, GameId, Match, ActionErrorCode, ChatMessage, LeaderboardMode, AnyGameState, InvitePayload, PresenceActivity } from 'shared';
 import type { Room } from './rooms.js';
 import { projectGameState } from './stateProjection.js';
 import { getGameCapacity } from './gameCapacity.js';
@@ -47,9 +47,30 @@ const nicknameMap = new Map<string, string>();
 /** playerToken → { nickname, sockets: Set of active socketIds } */
 const presence = new Map<string, { nickname: string; sockets: Set<string> }>();
 
+/** socketId → current activity for that socket */
+const socketActivity = new Map<string, PresenceActivity>();
+
+/** Priority: room > game > home. Pick the most specific activity across all sockets for a token. */
+function bestActivity(sockets: Set<string>): PresenceActivity | undefined {
+  let best: PresenceActivity | undefined;
+  let bestRank = -1;
+  for (const sid of sockets) {
+    const a = socketActivity.get(sid);
+    if (!a) continue;
+    const rank = a.kind === 'room' ? 2 : a.kind === 'game' ? 1 : 0;
+    if (rank > bestRank) { best = a; bestRank = rank; }
+  }
+  return best;
+}
+
 function buildPresenceList() {
   return [...presence.entries()]
-    .map(([playerToken, { nickname, sockets }]) => ({ playerToken, nickname, connections: sockets.size }))
+    .map(([playerToken, { nickname, sockets }]) => ({
+      playerToken,
+      nickname,
+      connections: sockets.size,
+      activity: bestActivity(sockets),
+    }))
     .sort((a, b) => a.nickname.localeCompare(b.nickname, undefined, { sensitivity: 'base' }));
 }
 
@@ -413,6 +434,8 @@ io.on('connection', (socket) => {
     if (room.matchStartsAt && Date.now() < room.matchStartsAt) {
       socket.emit('match_starting', { startsInMs: room.matchStartsAt - Date.now() });
     }
+    socketActivity.set(socket.id, { kind: 'room', gameId: room.gameId, roomCode: room.code, isPublic: room.visibility === 'public' });
+    broadcastPresence();
     console.log(`[rejoin] ${socket.id} → ${room.code} (player ${player.index})`);
   });
 
@@ -466,6 +489,8 @@ io.on('connection', (socket) => {
     socket.emit('room_created', { roomCode: room.code, playerIndex: 0, gameId: room.gameId, players: roomPlayers(room), maxPlayers: room.maxPlayers });
     // Empty history for the brand-new room
     socket.emit('chat_history', { scope: 'room', messages: [] });
+    socketActivity.set(socket.id, { kind: 'room', gameId: room.gameId, roomCode: room.code, isPublic: room.visibility === 'public' });
+    broadcastPresence();
     if (visibility === 'public') broadcastOpenRooms();
     console.log(`[room] created ${room.code} (${room.gameId}, ${visibility}${sanitizedName ? `: ${sanitizedName}` : ''})`);
   });
@@ -513,6 +538,8 @@ io.on('connection', (socket) => {
       if (rejoinState) {
         emitGameState(room, rejoinState);
       }
+      socketActivity.set(socket.id, { kind: 'room', gameId: room.gameId, roomCode: code, isPublic: room.visibility === 'public' });
+      broadcastPresence();
       return;
     }
 
@@ -599,6 +626,8 @@ io.on('connection', (socket) => {
           });
         }
       }
+      socketActivity.set(socket.id, { kind: 'room', gameId: room.gameId, roomCode: code, isPublic: room.visibility === 'public' });
+      broadcastPresence();
       if (room.visibility === 'public') broadcastOpenRooms();
       emitRoomReady(room);
       tryStartCountdown(room);
@@ -630,6 +659,8 @@ io.on('connection', (socket) => {
     });
     socket.emit('chat_history', { scope: 'room', messages: roomChats.get(code) ?? [] });
     io.to(code).emit('spectator_count_changed', { spectatorCount: room.spectators.size });
+    socketActivity.set(socket.id, { kind: 'room', gameId: room.gameId, roomCode: code, isPublic: room.visibility === 'public' });
+    broadcastPresence();
     console.log(`[room] ${socket.id} joined ${code} as spectator`);
   });
 
@@ -934,6 +965,8 @@ io.on('connection', (socket) => {
               });
             }
           }
+          socketActivity.set(socket.id, { kind: 'room', gameId: room.gameId, roomCode: entry.roomCode, isPublic: room.visibility === 'public' });
+          broadcastPresence();
           emitRoomReady(room);
           tryStartCountdown(room);
           console.log(`[quick-play] ${socket.id} joined ${entry.roomCode} (${gameId})`);
@@ -965,6 +998,8 @@ io.on('connection', (socket) => {
     });
     socket.emit('chat_history', { scope: 'room', messages: [] });
     socket.emit('quick_play_joined', { roomCode: room.code });
+    socketActivity.set(socket.id, { kind: 'room', gameId: room.gameId, roomCode: room.code, isPublic: room.visibility === 'public' });
+    broadcastPresence();
     console.log(`[quick-play] ${socket.id} waiting in ${room.code} (${gameId})`);
   });
 
@@ -1062,6 +1097,13 @@ io.on('connection', (socket) => {
   // ── get_online_users ──────────────────────────────────────────────────────
   socket.on('get_online_users', () => {
     socket.emit('online_users', { users: buildPresenceList() });
+  });
+
+  // ── presence_update ────────────────────────────────────────────────────────
+  socket.on('presence_update', ({ activity }) => {
+    if (!activity || typeof activity.kind !== 'string') return;
+    socketActivity.set(socket.id, activity);
+    broadcastPresence();
   });
 
   // ── invite_create ─────────────────────────────────────────────────────────
@@ -1174,6 +1216,7 @@ io.on('connection', (socket) => {
     console.log(`[-] ${socket.id}`);
     rateLimiter.clear(socket.id);
     nicknameMap.delete(socket.id);
+    socketActivity.delete(socket.id);
 
     // Update presence before deleting the token mapping
     const disconnectedToken = identifiedTokens.get(socket.id);
@@ -1196,6 +1239,13 @@ io.on('connection', (socket) => {
 
     const { room } = result;
     socket.leave(room.code);
+
+    // Reset activity to game-page level (they're still on the page, just not in a room)
+    const curActivity = socketActivity.get(socket.id);
+    if (curActivity?.kind === 'room') {
+      socketActivity.set(socket.id, { kind: 'game', gameId: room.gameId });
+      broadcastPresence();
+    }
 
     if (result.type === 'player') {
       // Update game-socket presence before broadcasting

@@ -1,18 +1,48 @@
 'use client';
 
-import type { OnlineUser } from 'shared';
+import type { OnlineUser, PresenceActivity, GameId } from 'shared';
 import { useI18n } from '@/components/providers/LanguageProvider';
+
+const GAME_DISPLAY_NAMES: Record<GameId, string> = {
+  tictactoe: 'Tic Tac Toe',
+  connect4: 'Connect 4',
+  rps: 'Schere Stein Papier',
+  chess: 'Schach',
+  battleship: 'Schiffe Versenken',
+  liarsbar: "Liar's Deck",
+};
+
+function ActivityLabel({ activity, t }: { activity?: PresenceActivity; t: (key: string) => string }) {
+  if (!activity) return null;
+  let text: string;
+  switch (activity.kind) {
+    case 'home':
+      text = t('online.activity.home');
+      break;
+    case 'game':
+      text = GAME_DISPLAY_NAMES[activity.gameId] ?? activity.gameId;
+      break;
+    case 'room':
+      text = `${activity.roomCode} – ${GAME_DISPLAY_NAMES[activity.gameId] ?? activity.gameId}`;
+      break;
+  }
+  return (
+    <span className="block text-[11px] text-zinc-500 truncate leading-tight">{text}</span>
+  );
+}
 
 interface OnlineUsersPanelProps {
   users: OnlineUser[];
   myToken: string;
   /** 'card' wraps the list in a rounded card shell; 'drawer' renders the list bare. */
   variant?: 'card' | 'drawer';
-  /** When provided, shows an invite button for each non-self user. */
+  /** When provided, shows an invite button for each non-self user (private rooms). */
   onInvite?: (token: string, nickname: string) => void;
+  /** When provided, shows a join button for users in public rooms. */
+  onJoinRoom?: (gameId: GameId, roomCode: string) => void;
 }
 
-export function OnlineUsersPanel({ users, myToken, variant = 'card', onInvite }: OnlineUsersPanelProps) {
+export function OnlineUsersPanel({ users, myToken, variant = 'card', onInvite, onJoinRoom }: OnlineUsersPanelProps) {
   const { t } = useI18n();
 
   const list = (
@@ -23,14 +53,26 @@ export function OnlineUsersPanel({ users, myToken, variant = 'card', onInvite }:
         <ul className="space-y-2">
           {users.map((u) => {
             const isMe = u.playerToken === myToken;
+            const act = u.activity;
+            const publicRoom = act?.kind === 'room' && act.isPublic === true ? act : null;
             return (
-              <li key={u.playerToken} className="flex items-center gap-2 min-w-0">
-                <span className="w-1.5 h-1.5 rounded-full bg-emerald-500/70 shrink-0" aria-hidden />
-                <span className={`text-sm truncate flex-1 min-w-0 ${isMe ? 'text-indigo-300 font-medium' : 'text-zinc-300'}`}>
-                  {u.nickname}
-                </span>
+              <li key={u.playerToken} className="flex items-start gap-2 min-w-0">
+                <span className="w-1.5 h-1.5 rounded-full bg-emerald-500/70 shrink-0 mt-1.5" aria-hidden />
+                <div className="flex-1 min-w-0">
+                  <span className={`text-sm truncate block ${isMe ? 'text-indigo-300 font-medium' : 'text-zinc-300'}`}>
+                    {u.nickname}
+                  </span>
+                  <ActivityLabel activity={u.activity} t={t} />
+                </div>
                 {isMe ? (
-                  <span className="shrink-0 text-xs text-zinc-600">{t('online.you')}</span>
+                  <span className="shrink-0 text-xs text-zinc-600 mt-0.5">{t('online.you')}</span>
+                ) : publicRoom && onJoinRoom ? (
+                  <button
+                    onClick={() => onJoinRoom(publicRoom.gameId, publicRoom.roomCode)}
+                    className="shrink-0 ml-auto px-3 py-1 text-xs font-medium rounded-md border border-zinc-700 bg-zinc-900/60 text-emerald-400 hover:bg-zinc-800 hover:border-emerald-600 transition"
+                  >
+                    {t('online.join')}
+                  </button>
                 ) : onInvite ? (
                   <button
                     onClick={() => onInvite(u.playerToken, u.nickname)}
@@ -39,7 +81,7 @@ export function OnlineUsersPanel({ users, myToken, variant = 'card', onInvite }:
                     {t('invite.title')}
                   </button>
                 ) : u.connections > 1 ? (
-                  <span className="shrink-0 text-xs text-zinc-700 tabular-nums">×{u.connections}</span>
+                  <span className="shrink-0 text-xs text-zinc-700 tabular-nums mt-0.5">×{u.connections}</span>
                 ) : null}
               </li>
             );
