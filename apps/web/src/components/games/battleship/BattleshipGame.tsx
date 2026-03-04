@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useMemo, useRef } from 'react';
+import { useState, useEffect, useMemo, useRef, type CSSProperties } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import type { BattleshipState, BattleshipShip, Coord, Orientation, ShipId, BsSlot } from 'shared';
@@ -190,45 +190,143 @@ function buildSegmentMap(ships: BattleshipShip[]): Map<number, ShipSegmentInfo> 
   return map;
 }
 
-/** Returns a CSS url() data-URI for the ship hull segment SVG overlay. */
+/**
+ * Returns a CSS url() data-URI for the ship hull segment SVG overlay.
+ * Each SVG embeds a linearGradient (top highlight → bottom shadow), a hull
+ * outline stroke, a centre deck-line, and a subtle bow/stern end shadow.
+ */
 function shipSegmentBg(segment: ShipSegmentInfo['segment'], dir: 'H' | 'V', sunk: boolean): string {
-  const fo  = sunk ? '0.07' : '0.14'; // fill-opacity
-  const so  = sunk ? '0.12' : '0.22'; // stroke-opacity
-  const fom = sunk ? '0.05' : '0.10'; // mid fill-opacity (slightly lower)
+  const gradTop   = sunk ? '0.07' : '0.24'; // top highlight
+  const gradBot   = sunk ? '0.14' : '0.12'; // bottom shadow
+  const outlineOp = sunk ? '0.28' : '0.65'; // hull outline stroke opacity
+  const deckOp    = sunk ? '0.10' : '0.26'; // centre deck line opacity
+  const hlOp      = sunk ? '0.04' : '0.14'; // top highlight stripe opacity
+  const bowShadOp = sunk ? '0.05' : '0.10'; // bow/stern tip shadow opacity
 
-  let path: string;
+  // Self-contained gradient — scoped to each SVG document in the data URI
+  const defs =
+    `<defs><linearGradient id='g' x1='0' y1='0' x2='0' y2='1'>` +
+    `<stop offset='0' stop-color='white' stop-opacity='${gradTop}'/>` +
+    `<stop offset='0.4' stop-color='white' stop-opacity='0.04'/>` +
+    `<stop offset='1' stop-color='black' stop-opacity='${gradBot}'/>` +
+    `</linearGradient></defs>`;
+
+  let shapes: string;
+
   if (dir === 'H') {
     switch (segment) {
       case 'bow':
-        path = `<path d='M2,5 L3.5,2.5 L10,2.5 L10,7.5 L3.5,7.5 Z' fill='white' fill-opacity='${fo}'/><line x1='3.5' y1='5' x2='9' y2='5' stroke='white' stroke-width='0.6' stroke-opacity='${so}'/>`;
+        shapes =
+          `<path d='M2,5 L3.5,2.5 L10,2.5 L10,7.5 L3.5,7.5 Z' fill='url(#g)' stroke='#1f2937' stroke-width='0.4' stroke-opacity='${outlineOp}'/>` +
+          `<line x1='4' y1='3.1' x2='9.8' y2='3.1' stroke='white' stroke-width='0.4' stroke-opacity='${hlOp}'/>` +
+          `<line x1='3.5' y1='5' x2='9.8' y2='5' stroke='white' stroke-width='0.55' stroke-opacity='${deckOp}'/>` +
+          `<path d='M2,5 L3.5,2.5 L3.5,7.5 Z' fill='black' fill-opacity='${bowShadOp}'/>`;
         break;
       case 'stern':
-        path = `<path d='M0,2.5 L7,2.5 Q10,2.5 10,5 Q10,7.5 7,7.5 L0,7.5 Z' fill='white' fill-opacity='${fo}'/><line x1='1' y1='5' x2='7' y2='5' stroke='white' stroke-width='0.6' stroke-opacity='${so}'/>`;
+        shapes =
+          `<path d='M0,2.5 L7,2.5 Q10,2.5 10,5 Q10,7.5 7,7.5 L0,7.5 Z' fill='url(#g)' stroke='#1f2937' stroke-width='0.4' stroke-opacity='${outlineOp}'/>` +
+          `<line x1='0.2' y1='3.1' x2='7' y2='3.1' stroke='white' stroke-width='0.4' stroke-opacity='${hlOp}'/>` +
+          `<line x1='0.2' y1='5' x2='7' y2='5' stroke='white' stroke-width='0.55' stroke-opacity='${deckOp}'/>` +
+          `<path d='M7,2.5 Q10,2.5 10,5 Q10,7.5 7,7.5 Z' fill='black' fill-opacity='${bowShadOp}'/>`;
         break;
       case 'single':
-        path = `<ellipse cx='5' cy='5' rx='3.8' ry='2.3' fill='white' fill-opacity='${fo}'/><line x1='1.5' y1='5' x2='8.5' y2='5' stroke='white' stroke-width='0.6' stroke-opacity='${so}'/>`;
+        shapes =
+          `<ellipse cx='5' cy='5' rx='4' ry='2.3' fill='url(#g)' stroke='#1f2937' stroke-width='0.4' stroke-opacity='${outlineOp}'/>` +
+          `<line x1='1.5' y1='3.6' x2='8.5' y2='3.6' stroke='white' stroke-width='0.4' stroke-opacity='${hlOp}'/>` +
+          `<line x1='1.5' y1='5' x2='8.5' y2='5' stroke='white' stroke-width='0.55' stroke-opacity='${deckOp}'/>`;
         break;
       default: // mid
-        path = `<rect x='0' y='2.5' width='10' height='5' fill='white' fill-opacity='${fom}'/><line x1='0' y1='5' x2='10' y2='5' stroke='white' stroke-width='0.6' stroke-opacity='${so}'/>`;
+        shapes =
+          `<rect x='0' y='2.5' width='10' height='5' fill='url(#g)' stroke='#1f2937' stroke-width='0.4' stroke-opacity='${outlineOp}'/>` +
+          `<line x1='0' y1='3.1' x2='10' y2='3.1' stroke='white' stroke-width='0.4' stroke-opacity='${hlOp}'/>` +
+          `<line x1='0' y1='5' x2='10' y2='5' stroke='white' stroke-width='0.55' stroke-opacity='${deckOp}'/>`;
     }
   } else { // V
     switch (segment) {
       case 'bow':
-        path = `<path d='M5,2 L2.5,3.5 L2.5,10 L7.5,10 L7.5,3.5 Z' fill='white' fill-opacity='${fo}'/><line x1='5' y1='3.5' x2='5' y2='9' stroke='white' stroke-width='0.6' stroke-opacity='${so}'/>`;
+        shapes =
+          `<path d='M5,2 L2.5,3.5 L2.5,10 L7.5,10 L7.5,3.5 Z' fill='url(#g)' stroke='#1f2937' stroke-width='0.4' stroke-opacity='${outlineOp}'/>` +
+          `<line x1='3.1' y1='3.5' x2='3.1' y2='9.8' stroke='white' stroke-width='0.4' stroke-opacity='${hlOp}'/>` +
+          `<line x1='5' y1='3.5' x2='5' y2='9.8' stroke='white' stroke-width='0.55' stroke-opacity='${deckOp}'/>` +
+          `<path d='M2.5,3.5 L5,2 L7.5,3.5 Z' fill='black' fill-opacity='${bowShadOp}'/>`;
         break;
       case 'stern':
-        path = `<path d='M2.5,0 L2.5,7 Q2.5,10 5,10 Q7.5,10 7.5,7 L7.5,0 Z' fill='white' fill-opacity='${fo}'/><line x1='5' y1='1' x2='5' y2='7' stroke='white' stroke-width='0.6' stroke-opacity='${so}'/>`;
+        shapes =
+          `<path d='M2.5,0 L2.5,7 Q2.5,10 5,10 Q7.5,10 7.5,7 L7.5,0 Z' fill='url(#g)' stroke='#1f2937' stroke-width='0.4' stroke-opacity='${outlineOp}'/>` +
+          `<line x1='3.1' y1='0.2' x2='3.1' y2='7' stroke='white' stroke-width='0.4' stroke-opacity='${hlOp}'/>` +
+          `<line x1='5' y1='0.2' x2='5' y2='7' stroke='white' stroke-width='0.55' stroke-opacity='${deckOp}'/>` +
+          `<path d='M2.5,7 Q2.5,10 5,10 Q7.5,10 7.5,7 Z' fill='black' fill-opacity='${bowShadOp}'/>`;
         break;
       case 'single':
-        path = `<ellipse cx='5' cy='5' rx='2.3' ry='3.8' fill='white' fill-opacity='${fo}'/><line x1='5' y1='1.5' x2='5' y2='8.5' stroke='white' stroke-width='0.6' stroke-opacity='${so}'/>`;
+        shapes =
+          `<ellipse cx='5' cy='5' rx='2.3' ry='4' fill='url(#g)' stroke='#1f2937' stroke-width='0.4' stroke-opacity='${outlineOp}'/>` +
+          `<line x1='3.6' y1='1.5' x2='3.6' y2='8.5' stroke='white' stroke-width='0.4' stroke-opacity='${hlOp}'/>` +
+          `<line x1='5' y1='1.5' x2='5' y2='8.5' stroke='white' stroke-width='0.55' stroke-opacity='${deckOp}'/>`;
         break;
       default: // mid
-        path = `<rect x='2.5' y='0' width='5' height='10' fill='white' fill-opacity='${fom}'/><line x1='5' y1='0' x2='5' y2='10' stroke='white' stroke-width='0.6' stroke-opacity='${so}'/>`;
+        shapes =
+          `<rect x='2.5' y='0' width='5' height='10' fill='url(#g)' stroke='#1f2937' stroke-width='0.4' stroke-opacity='${outlineOp}'/>` +
+          `<line x1='3.1' y1='0' x2='3.1' y2='10' stroke='white' stroke-width='0.4' stroke-opacity='${hlOp}'/>` +
+          `<line x1='5' y1='0' x2='5' y2='10' stroke='white' stroke-width='0.55' stroke-opacity='${deckOp}'/>`;
     }
   }
 
-  const svg = `<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 10 10'>${path}</svg>`;
+  const svg = `<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 10 10'>${defs}${shapes}</svg>`;
   return `url("data:image/svg+xml;charset=utf-8,${encodeURIComponent(svg)}")`;
+}
+
+// ── Ship silhouette icons (fleet panel) ────────────────────────────────────────
+
+/** Small profile-view ship SVG for the fleet status panel. */
+function ShipIconSvg({ id, sunk }: { id: ShipId; sunk: boolean }) {
+  const hull   = sunk ? '#4c0519' : '#4338ca'; // rose-950 | indigo-700
+  const accent = sunk ? '#9f1239' : '#818cf8'; // rose-800 | indigo-400
+
+  switch (id) {
+    case 'carrier':
+      return (
+        <svg width="20" height="10" viewBox="0 0 20 10" aria-hidden="true" style={{ display: 'block' }}>
+          <rect x="1" y="5.5" width="18" height="3.5" rx="1" fill={hull}/>
+          <rect x="4.5" y="2.5" width="10" height="3" rx="0.5" fill={hull} opacity="0.85"/>
+          <rect x="9" y="0.5" width="2" height="2" fill={accent} opacity="0.8"/>
+          <rect x="5.5" y="2.5" width="1.5" height="3" fill={accent} opacity="0.55"/>
+        </svg>
+      );
+    case 'battleship':
+      return (
+        <svg width="16" height="10" viewBox="0 0 16 10" aria-hidden="true" style={{ display: 'block' }}>
+          <rect x="1" y="5.5" width="14" height="3.5" rx="1" fill={hull}/>
+          <rect x="3" y="3" width="10" height="2.5" rx="0.5" fill={hull} opacity="0.85"/>
+          <rect x="4" y="1.5" width="2" height="1.5" fill={accent} opacity="0.8"/>
+          <rect x="10" y="1.5" width="2" height="1.5" fill={accent} opacity="0.8"/>
+        </svg>
+      );
+    case 'cruiser':
+      return (
+        <svg width="12" height="10" viewBox="0 0 12 10" aria-hidden="true" style={{ display: 'block' }}>
+          <rect x="1" y="5.5" width="10" height="3.5" rx="1" fill={hull}/>
+          <rect x="2.5" y="3" width="7" height="2.5" rx="0.5" fill={hull} opacity="0.85"/>
+          <rect x="5" y="1.5" width="2" height="1.5" fill={accent} opacity="0.8"/>
+        </svg>
+      );
+    case 'submarine':
+      return (
+        <svg width="12" height="10" viewBox="0 0 12 10" aria-hidden="true" style={{ display: 'block' }}>
+          <ellipse cx="6" cy="7" rx="5.5" ry="2.5" fill={hull}/>
+          <rect x="4.5" y="2.5" width="3" height="4.5" rx="0.5" fill={hull} opacity="0.85"/>
+          <rect x="5.5" y="1" width="1" height="1.5" fill={accent} opacity="0.8"/>
+        </svg>
+      );
+    case 'destroyer':
+      return (
+        <svg width="8" height="10" viewBox="0 0 8 10" aria-hidden="true" style={{ display: 'block' }}>
+          <rect x="0.5" y="5.5" width="7" height="3" rx="1" fill={hull}/>
+          <rect x="1.5" y="3.5" width="4" height="2" rx="0.5" fill={hull} opacity="0.85"/>
+        </svg>
+      );
+    default:
+      return null;
+  }
 }
 
 // ── BsGrid ────────────────────────────────────────────────────────────────────
@@ -242,10 +340,16 @@ interface BsGridProps {
   cellSize?:   number;
   label?:      string;
   /** Per-cell ship segment metadata for hull-segment SVG overlay. */
-  segments?:   Map<number, ShipSegmentInfo>;
+  segments?:      Map<number, ShipSegmentInfo>;
+  /** When true: crosshair cursor + targeting reticle + coordinate badge on hover. */
+  targeting?:     boolean;
+  /** Cell that should play the hit/miss pop-in animation (impact phase). */
+  popCoord?:      Coord | null;
+  /** Set of "x,y" keys whose cells should play the sunk-pulse glow animation. */
+  sunkPulseKeys?: Set<string>;
 }
 
-function BsGrid({ cells, onCell, onHover, disabled, hoverCoord, cellSize = 28, label, segments }: BsGridProps) {
+function BsGrid({ cells, onCell, onHover, disabled, hoverCoord, cellSize = 28, label, segments, targeting, popCoord, sunkPulseKeys }: BsGridProps) {
   const boardPx = BOARD_SIZE * cellSize + (BOARD_SIZE - 1) * 2; // cells + 2px gaps
 
   return (
@@ -269,8 +373,11 @@ function BsGrid({ cells, onCell, onHover, disabled, hoverCoord, cellSize = 28, l
             const x = idx % BOARD_SIZE;
             const y = Math.floor(idx / BOARD_SIZE);
             const coord: Coord = { x, y };
-            const isHovered = hoverCoord ? coordEq(hoverCoord, coord) : false;
-            const canClick   = !disabled && (view === 'empty' || view === 'preview-ok' || view === 'preview-bad');
+            const isHovered   = hoverCoord ? coordEq(hoverCoord, coord) : false;
+            const canClick    = !disabled && (view === 'empty' || view === 'preview-ok' || view === 'preview-bad');
+            const showReticle = isHovered && targeting && !disabled && view === 'empty';
+            const isPop       = popCoord ? coordEq(popCoord, coord) : false;
+            const isPulse     = sunkPulseKeys?.has(`${x},${y}`) ?? false;
 
             // Layer: texture (top) → segment SVG (bottom, behind texture)
             const seg       = segments?.get(idx);
@@ -281,43 +388,76 @@ function BsGrid({ cells, onCell, onHover, disabled, hoverCoord, cellSize = 28, l
             return (
               <div
                 key={idx}
+                data-bsx={x}
+                data-bsy={y}
+                className={isPulse ? 'bs-sunk-pulse' : undefined}
                 onClick={() => canClick && onCell?.(coord)}
                 onMouseEnter={() => onHover?.(coord)}
-                title={`${String.fromCharCode(65 + x)}${y + 1}`}
                 style={{
                   width:           cellSize,
                   height:          cellSize,
                   backgroundColor: cellBg(view),
                   backgroundImage: bgImage,
                   borderRadius:    3,
-                  cursor:          canClick ? 'pointer' : 'default',
+                  cursor:          canClick ? (targeting ? 'crosshair' : 'pointer') : 'default',
                   position:        'relative',
-                  outline:         isHovered && !disabled ? '2px solid rgba(99,102,241,0.7)' : 'none',
+                  outline:         isHovered && !disabled ? '2px solid rgba(99,102,241,0.75)' : 'none',
                   outlineOffset:   '-1px',
                   transition:      'background-color 0.08s',
                   flexShrink:      0,
                 }}
               >
+                {/* Targeting hover overlay: indigo tint + crosshair reticle + coord badge */}
+                {showReticle && (
+                  <div
+                    style={{
+                      position: 'absolute', inset: 0, pointerEvents: 'none',
+                      backgroundColor: 'rgba(99,102,241,0.10)',
+                      borderRadius: 3,
+                      display: 'flex', alignItems: 'center', justifyContent: 'center',
+                    }}
+                  >
+                    <svg viewBox="0 0 10 10" style={{ width: '68%', height: '68%' }} aria-hidden="true">
+                      <circle cx="5" cy="5" r="3.4" stroke="rgba(129,140,248,0.9)" strokeWidth="0.75" fill="none"/>
+                      <line x1="5" y1="1.5" x2="5" y2="3.2" stroke="rgba(129,140,248,0.9)" strokeWidth="0.75"/>
+                      <line x1="5" y1="6.8" x2="5" y2="8.5" stroke="rgba(129,140,248,0.9)" strokeWidth="0.75"/>
+                      <line x1="1.5" y1="5" x2="3.2" y2="5" stroke="rgba(129,140,248,0.9)" strokeWidth="0.75"/>
+                      <line x1="6.8" y1="5" x2="8.5" y2="5" stroke="rgba(129,140,248,0.9)" strokeWidth="0.75"/>
+                    </svg>
+                    {/* Coordinate label — tiny corner badge */}
+                    <span style={{
+                      position: 'absolute', bottom: 1, right: 1,
+                      fontSize: 5.5, lineHeight: 1, fontFamily: 'monospace', fontWeight: 700,
+                      color: 'rgba(165,180,252,0.95)',
+                      backgroundColor: 'rgba(15,15,25,0.75)',
+                      borderRadius: 1, padding: '0.5px 1.5px',
+                    }}>
+                      {String.fromCharCode(65 + x)}{y + 1}
+                    </span>
+                  </div>
+                )}
                 {/* Hit / Sunk marker */}
                 {(view === 'hit' || view === 'sunk' || view === 'shot-hit' || view === 'shot-sunk') && (
-                  <svg
-                    viewBox="0 0 10 10"
+                  <div
+                    className={isPop ? 'bs-pop' : undefined}
                     style={{ position: 'absolute', inset: '15%', pointerEvents: 'none' }}
-                    aria-hidden="true"
                   >
-                    <line x1="1" y1="1" x2="9" y2="9" stroke="white" strokeWidth="2" strokeLinecap="round" />
-                    <line x1="9" y1="1" x2="1" y2="9" stroke="white" strokeWidth="2" strokeLinecap="round" />
-                  </svg>
+                    <svg viewBox="0 0 10 10" style={{ width: '100%', height: '100%' }} aria-hidden="true">
+                      <line x1="1" y1="1" x2="9" y2="9" stroke="white" strokeWidth="2" strokeLinecap="round" />
+                      <line x1="9" y1="1" x2="1" y2="9" stroke="white" strokeWidth="2" strokeLinecap="round" />
+                    </svg>
+                  </div>
                 )}
                 {/* Miss marker */}
                 {(view === 'shot-miss' || view === 'miss-rx') && (
-                  <svg
-                    viewBox="0 0 10 10"
+                  <div
+                    className={isPop ? 'bs-pop' : undefined}
                     style={{ position: 'absolute', inset: '20%', pointerEvents: 'none' }}
-                    aria-hidden="true"
                   >
-                    <circle cx="5" cy="5" r="3.5" stroke="#a1a1aa" strokeWidth="1.5" fill="none" />
-                  </svg>
+                    <svg viewBox="0 0 10 10" style={{ width: '100%', height: '100%' }} aria-hidden="true">
+                      <circle cx="5" cy="5" r="3.5" stroke="#a1a1aa" strokeWidth="1.5" fill="none" />
+                    </svg>
+                  </div>
                 )}
               </div>
             );
@@ -473,6 +613,26 @@ export function BattleshipGame({ wsUrl, gameId, initialRoomCode, quickPlay: isQu
   const placeErrorTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [shotOverlay, setShotOverlay] = useState<{ text: string; kind: 'hit' | 'miss' | 'sunk' } | null>(null);
 
+  // ── Shot animation state ────────────────────────────────────────────────────
+  type ShotFx = {
+    id:         string;
+    by:         BsSlot;
+    x:          number;
+    y:          number;
+    result:     'hit' | 'miss' | 'sunk';
+    sunkShipId?: string;
+    phase:      'travel' | 'impact';
+  };
+  const [shotFx,        setShotFx]        = useState<ShotFx | null>(null);
+  const [shake,         setShake]         = useState(false);
+  const [sunkPulseKeys, setSunkPulseKeys] = useState<Set<string>>(new Set());
+  const boardRefLeft     = useRef<HTMLDivElement | null>(null);
+  const boardRefRight    = useRef<HTMLDivElement | null>(null);
+  const [fxPos, setFxPos] = useState<{ cx: number; cy: number; size: number } | null>(null);
+  // End-overlay latch — set once per finished match, cleared on rematch
+  const lastFinishKeyRef = useRef<string>('');
+  const [endOverlay, setEndOverlay] = useState<{ iWon: boolean } | null>(null);
+
   // Setup phase state (client-only)
   const [orientation,   setOrientation]  = useState<Orientation>('H');
   const [hoverCoord,    setHoverCoord]   = useState<Coord | null>(null);
@@ -561,6 +721,11 @@ export function BattleshipGame({ wsUrl, gameId, initialRoomCode, quickPlay: isQu
   const isMyTurn = !mp.isSpectator && gs?.phase === 'playing' && myPlayerId !== null && gs.currentTurn === myPlayerId;
   const canFire  = isMyTurn && mp.matchCountdown === null;
 
+  // Stable key that is non-empty only once per finished match (ignored on repeated pushes).
+  const finishKey = gs?.phase === 'finished' && gs?.winner && !mp.isSpectator && myIdx !== null
+    ? `${mp.roomCode ?? ''}|${gs.winner}`
+    : '';
+
   const placedIds = useMemo(
     () => new Set(gs?.players[myIdx ?? 0]?.ships.map((s) => s.id) ?? []),
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -589,7 +754,7 @@ export function BattleshipGame({ wsUrl, gameId, initialRoomCode, quickPlay: isQu
 
   // Stable string key that changes exactly when a new shot arrives (used as effect dep).
   const lastShotKey = (gs?.lastShot && gs.phase !== 'setup')
-    ? `${gs.lastShot.by}|${gs.lastShot.at.x}|${gs.lastShot.at.y}|${gs.lastShot.result}`
+    ? `${gs.lastShot.by}|${gs.lastShot.at.x}|${gs.lastShot.at.y}|${gs.lastShot.result}|${gs.lastShot.sunkShipId ?? ''}`
     : null;
 
   // Keyboard shortcut: R / r toggles orientation during ship placement
@@ -631,6 +796,70 @@ export function BattleshipGame({ wsUrl, gameId, initialRoomCode, quickPlay: isQu
     return () => clearTimeout(timer);
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [lastShotKey]);
+
+  // Shot FX: tracer → impact animation lifecycle
+  useEffect(() => {
+    if (!lastShotKey || !gs?.lastShot) return;
+    const { lastShot } = gs;
+    const fxResult: 'hit' | 'miss' | 'sunk' = lastShot.sunkShipId ? 'sunk' : lastShot.result === 'hit' ? 'hit' : 'miss';
+    const fxId = lastShotKey;
+    setShotFx({ id: fxId, by: lastShot.by, x: lastShot.at.x, y: lastShot.at.y, result: fxResult, sunkShipId: lastShot.sunkShipId ?? undefined, phase: 'travel' });
+    const t1 = setTimeout(() => setShotFx((s) => s?.id === fxId ? { ...s, phase: 'impact' } : s), 320);
+    const t2 = setTimeout(() => { setShotFx((s) => s?.id === fxId ? null : s); setFxPos(null); }, 970);
+    return () => { clearTimeout(t1); clearTimeout(t2); };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [lastShotKey]);
+
+  // Compute pixel position of the targeted cell on the relevant board
+  useEffect(() => {
+    if (!shotFx) { setFxPos(null); return; }
+    // A fires at B's board (right for player-A and spectator); B fires at A's board (left for both)
+    const isFxRight = mySlot !== null ? shotFx.by === mySlot : shotFx.by === 'A';
+    const ref = isFxRight ? boardRefRight : boardRefLeft;
+    if (!ref.current) { setFxPos(null); return; }
+    const cell = ref.current.querySelector(`[data-bsx="${shotFx.x}"][data-bsy="${shotFx.y}"]`) as HTMLElement | null;
+    if (!cell) { setFxPos(null); return; }
+    const gRect = ref.current.getBoundingClientRect();
+    const cRect = cell.getBoundingClientRect();
+    setFxPos({
+      cx:   (cRect.left - gRect.left) + cRect.width  / 2,
+      cy:   (cRect.top  - gRect.top)  + cRect.height / 2,
+      size: cRect.width,
+    });
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [shotFx?.id]);
+
+  // Board shake on hit / sunk impact
+  useEffect(() => {
+    if (shotFx?.phase !== 'impact') return;
+    if (shotFx.result !== 'hit' && shotFx.result !== 'sunk') return;
+    setShake(true);
+    const t = setTimeout(() => setShake(false), 260);
+    return () => clearTimeout(t);
+  }, [shotFx?.phase, shotFx?.id]); // eslint-disable-line
+
+  // Sunk-cell pulse glow — always cleared first so hit/miss never inherits a previous sunk pulse
+  useEffect(() => {
+    setSunkPulseKeys(new Set()); // clear immediately on every new shot / phase change
+    if (shotFx?.phase !== 'impact' || shotFx.result !== 'sunk' || !shotFx.sunkShipId) return;
+    const ship = gs?.players.flatMap((p) => p.ships).find((s) => s.id === shotFx.sunkShipId && s.sunk && s.cells);
+    if (!ship?.cells) return;
+    setSunkPulseKeys(new Set(ship.cells.map((c: Coord) => `${c.x},${c.y}`)));
+    const t = setTimeout(() => setSunkPulseKeys(new Set()), 720);
+    return () => clearTimeout(t);
+  }, [shotFx?.phase, shotFx?.id]); // eslint-disable-line
+
+  // Latch end-overlay exactly once per finished match; clear on phase reset (rematch)
+  useEffect(() => {
+    if (!finishKey) {
+      lastFinishKeyRef.current = '';
+      setEndOverlay(null);
+      return;
+    }
+    if (finishKey === lastFinishKeyRef.current) return; // repeated push, skip
+    lastFinishKeyRef.current = finishKey;
+    setEndOverlay({ iWon: gs?.winner === mySlot });
+  }, [finishKey]); // eslint-disable-line
 
   // Board cell arrays
   const setupCells = useMemo((): CellView[] => {
@@ -842,29 +1071,43 @@ export function BattleshipGame({ wsUrl, gameId, initialRoomCode, quickPlay: isQu
     function renderColumn(title: string, ships: BattleshipShip[]) {
       return (
         <div className="flex-1 rounded-xl border border-zinc-800 bg-zinc-900/60 px-3 py-2.5 min-w-0">
-          <p className="text-[10px] text-zinc-500 font-semibold uppercase tracking-wider mb-2 truncate">{title}</p>
-          <div className="flex flex-col gap-1.5">
+          <p className="text-[10px] text-zinc-500 font-semibold uppercase tracking-wider mb-2.5 truncate">{title}</p>
+          <div className="flex flex-col gap-2">
             {SHIP_DEFS.map((def) => {
               const ship = ships.find((s) => s.id === def.id);
               const sunk = ship?.sunk ?? false;
               return (
-                <div key={def.id} className={`flex items-center gap-1.5 text-xs transition-opacity ${sunk ? 'opacity-55' : ''}`}>
-                  <div className="flex gap-[2px] shrink-0">
+                <div
+                  key={def.id}
+                  className={`flex items-center gap-1.5 transition-opacity ${sunk ? 'opacity-45' : ''}`}
+                >
+                  {/* Ship silhouette icon */}
+                  <span className="shrink-0 flex items-center">
+                    <ShipIconSvg id={def.id} sunk={sunk} />
+                  </span>
+                  {/* Ship name */}
+                  <span className={`flex-1 truncate text-[11px] ${sunk ? 'line-through text-zinc-600' : 'text-zinc-300'}`}>
+                    {t(`battleship.ship.${def.id}`)}
+                  </span>
+                  {/* Health squares */}
+                  <div className="flex gap-0.5 shrink-0">
                     {Array.from({ length: def.length }, (_, i) => (
                       <span
                         key={i}
-                        style={{ width: 5, height: 5, borderRadius: 1, display: 'block',
-                          backgroundColor: sunk ? '#881337' : '#4338ca' }}
+                        className={`block rounded-sm ${sunk ? 'bg-rose-700' : 'bg-indigo-500'}`}
+                        style={{ width: 6, height: 8 }}
                       />
                     ))}
                   </div>
-                  <span className={`flex-1 truncate ${sunk ? 'line-through text-zinc-600' : 'text-zinc-400'}`}>
-                    {t(`battleship.ship.${def.id}`)}
-                  </span>
+                  {/* Status badge */}
                   {sunk ? (
-                    <span className="text-[9px] font-bold text-rose-600 shrink-0">{t('battleship.fleet.sunk')}</span>
+                    <span className="text-[9px] font-bold text-rose-500 bg-rose-950/70 border border-rose-900/60 rounded px-1 py-px shrink-0 leading-none">
+                      {t('battleship.fleet.sunk')}
+                    </span>
                   ) : (
-                    <span className="text-[9px] text-zinc-600 shrink-0">{t('battleship.fleet.alive')}</span>
+                    <span className="text-[9px] text-emerald-700 shrink-0 leading-none">
+                      {t('battleship.fleet.alive')}
+                    </span>
                   )}
                 </div>
               );
@@ -880,6 +1123,97 @@ export function BattleshipGame({ wsUrl, gameId, initialRoomCode, quickPlay: isQu
         {renderColumn(rightTitle, rightShips)}
       </div>
     );
+  }
+
+  // ── Shot FX helpers ─────────────────────────────────────────────────────────
+
+  // true  = effects go on the right board (enemy for player-A; P1's board for spectator)
+  // false = effects go on the left board  (own for player-A;  P0's board for spectator)
+  const isFxOnRight = shotFx
+    ? (mySlot !== null ? shotFx.by === mySlot : shotFx.by === 'A')
+    : false;
+
+  function renderShotFxLayer(forRightBoard: boolean) {
+    if (!shotFx || !fxPos || isFxOnRight !== forRightBoard) return null;
+
+    if (shotFx.phase === 'travel') {
+      const tHeight = Math.max(20, fxPos.cy + fxPos.size * 0.5);
+      return (
+        <div
+          className="bs-tracer"
+          style={{
+            position: 'absolute', zIndex: 5,
+            left: Math.round(fxPos.cx - 2), top: 0,
+            width: 4, height: Math.round(tHeight),
+            background: 'linear-gradient(to bottom, transparent, rgba(199,210,254,0.65) 55%, rgba(255,255,255,0.95))',
+            borderRadius: '0 0 3px 3px',
+            pointerEvents: 'none',
+          }}
+        />
+      );
+    }
+
+    if (shotFx.phase === 'impact') {
+      if (shotFx.result === 'hit' || shotFx.result === 'sunk') {
+        const isSunk  = shotFx.result === 'sunk';
+        const eSize   = fxPos.size * (isSunk ? 1.5 : 1.0);
+        const sDist   = fxPos.size * (isSunk ? 2.5 : 1.8);
+        const sCount  = isSunk ? 8 : 6;
+        const eDur    = isSunk ? '560ms' : '400ms';
+        const spDur   = isSunk ? '460ms' : '360ms';
+        const spSize  = isSunk ? 7 : 5;
+        return (
+          <>
+            {/* Core explosion flash */}
+            <div style={{
+              position: 'absolute', zIndex: 5, pointerEvents: 'none',
+              left: Math.round(fxPos.cx - eSize), top: Math.round(fxPos.cy - eSize),
+              width: Math.round(eSize * 2), height: Math.round(eSize * 2),
+              background: 'radial-gradient(circle, rgba(255,215,50,0.95) 0%, rgba(239,68,68,0.78) 40%, transparent 70%)',
+              borderRadius: '50%',
+              animation: `bs-explosion ${eDur} ease-out forwards`,
+            }} />
+            {/* Sparks */}
+            {Array.from({ length: sCount }, (_, i) => {
+              const angle = (i / sCount) * Math.PI * 2;
+              return (
+                <div key={i} style={{
+                  position: 'absolute', zIndex: 5, pointerEvents: 'none',
+                  left: Math.round(fxPos!.cx - spSize / 2),
+                  top:  Math.round(fxPos!.cy - spSize / 2),
+                  width: spSize, height: spSize, borderRadius: '50%',
+                  backgroundColor: ['#fbbf24', '#f87171', '#fb923c', '#fde047'][i % 4],
+                  animation: `bs-spark ${spDur} ease-out forwards`,
+                  ['--sx' as string]: `${Math.round(Math.cos(angle) * sDist)}px`,
+                  ['--sy' as string]: `${Math.round(Math.sin(angle) * sDist)}px`,
+                } as CSSProperties} />
+              );
+            })}
+          </>
+        );
+      }
+
+      if (shotFx.result === 'miss') {
+        return (
+          <>
+            {[0, 130, 260].map((delay, i) => (
+              <div key={i} style={{
+                position: 'absolute', zIndex: 5, pointerEvents: 'none',
+                left: Math.round(fxPos!.cx - fxPos!.size * 0.55),
+                top:  Math.round(fxPos!.cy - fxPos!.size * 0.55),
+                width:  Math.round(fxPos!.size * 1.1),
+                height: Math.round(fxPos!.size * 1.1),
+                borderRadius: '50%',
+                border: '2px solid rgba(99,102,241,0.55)',
+                animation: `bs-ripple 580ms ease-out ${delay}ms forwards`,
+              }} />
+            ))}
+          </>
+        );
+      }
+    }
+
+    return null;
   }
 
   // ── Render ──────────────────────────────────────────────────────────────────
@@ -898,6 +1232,71 @@ export function BattleshipGame({ wsUrl, gameId, initialRoomCode, quickPlay: isQu
             100% { opacity: 0; transform: scale(0.95); }
           }
           .bs-shot-anim { animation: bs-shot-pop 1s ease-out forwards; }
+
+          @keyframes bs-turn-glow {
+            0%, 100% { box-shadow: 0 0 0 0px rgba(99,102,241,0.15), 0 0 6px 0px rgba(99,102,241,0.10); }
+            50%       { box-shadow: 0 0 0 3px rgba(99,102,241,0.25), 0 0 14px 2px rgba(99,102,241,0.18); }
+          }
+          .bs-turn-glow { animation: bs-turn-glow 2.2s ease-in-out infinite; }
+
+          @keyframes bs-win-pop {
+            0%   { transform: scale(0.85); opacity: 0; }
+            100% { transform: scale(1);    opacity: 1; }
+          }
+          .bs-win-pop { animation: bs-win-pop 0.25s ease-out forwards; }
+
+          @keyframes bs-confetti-fall {
+            0%   { transform: translateY(0)     rotate(0deg);   opacity: 0.9; }
+            80%  { opacity: 0.75; }
+            100% { transform: translateY(420px) rotate(400deg); opacity: 0; }
+          }
+
+          @keyframes bs-tracer {
+            0%   { transform: scaleY(0); opacity: 0.95; }
+            55%  { transform: scaleY(1); opacity: 0.9;  }
+            100% { transform: scaleY(1); opacity: 0;    }
+          }
+          .bs-tracer { animation: bs-tracer 320ms ease-in forwards; transform-origin: top center; }
+
+          @keyframes bs-explosion {
+            0%   { transform: scale(0.2); opacity: 0.95; }
+            40%  { transform: scale(1.4); opacity: 0.85; }
+            100% { transform: scale(2.4); opacity: 0;    }
+          }
+
+          @keyframes bs-spark {
+            0%   { transform: translate(0, 0) scale(1); opacity: 1; }
+            100% { transform: translate(var(--sx, 20px), var(--sy, -20px)) scale(0); opacity: 0; }
+          }
+
+          @keyframes bs-ripple {
+            0%   { transform: scale(0.3); opacity: 0.8; }
+            100% { transform: scale(3.4); opacity: 0;   }
+          }
+
+          @keyframes bs-shake {
+            0%   { transform: translate(0,   0);   }
+            20%  { transform: translate(-2px, 1px); }
+            40%  { transform: translate( 2px,-1px); }
+            60%  { transform: translate(-1px,-2px); }
+            80%  { transform: translate( 1px, 2px); }
+            100% { transform: translate(0,   0);   }
+          }
+          .bs-shake { animation: bs-shake 220ms ease-in-out; }
+
+          @keyframes bs-pop {
+            0%   { transform: scale(0.6); opacity: 0;   }
+            60%  { transform: scale(1.15); opacity: 1;  }
+            100% { transform: scale(1);   opacity: 1;   }
+          }
+          .bs-pop { animation: bs-pop 180ms ease-out; transform-origin: center; }
+
+          @keyframes bs-sunk-pulse {
+            0%   { box-shadow: 0 0 0 0   rgba(244,63,94,0.0);  }
+            30%  { box-shadow: 0 0 0 6px rgba(244,63,94,0.20); }
+            100% { box-shadow: 0 0 0 0   rgba(244,63,94,0.0);  }
+          }
+          .bs-sunk-pulse { animation: bs-sunk-pulse 680ms ease-out; }
         `}</style>
 
         {/* Big transient shot-result overlay (pointer-events-none so it never blocks clicks) */}
@@ -921,6 +1320,72 @@ export function BattleshipGame({ wsUrl, gameId, initialRoomCode, quickPlay: isQu
           </div>
         )}
 
+        {/* End-game overlay — latched into endOverlay state so it mounts once and never re-animates */}
+        {endOverlay && (
+          <div style={{
+            position: 'absolute', inset: 0, zIndex: 30,
+            backgroundColor: 'rgba(0,0,0,0.50)',
+            display: 'flex', alignItems: 'center', justifyContent: 'center',
+            pointerEvents: 'none',
+          }}>
+            {endOverlay.iWon && (
+              <div style={{ position: 'absolute', inset: 0, overflow: 'hidden', pointerEvents: 'none' }}>
+                {Array.from({ length: 14 }, (_, i) => (
+                  <div key={i} style={{
+                    position: 'absolute',
+                    width: 5 + (i % 3) * 3,
+                    height: 5 + (i % 3) * 3,
+                    borderRadius: i % 3 === 0 ? '50%' : '2px',
+                    backgroundColor: ['#818cf8', '#34d399', '#fbbf24', '#f87171', '#a78bfa', '#38bdf8'][i % 6],
+                    left: `${(i * 7 + 3) % 94}%`,
+                    top: '-12px',
+                    animation: `bs-confetti-fall ${1.4 + (i % 4) * 0.35}s ease-in ${i * 0.08}s infinite`,
+                  }} />
+                ))}
+              </div>
+            )}
+            {!endOverlay.iWon && (
+              <div style={{
+                position: 'absolute', inset: 0, pointerEvents: 'none',
+                background: 'radial-gradient(ellipse at center, transparent 30%, rgba(159,18,57,0.28) 100%)',
+              }} />
+            )}
+            <div
+              className="bs-win-pop bg-zinc-900/90 backdrop-blur rounded-2xl border border-zinc-700 px-10 py-8 text-center shadow-xl"
+              style={{ pointerEvents: 'auto', minWidth: 260, maxWidth: 360 }}
+            >
+              <p className={`text-4xl font-bold mb-2 ${endOverlay.iWon ? 'text-indigo-400' : 'text-rose-400'}`}>
+                {endOverlay.iWon ? `🏆 ${t('battleship.end.victory')}` : `💀 ${t('battleship.end.defeat')}`}
+              </p>
+              <p className="text-zinc-400 text-sm mb-6">
+                {endOverlay.iWon ? t('battleship.end.victorySubtitle') : t('battleship.end.defeatSubtitle')}
+              </p>
+              {mp.playerCount === 2 && (
+                <div className="flex flex-col items-center gap-2 mb-3">
+                  <button
+                    onClick={mp.requestRematch}
+                    disabled={mp.myVotedRematch}
+                    className="w-full px-5 py-2 rounded-lg bg-indigo-600 hover:bg-indigo-500 disabled:opacity-50 disabled:cursor-not-allowed text-white font-semibold text-sm transition-colors"
+                  >
+                    {mp.myVotedRematch ? t('game.actions.waitingRematch') : t('game.actions.rematch')}
+                  </button>
+                  {mp.rematchVotes > 0 && !mp.myVotedRematch && (
+                    <p className="text-xs text-amber-400">{t('game.status.opponentRematch')}</p>
+                  )}
+                  {mp.rematchError && (
+                    <p className="text-xs text-rose-400">{mp.rematchError}</p>
+                  )}
+                </div>
+              )}
+              <button
+                onClick={mp.leaveRoom}
+                className="w-full px-4 py-2 text-sm rounded-lg border border-zinc-700 text-zinc-400 hover:border-zinc-500 hover:text-zinc-200 transition-colors"
+              >
+                {t('game.actions.leaveRoom')}
+              </button>
+            </div>
+          </div>
+        )}
         <CountdownOverlay countdown={mp.matchCountdown} />
         <StatusBanner />
 
@@ -985,37 +1450,70 @@ export function BattleshipGame({ wsUrl, gameId, initialRoomCode, quickPlay: isQu
             <div className="flex flex-col sm:flex-row gap-6 items-start justify-center w-full overflow-x-auto">
               {mp.isSpectator ? (
                 <>
-                  <div className="rounded-xl border border-zinc-800 bg-zinc-950/40 px-4 py-3">
+                  {/* Spectator: P0 board (left) */}
+                  <div
+                    ref={boardRefLeft}
+                    className={`relative rounded-xl border border-zinc-800 bg-zinc-950/40 px-4 py-3${!isFxOnRight && shake ? ' bs-shake' : ''}`}
+                  >
                     <BsGrid
                       cells={specP0Cells}
                       label={`${p0nick} ${t('game.room.watching')}`}
                       disabled
                       cellSize={26}
+                      popCoord={!isFxOnRight && shotFx?.phase === 'impact' ? { x: shotFx.x, y: shotFx.y } : null}
+                      sunkPulseKeys={!isFxOnRight ? sunkPulseKeys : undefined}
                     />
+                    <div className="pointer-events-none absolute inset-0">
+                      {renderShotFxLayer(false)}
+                    </div>
                   </div>
-                  <div className="rounded-xl border border-zinc-800 bg-zinc-950/40 px-4 py-3">
+                  {/* Spectator: P1 board (right) */}
+                  <div
+                    ref={boardRefRight}
+                    className={`relative rounded-xl border border-zinc-800 bg-zinc-950/40 px-4 py-3${isFxOnRight && shake ? ' bs-shake' : ''}`}
+                  >
                     <BsGrid
                       cells={specP1Cells}
                       label={`${p1nick} ${t('game.room.watching')}`}
                       disabled
                       cellSize={26}
+                      popCoord={isFxOnRight && shotFx?.phase === 'impact' ? { x: shotFx.x, y: shotFx.y } : null}
+                      sunkPulseKeys={isFxOnRight ? sunkPulseKeys : undefined}
                     />
+                    <div className="pointer-events-none absolute inset-0">
+                      {renderShotFxLayer(true)}
+                    </div>
                   </div>
                 </>
               ) : (
                 <>
-                  <div className="rounded-xl border border-zinc-800 bg-zinc-950/40 px-4 py-3">
+                  {/* Player: own board (left) */}
+                  <div
+                    ref={boardRefLeft}
+                    className={`relative rounded-xl border border-zinc-800 bg-zinc-950/40 px-4 py-3${!isFxOnRight && shake ? ' bs-shake' : ''}`}
+                  >
                     <BsGrid
                       cells={ownCells}
                       disabled
                       cellSize={26}
                       label={t('battleship.play.yourBoard')}
                       segments={myShipSegments}
+                      popCoord={!isFxOnRight && shotFx?.phase === 'impact' ? { x: shotFx.x, y: shotFx.y } : null}
+                      sunkPulseKeys={!isFxOnRight ? sunkPulseKeys : undefined}
                     />
+                    <div className="pointer-events-none absolute inset-0">
+                      {renderShotFxLayer(false)}
+                    </div>
                   </div>
-                  <div className={`rounded-xl border px-4 py-3 transition-colors ${
-                    canFire ? 'border-indigo-700/60 bg-indigo-950/20' : 'border-zinc-800 bg-zinc-950/40'
-                  }`}>
+                  {/* Player: enemy board (right) */}
+                  <div
+                    ref={boardRefRight}
+                    className={`relative rounded-xl border px-4 py-3 transition-colors ${
+                      canFire
+                        ? 'border-indigo-700/60 bg-indigo-950/20 bs-turn-glow'
+                        : 'border-zinc-800 bg-zinc-950/40'
+                    }${isFxOnRight && shake ? ' bs-shake' : ''}`}
+                  >
                     <BsGrid
                       cells={oppCells}
                       onCell={handleFire}
@@ -1025,7 +1523,13 @@ export function BattleshipGame({ wsUrl, gameId, initialRoomCode, quickPlay: isQu
                       cellSize={26}
                       label={t('battleship.play.enemyBoard')}
                       segments={oppShipSegments}
+                      targeting={canFire}
+                      popCoord={isFxOnRight && shotFx?.phase === 'impact' ? { x: shotFx.x, y: shotFx.y } : null}
+                      sunkPulseKeys={isFxOnRight ? sunkPulseKeys : undefined}
                     />
+                    <div className="pointer-events-none absolute inset-0">
+                      {renderShotFxLayer(true)}
+                    </div>
                   </div>
                 </>
               )}

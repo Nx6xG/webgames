@@ -207,8 +207,10 @@ export const battleshipEngine: GameEngine<BattleshipState, BattleshipAction> = {
           };
         }
 
-        // Switch currentTurn to the other player's token (satisfies server sanity guard).
-        const nextTurnToken: string = state.playerIds[pIdx === 0 ? 1 : 0];
+        // Miss → opponent's turn; Hit or Sunk → same player fires again.
+        const nextTurnToken: string = result === 'miss'
+          ? state.playerIds[oppIdx]
+          : ctx.playerId;
 
         return {
           ...state,

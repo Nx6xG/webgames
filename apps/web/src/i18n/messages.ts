@@ -247,6 +247,11 @@ export const messages: Record<Lang, Record<string, string>> = {
     'battleship.fleet.sunk':           'Versenkt',
     'battleship.fleet.alive':          'Intakt',
 
+    'battleship.end.victory':          'Sieg',
+    'battleship.end.victorySubtitle':  'Du hast die feindliche Flotte vernichtet',
+    'battleship.end.defeat':           'Niederlage',
+    'battleship.end.defeatSubtitle':   'Deine Flotte wurde zerstört',
+
     // ── Chat ───────────────────────────────────────────────────────────────
     'chat.title':           'Chat',
     'chat.global':          'Global',
@@ -499,6 +504,11 @@ export const messages: Record<Lang, Record<string, string>> = {
     'battleship.fleet.titleEnemy':     'Enemy Fleet',
     'battleship.fleet.sunk':           'Sunk',
     'battleship.fleet.alive':          'Afloat',
+
+    'battleship.end.victory':          'Victory',
+    'battleship.end.victorySubtitle':  'You destroyed the enemy fleet',
+    'battleship.end.defeat':           'Defeat',
+    'battleship.end.defeatSubtitle':   'Your fleet has been destroyed',
 
     // ── Chat ───────────────────────────────────────────────────────────────
     'chat.title':           'Chat',
