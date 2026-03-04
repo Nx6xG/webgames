@@ -31,6 +31,8 @@ export const messages: Record<Lang, Record<string, string>> = {
     'lobby.hero.title':     'Play. Together.',
     'lobby.hero.subtitle':  'Echtzeit-Mehrspieler direkt im Browser – kein Account erforderlich.',
     'lobby.availableGames': 'Verfügbare Spiele',
+    'lobby.singleplayer':   'Einzelspieler',
+    'lobby.play':           'Spielen',
     'lobby.quickPlay':      'Schnellspiel',
     'lobby.customGame':     'Benutzerdefiniert',
     'lobby.soon':           'Bald',
@@ -53,6 +55,39 @@ export const messages: Record<Lang, Record<string, string>> = {
     'lobby.tags.strategy':         'Strategie',
     'lobby.tags.twoPlayers':       '2 Spieler',
     'lobby.tags.multiplayer':      'Mehrspieler',
+    'lobby.tags.singleplayer':     'Einzelspieler',
+    'lobby.tags.puzzle':           'Puzzle',
+    'lobby.tags.casual':           'Gelegenheit',
+    'lobby.tags.arcade':           'Arcade',
+
+    // ── 2048 ───────────────────────────────────────────────────────────────
+    'lobby.games.2048.title':      '2048',
+    'lobby.games.2048.desc':       'Schiebe Kacheln zusammen und erreiche 2048.',
+
+    // ── Snake ──────────────────────────────────────────────────────────────
+    'lobby.games.snake.title':     'Snake',
+    'lobby.games.snake.desc':      'Futtere dich satt, werde länger und weiche Hindernissen aus.',
+
+    // ── TicTacToe Solo ─────────────────────────────────────────────────────
+    'lobby.games.tictactoe-solo.title': 'TicTacToe',
+    'lobby.games.tictactoe-solo.desc':  'Lokal PvP oder gegen KI. Drei in einer Reihe gewinnt!',
+
+    // ── Sudoku ─────────────────────────────────────────────────────────────
+    'lobby.games.sudoku.title':    'Sudoku',
+    'lobby.games.sudoku.desc':     'Fülle das Raster, sodass jede Zeile, Spalte und jedes Kästchen die Zahlen 1–9 enthält.',
+
+    // ── Tetris ───────────────────────────────────────────────────────────
+    'lobby.games.tetris.title':    'Tetris',
+    'lobby.games.tetris.desc':     'Stapele fallende Blöcke und räume Reihen ab – Arcade-Klassiker!',
+    'tetris.highscores':           'Top 10',
+    'tetris.best':                 'Bester',
+    'tetris.games':                'Spiele',
+    'tetris.bestLines':            'Beste Reihen',
+    'tetris.clearStats':           'Statistik löschen',
+    'tetris.clearStatsConfirm':    'Wirklich löschen?',
+    'tetris.emptyHighscores':      'Noch keine Einträge.',
+    'sudoku.notes':                'Notizen',
+    'sudoku.notesHint':            'Notizen an — Zahlen toggeln Kandidaten · N zum Wechseln',
 
     // ── Rooms page ─────────────────────────────────────────────────────────
     'rooms.title':               'Offene Räume',
@@ -319,6 +354,8 @@ export const messages: Record<Lang, Record<string, string>> = {
     'lobby.hero.title':     'Play. Together.',
     'lobby.hero.subtitle':  'Real-time multiplayer games in your browser — no account required.',
     'lobby.availableGames': 'Available Games',
+    'lobby.singleplayer':   'Singleplayer',
+    'lobby.play':           'Play',
     'lobby.quickPlay':      'Quick Play',
     'lobby.customGame':     'Custom',
     'lobby.soon':           'Soon',
@@ -341,6 +378,39 @@ export const messages: Record<Lang, Record<string, string>> = {
     'lobby.tags.strategy':         'Strategy',
     'lobby.tags.twoPlayers':       '2 Players',
     'lobby.tags.multiplayer':      'Multiplayer',
+    'lobby.tags.singleplayer':     'Singleplayer',
+    'lobby.tags.puzzle':           'Puzzle',
+    'lobby.tags.casual':           'Casual',
+    'lobby.tags.arcade':           'Arcade',
+
+    // ── 2048 ───────────────────────────────────────────────────────────────
+    'lobby.games.2048.title':      '2048',
+    'lobby.games.2048.desc':       'Slide tiles together and reach 2048.',
+
+    // ── Snake ──────────────────────────────────────────────────────────────
+    'lobby.games.snake.title':     'Snake',
+    'lobby.games.snake.desc':      'Eat food, grow longer and avoid crashing.',
+
+    // ── TicTacToe Solo ─────────────────────────────────────────────────────
+    'lobby.games.tictactoe-solo.title': 'TicTacToe',
+    'lobby.games.tictactoe-solo.desc':  'Local PvP or vs AI. Get three in a row to win!',
+
+    // ── Sudoku ─────────────────────────────────────────────────────────────
+    'lobby.games.sudoku.title':    'Sudoku',
+    'lobby.games.sudoku.desc':     'Fill the grid so each row, column and box contains numbers 1–9.',
+
+    // ── Tetris ───────────────────────────────────────────────────────────
+    'lobby.games.tetris.title':    'Tetris',
+    'lobby.games.tetris.desc':     'Stack falling blocks and clear rows — arcade classic!',
+    'tetris.highscores':           'Top 10',
+    'tetris.best':                 'Best',
+    'tetris.games':                'Games',
+    'tetris.bestLines':            'Best Lines',
+    'tetris.clearStats':           'Clear Stats',
+    'tetris.clearStatsConfirm':    'Really clear?',
+    'tetris.emptyHighscores':      'No runs yet.',
+    'sudoku.notes':                'Notes',
+    'sudoku.notesHint':            'Notes on — numbers toggle candidates · N to switch',
 
     // ── Rooms page ─────────────────────────────────────────────────────────
     'rooms.title':               'Open Rooms',

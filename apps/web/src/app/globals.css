@@ -96,6 +96,20 @@ body {
   animation: cd-fadein 180ms ease-out forwards;
 }
 
+/* ── 2048 tile animations ──────────────────────────────────────────────────── */
+
+@keyframes tile-pop {
+  0%   { transform: scale(0);    }
+  75%  { transform: scale(1.12); }
+  100% { transform: scale(1);    }
+}
+
+@keyframes tile-bump {
+  0%   { transform: scale(1);    }
+  45%  { transform: scale(1.15); }
+  100% { transform: scale(1);    }
+}
+
 /* ── Invite accepted countdown bar ────────────────────────────────────────── */
 
 @keyframes invite-timer-shrink {
@@ -105,4 +119,27 @@ body {
 
 .invite-timer-bar {
   animation: invite-timer-shrink 3s linear forwards;
+}
+
+/* ── Snake food animations ─────────────────────────────────────────────────── */
+
+@keyframes snake-food-appear {
+  0%   { transform: scale(0);   }
+  70%  { transform: scale(1.2); }
+  100% { transform: scale(1);   }
+}
+
+@keyframes snake-food-pulse {
+  0%, 100% { transform: scale(1);    }
+  50%       { transform: scale(1.14); }
+}
+
+/*
+ * Food element: bounces in (280 ms), then pulses indefinitely.
+ * The pulse animation starts after the appear animation ends (280 ms delay).
+ */
+.snake-food {
+  animation:
+    snake-food-appear 280ms cubic-bezier(0.34, 1.56, 0.64, 1) both,
+    snake-food-pulse  2s   280ms ease-in-out infinite;
 }
