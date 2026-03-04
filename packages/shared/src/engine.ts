@@ -20,12 +20,14 @@ export interface StatusResult {
  */
 export interface GameEngine<TState, TAction> {
   /**
-   * Called once when the second player joins; returns the initial board state.
-   * Pass `startingPlayerIndex` (0 or 1) to control which player moves first.
+   * Called once when enough players have joined; returns the initial board state.
+   * `playerIds` contains tokens for every seated player (length 2 for most games,
+   * 2–6 for party games like Liar's Bar).
+   * Pass `startingPlayerIndex` to control which player moves first.
    * Defaults to 0 when omitted — callers should always pass a random value.
    * `config` is an optional game-specific configuration object (only used by RPS).
    */
-  initialState(playerIds: [string, string], startingPlayerIndex?: 0 | 1, config?: unknown): TState;
+  initialState(playerIds: string[], startingPlayerIndex?: number, config?: unknown): TState;
 
   /**
    * Apply a player action to the current state.

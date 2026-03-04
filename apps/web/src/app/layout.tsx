@@ -16,7 +16,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
       <head>
         <script dangerouslySetInnerHTML={{ __html: `(function(){try{var t=localStorage.getItem('webgames:theme');document.documentElement.dataset.theme=t==='light'?'light':'dark';}catch(e){document.documentElement.dataset.theme='dark';}try{var l=localStorage.getItem('webgames:lang');document.documentElement.lang=l==='en'?'en':'de';}catch(e){}})();` }} />
       </head>
-      <body className="antialiased">
+      <body className="antialiased overflow-x-hidden">
         <LanguageProvider>
           <NicknameProvider>{children}</NicknameProvider>
         </LanguageProvider>

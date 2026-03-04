@@ -3,6 +3,7 @@ import type { Connect4State, Connect4Action } from './games/connect4';
 import type { RpsState, RpsAction } from './games/rps';
 import type { ChessState, ChessAction } from './games/chess';
 import type { BattleshipState, BattleshipAction } from './games/battleship';
+import type { LiarsBarState, LiarsBarAction } from './games/liarsbar';
 import type { GameId } from './registry';
 
 // ─── Game-state / action unions ───────────────────────────────────────────────
@@ -10,10 +11,10 @@ import type { GameId } from './registry';
 // the rest of the code stays unchanged.
 
 /** Union of all possible game states across every registered game. */
-export type AnyGameState = TicTacToeState | Connect4State | RpsState | ChessState | BattleshipState;
+export type AnyGameState = TicTacToeState | Connect4State | RpsState | ChessState | BattleshipState | LiarsBarState;
 
 /** Union of all possible game actions across every registered game. */
-export type AnyGameAction = TicTacToeAction | Connect4Action | RpsAction | ChessAction | BattleshipAction;
+export type AnyGameAction = TicTacToeAction | Connect4Action | RpsAction | ChessAction | BattleshipAction | LiarsBarAction;
 
 // ─── Invites ─────────────────────────────────────────────────────────────────
 
@@ -43,7 +44,7 @@ export interface OnlineUser {
 
 /** Lightweight player descriptor sent in room events */
 export interface RoomPlayerInfo {
-  index: 0 | 1;
+  index: number;
   nickname: string;
 }
 
@@ -93,6 +94,8 @@ export interface ChatMessage {
   nickname: string;
   message: string;
   ts: number;
+  /** True for server-generated announcements (e.g. win broadcasts) */
+  system?: boolean;
 }
 
 // ─── Stats ───────────────────────────────────────────────────────────────────
@@ -157,6 +160,7 @@ export interface ServerToClientEvents {
     playerIndex: 0;
     gameId: GameId;
     players: RoomPlayerInfo[];
+    maxPlayers: number;
   }) => void;
 
   /**
@@ -167,9 +171,10 @@ export interface ServerToClientEvents {
     roomCode: string;
     gameId: GameId;
     /** null when isSpectator=true */
-    playerIndex: 1 | null;
+    playerIndex: number | null;
     isSpectator: boolean;
     playerCount: number;
+    maxPlayers: number;
     spectatorCount: number;
     /** Current game state; null if game hasn't started yet */
     state: AnyGameState | null;
@@ -183,27 +188,28 @@ export interface ServerToClientEvents {
   room_rejoined: (data: {
     roomCode: string;
     gameId: GameId;
-    playerIndex: 0 | 1;
+    playerIndex: number;
+    playerCount: number;
+    maxPlayers: number;
+    spectatorCount: number;
+    state: AnyGameState | null;
+    players: RoomPlayerInfo[];
+  }) => void;
+
+  /** Broadcast to the room when a new player joins (game may start) */
+  player_joined: (data: {
+    playerId: string;
+    playerIndex: number;
     playerCount: number;
     spectatorCount: number;
     state: AnyGameState | null;
     players: RoomPlayerInfo[];
   }) => void;
 
-  /** Broadcast to the room when a second player first joins (game starts) */
-  player_joined: (data: {
-    playerId: string;
-    playerIndex: 1;
-    playerCount: number;
-    spectatorCount: number;
-    state: AnyGameState;
-    players: RoomPlayerInfo[];
-  }) => void;
-
   /** Broadcast to the room when a previously disconnected player reconnects */
   player_rejoined: (data: {
     playerId: string;
-    playerIndex: 0 | 1;
+    playerIndex: number;
     playerCount: number;
     players: RoomPlayerInfo[];
   }) => void;
@@ -302,7 +308,7 @@ export interface ClientToServerEvents {
   identify: (data: { playerToken: string; nickname: string }) => void;
 
   /** playerToken is stored server-side so the seat can survive a refresh */
-  create_room: (data: { playerToken: string; gameId?: GameId; nickname: string; visibility?: RoomVisibility; roomName?: string; rpsConfig?: { mode: string; bestOf?: number } }) => void;
+  create_room: (data: { playerToken: string; gameId?: GameId; nickname: string; visibility?: RoomVisibility; roomName?: string; rpsConfig?: { mode: string; bestOf?: number }; ldConfig?: { mode: string }; maxPlayers?: number }) => void;
 
   /** If the room is full the socket joins as spectator instead */
   join_room: (data: { roomCode: string; playerToken: string; nickname: string }) => void;

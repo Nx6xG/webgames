@@ -63,6 +63,35 @@ export type {
   BsSlot,
   ShotRecord,
 } from './games/battleship';
+import {
+  DECK_SIZE as _deckSize,
+  HAND_SIZE as _handSize,
+  STARTING_LIVES as _startingLives,
+  createInitialState as _lbCreateInitialState,
+  applyAction as _lbApplyAction,
+} from './games/liarsbar';
+export const LB_DECK_SIZE = _deckSize;
+export const LB_HAND_SIZE = _handSize;
+export const LB_STARTING_LIVES = _startingLives;
+export const lbCreateInitialState = _lbCreateInitialState;
+export const lbApplyAction = _lbApplyAction;
+export type {
+  LiarsBarState,
+  LiarsBarAction,
+  LbPlayAction,
+  LbCallAction,
+  LbPassAction,
+  LbStartAction,
+  LbPlayer,
+  LbPhase,
+  LbReveal,
+  LbLastClaim,
+  LdMode,
+  LdRouletteState,
+  LdLastPenalty,
+  Card,
+  CardRank,
+} from './games/liarsbar';
 export type {
   AnyGameState,
   AnyGameAction,

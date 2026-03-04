@@ -20,7 +20,7 @@ function resolveRound(p0: RpsPick, p1: RpsPick): 'p0_wins' | 'p1_wins' | 'draw' 
 }
 
 export const rpsEngine: GameEngine<RpsState, RpsAction> = {
-  initialState([p0, p1]: [string, string], startingPlayerIndex: 0 | 1 = 0, config?: unknown): RpsState {
+  initialState([p0, p1]: string[], startingPlayerIndex: number = 0, config?: unknown): RpsState {
     const cfg = config as RpsEngineConfig | undefined;
     const mode: RpsMode = cfg?.mode === 'showdown' ? 'showdown' : 'best_of';
     // showdown: no round cap; best_of: use provided value (must be odd), default 3

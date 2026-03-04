@@ -610,7 +610,7 @@ export function RpsGame({ wsUrl, gameId, initialRoomCode, quickPlay: isQuickPlay
             <p className="text-xs text-zinc-500 uppercase tracking-wider font-semibold">{t('game.room.title')}</p>
             <div className="flex items-center gap-2">
               <span className="font-mono text-2xl font-black tracking-widest text-zinc-100">{mp.roomCode}</span>
-              <span className="text-xs text-zinc-500">{mp.playerCount}/2</span>
+              <span className="text-xs text-zinc-500">{mp.playerCount}/{mp.roomMaxPlayers}</span>
               {gs && isShowdown && (
                 <span className="text-xs font-bold text-amber-400 bg-amber-950/40 border border-amber-800 rounded-full px-2 py-0.5">
                   {t('rps.showdown.label')}

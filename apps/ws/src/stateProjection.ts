@@ -24,13 +24,14 @@ import type {
   BattleshipState,
   BattleshipShip,
   BsPlayerState,
+  LiarsBarState,
 } from 'shared';
 
 // ── Viewer context ─────────────────────────────────────────────────────────────
 
 export interface ViewerCtx {
-  /** Index of the viewing player (0 or 1).  null for spectators. */
-  playerIndex: 0 | 1 | null;
+  /** Index of the viewing player (0-based seat).  null for spectators. */
+  playerIndex: number | null;
   isSpectator: boolean;
 }
 
@@ -78,6 +79,7 @@ export function projectGameState(
   state: AnyGameState,
   ctx: ViewerCtx,
 ): AnyGameState {
+  if (gameId === 'liarsbar') return projectLiarsBar(state as LiarsBarState, ctx);
   if (gameId !== 'battleship') return state;
 
   const bs = state as BattleshipState;
@@ -91,9 +93,44 @@ export function projectGameState(
   }
 
   // Player: own ships untouched; opponent ships get per-sunk projection.
-  const oppIdx: 0 | 1 = ctx.playerIndex === 0 ? 1 : 0;
+  // Battleship is always 2-player, so playerIndex is always 0 or 1 here.
+  const oppIdx: 0 | 1 = (ctx.playerIndex === 0 ? 1 : 0);
   const newPlayers: [BsPlayerState, BsPlayerState] = [bs.players[0], bs.players[1]];
   newPlayers[oppIdx] = projectOpponentPlayer(bs.players[oppIdx]);
 
   return { ...bs, players: newPlayers };
+}
+
+// ── Liar's Deck projector ──────────────────────────────────────────────────────
+
+/**
+ * Strip opponent hands so each player only sees their own cards.
+ * Spectators see no hands at all.
+ * The deck is always stripped (anti-cheat).
+ */
+function projectLiarsBar(state: LiarsBarState, ctx: ViewerCtx): LiarsBarState {
+  const emptyHands = state.hands.map(() => [] as LiarsBarState['hands'][number]);
+
+  // Strip actual cards from lastClaim (anti-cheat: only revealed on call)
+  const projectedClaim = state.lastClaim
+    ? { ...state.lastClaim, cards: [] }
+    : null;
+
+  // Strip roulette bulletPos and rngSeed (anti-cheat)
+  const projectedRoulette = state.roulette
+    ? { cylinderPos: state.roulette.cylinderPos, bulletPos: -1 }
+    : undefined;
+
+  const base = { ...state, deck: [], discard: [], lastClaim: projectedClaim, rngSeed: 0, roulette: projectedRoulette };
+
+  if (ctx.isSpectator || ctx.playerIndex === null) {
+    return { ...base, hands: emptyHands };
+  }
+
+  // Player sees only their own hand
+  const projected = emptyHands.map((_, i) =>
+    i === ctx.playerIndex ? [...state.hands[i]] : [],
+  );
+
+  return { ...base, hands: projected };
 }

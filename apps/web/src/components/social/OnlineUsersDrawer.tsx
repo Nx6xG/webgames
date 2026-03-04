@@ -36,8 +36,9 @@ export function OnlineUsersDrawer({ open, onClose, users, connected, myToken, on
       {/* Panel — ref is forwarded to the parent for useClickOutside containment */}
       <div
         ref={panelRef}
-        className={`fixed top-0 right-0 z-50 h-screen w-[340px] max-w-full flex flex-col bg-zinc-950 border-l border-zinc-800 shadow-2xl transition-transform duration-200 ease-in-out ${
-          open ? 'translate-x-0' : 'translate-x-full'
+        aria-hidden={!open}
+        className={`fixed top-0 right-0 z-50 h-dvh w-[340px] max-w-full flex flex-col bg-zinc-950 border-l border-zinc-800 shadow-2xl transition-transform duration-200 ease-in-out ${
+          open ? 'translate-x-0 pointer-events-auto' : 'translate-x-full pointer-events-none'
         }`}
       >
         {/* Header */}

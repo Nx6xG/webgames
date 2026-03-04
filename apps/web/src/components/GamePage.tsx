@@ -40,7 +40,7 @@ export function GamePage({ title, children }: Props) {
       </header>
 
       {/* Main */}
-      <main className="flex-1 max-w-6xl mx-auto w-full px-6 py-10">
+      <main className="flex-1 max-w-6xl mx-auto w-full px-6 py-4 lg:py-6 xl:py-10">
         {children}
       </main>
     </div>

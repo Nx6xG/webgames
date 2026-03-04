@@ -26,9 +26,11 @@ export interface MultiplayerState<TState extends AnyGameState = AnyGameState> {
   connection: ConnectionStatus;
   phase: RoomPhase;
   roomCode: string | null;
-  playerIndex: 0 | 1 | null;
+  playerIndex: number | null;
   isSpectator: boolean;
   playerCount: number;
+  /** Room capacity (from server). Defaults to 2 until a room event provides it. */
+  roomMaxPlayers: number;
   spectatorCount: number;
   gameState: TState | null;
   error: string | null;
@@ -62,7 +64,7 @@ export interface MultiplayerState<TState extends AnyGameState = AnyGameState> {
 }
 
 export interface MultiplayerActions {
-  createRoom: (options?: { visibility?: RoomVisibility; roomName?: string; rpsConfig?: { mode: string; bestOf?: number } }) => void;
+  createRoom: (options?: { visibility?: RoomVisibility; roomName?: string; rpsConfig?: { mode: string; bestOf?: number }; ldConfig?: { mode: string }; maxPlayers?: number }) => void;
   joinRoom: (code: string) => void;
   /** Join the per-gameId matchmaking queue. Server assigns a room automatically. */
   quickPlay: () => void;
@@ -84,6 +86,7 @@ function makeLobbyState<TState extends AnyGameState>(): MultiplayerState<TState>
     playerIndex: null,
     isSpectator: false,
     playerCount: 0,
+    roomMaxPlayers: 2,
     spectatorCount: 0,
     gameState: null,
     error: null,
@@ -190,7 +193,7 @@ export function useMultiplayer<TState extends AnyGameState = AnyGameState>(
     );
 
     // ── Room events ────────────────────────────────────────────────────────
-    socket.on('room_created', ({ roomCode, playerIndex, players }) =>
+    socket.on('room_created', ({ roomCode, playerIndex, players, maxPlayers }) =>
       set((prev) => ({
         ...prev,
         roomCode,
@@ -198,6 +201,7 @@ export function useMultiplayer<TState extends AnyGameState = AnyGameState>(
         isSpectator: false,
         phase: 'waiting',
         playerCount: 1,
+        roomMaxPlayers: maxPlayers,
         spectatorCount: 0,
         players,
         roomReady: false,
@@ -205,13 +209,14 @@ export function useMultiplayer<TState extends AnyGameState = AnyGameState>(
       })),
     );
 
-    socket.on('room_joined', ({ roomCode, playerIndex, isSpectator, playerCount, spectatorCount, state, players }) =>
+    socket.on('room_joined', ({ roomCode, playerIndex, isSpectator, playerCount, maxPlayers, spectatorCount, state, players }) =>
       set((prev) => ({
         ...prev,
         roomCode,
         playerIndex,
         isSpectator,
         playerCount,
+        roomMaxPlayers: maxPlayers,
         spectatorCount,
         gameState: state as TState | null,
         players,
@@ -223,13 +228,14 @@ export function useMultiplayer<TState extends AnyGameState = AnyGameState>(
     );
 
     // Reconnect: server restored our seat
-    socket.on('room_rejoined', ({ roomCode, playerIndex, playerCount, spectatorCount, state, players }) =>
+    socket.on('room_rejoined', ({ roomCode, playerIndex, playerCount, maxPlayers, spectatorCount, state, players }) =>
       set((prev) => ({
         ...prev,
         roomCode,
         playerIndex,
         isSpectator: false,
         playerCount,
+        roomMaxPlayers: maxPlayers,
         spectatorCount,
         gameState: state as TState | null,
         players,
@@ -382,7 +388,7 @@ export function useMultiplayer<TState extends AnyGameState = AnyGameState>(
     };
   }, [wsUrl]);
 
-  const createRoom = useCallback((options?: { visibility?: RoomVisibility; roomName?: string; rpsConfig?: { mode: string; bestOf?: number } }) => {
+  const createRoom = useCallback((options?: { visibility?: RoomVisibility; roomName?: string; rpsConfig?: { mode: string; bestOf?: number }; ldConfig?: { mode: string }; maxPlayers?: number }) => {
     set((prev) => ({ ...prev, error: null }));
     socketRef.current?.emit('create_room', {
       playerToken: tokenRef.current,
@@ -391,6 +397,8 @@ export function useMultiplayer<TState extends AnyGameState = AnyGameState>(
       visibility: options?.visibility ?? 'private',
       roomName: options?.roomName,
       rpsConfig: options?.rpsConfig,
+      ldConfig: options?.ldConfig,
+      maxPlayers: options?.maxPlayers,
     });
   }, []);
 

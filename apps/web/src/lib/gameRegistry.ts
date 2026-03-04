@@ -5,6 +5,7 @@ import { Connect4Game } from '@/components/games/connect4/Connect4Game';
 import { RpsGame } from '@/components/games/rps/RpsGame';
 import { ChessGame } from '@/components/games/chess/ChessGame';
 import { BattleshipGame } from '@/components/games/battleship/BattleshipGame';
+import { LiarsBarGame } from '@/components/games/liarsbar/LiarsBarGame';
 
 /**
  * Props every game component must accept.
@@ -133,5 +134,20 @@ export const webRegistry: Record<GameId, WebGameEntry> = {
     titleKey: 'lobby.games.battleship.title',
     descKey:  'lobby.games.battleship.desc',
     Component: BattleshipGame,
+  },
+  liarsbar: {
+    manifest: {
+      id: 'liarsbar',
+      name: "Liar's Deck",
+      description: 'Bluff your way through with face-down cards. Get called out and lose a life!',
+      categories: ['cards', 'bluff', 'multiplayer'],
+      version: '1.0.0',
+      routeSlug: 'liarsbar',
+      minPlayers: 2,
+      maxPlayers: 6,
+    },
+    titleKey: 'lobby.games.liarsbar.title',
+    descKey:  'lobby.games.liarsbar.desc',
+    Component: LiarsBarGame,
   },
 };

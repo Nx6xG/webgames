@@ -408,7 +408,7 @@ function initialBoard(): (ChessPiece | null)[] {
 // ── Engine ─────────────────────────────────────────────────────────────────────
 
 export const chessEngine: GameEngine<ChessState, ChessAction> = {
-  initialState([p0, p1]: [string, string], startingPlayerIndex: 0 | 1 = 0): ChessState {
+  initialState([p0, p1]: string[], startingPlayerIndex: number = 0): ChessState {
     const board      = initialBoard();
     const castling   = { w: { kingSide: true, queenSide: true }, b: { kingSide: true, queenSide: true } };
     // players[0] is always White; players[1] is always Black.

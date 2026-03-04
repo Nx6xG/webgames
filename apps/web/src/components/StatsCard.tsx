@@ -3,7 +3,7 @@ import type { GameStats } from 'shared';
 interface Props {
   stats: GameStats | null;
   /** Null / undefined = spectator or lobby view → show generic P1/P2 labels */
-  playerIndex?: 0 | 1 | null;
+  playerIndex?: number | null;
 }
 
 export function StatsCard({ stats, playerIndex }: Props) {

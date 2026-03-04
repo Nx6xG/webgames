@@ -44,7 +44,7 @@ function emptyPlayer(): BsPlayerState {
 
 export const battleshipEngine: GameEngine<BattleshipState, BattleshipAction> = {
 
-  initialState([p0, p1]: [string, string], startingPlayerIndex: 0 | 1 = 0): BattleshipState {
+  initialState([p0, p1]: string[], startingPlayerIndex: number = 0): BattleshipState {
     const first = startingPlayerIndex === 0 ? p0 : p1;
     return {
       phase:       'setup',

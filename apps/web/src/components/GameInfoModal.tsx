@@ -9,7 +9,7 @@ interface GameInfoModalProps {
   open: boolean;
   onClose: () => void;
   stats: GameStats | null;
-  playerIndex: 0 | 1 | null;
+  playerIndex: number | null;
   rules: ReactNode;
   history: Match[];
   myNickname: string;

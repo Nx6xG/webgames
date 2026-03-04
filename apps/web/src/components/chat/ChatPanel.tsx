@@ -200,13 +200,19 @@ export function ChatPanel({
                 ) : (
                   messages.map((msg) => (
                     <div key={msg.id}>
-                      <div className="flex items-baseline gap-1.5 mb-0.5">
-                        <span className="text-xs font-semibold text-indigo-400 truncate max-w-[120px]">
-                          {msg.nickname}
-                        </span>
-                        <span className="text-[10px] text-zinc-600 shrink-0">{formatTime(msg.ts)}</span>
-                      </div>
-                      <p className="text-xs text-zinc-300 break-words leading-relaxed">{msg.message}</p>
+                      {msg.system ? (
+                        <p className="text-xs font-semibold text-amber-400/90 break-words leading-relaxed">{msg.message}</p>
+                      ) : (
+                        <>
+                          <div className="flex items-baseline gap-1.5 mb-0.5">
+                            <span className="text-xs font-semibold text-indigo-400 truncate max-w-[120px]">
+                              {msg.nickname}
+                            </span>
+                            <span className="text-[10px] text-zinc-600 shrink-0">{formatTime(msg.ts)}</span>
+                          </div>
+                          <p className="text-xs text-zinc-300 break-words leading-relaxed">{msg.message}</p>
+                        </>
+                      )}
                     </div>
                   ))
                 )}
@@ -284,13 +290,19 @@ export function ChatPanel({
         ) : (
           messages.map((msg) => (
             <div key={msg.id}>
-              <div className="flex items-baseline gap-1.5 mb-0.5">
-                <span className="text-xs font-semibold text-indigo-400 truncate max-w-[130px]">
-                  {msg.nickname}
-                </span>
-                <span className="text-[10px] text-zinc-600 shrink-0">{formatTime(msg.ts)}</span>
-              </div>
-              <p className="text-xs text-zinc-300 break-words leading-relaxed">{msg.message}</p>
+              {msg.system ? (
+                <p className="text-xs font-semibold text-amber-400/90 break-words leading-relaxed">{msg.message}</p>
+              ) : (
+                <>
+                  <div className="flex items-baseline gap-1.5 mb-0.5">
+                    <span className="text-xs font-semibold text-indigo-400 truncate max-w-[130px]">
+                      {msg.nickname}
+                    </span>
+                    <span className="text-[10px] text-zinc-600 shrink-0">{formatTime(msg.ts)}</span>
+                  </div>
+                  <p className="text-xs text-zinc-300 break-words leading-relaxed">{msg.message}</p>
+                </>
+              )}
             </div>
           ))
         )}

@@ -679,8 +679,8 @@ export function BattleshipGame({ wsUrl, gameId, initialRoomCode, quickPlay: isQu
   }, [mp.roomMessages.length, mp.globalMessages.length]);
 
   // Auto-advance activeShipId to the next unplaced ship after a successful placement
-  const myIdx: 0 | 1 | null = mp.playerIndex as 0 | 1 | null;
-  const oppIdx: 0 | 1 | null = myIdx !== null ? (myIdx === 0 ? 1 : 0) : null;
+  const myIdx = mp.playerIndex;
+  const oppIdx: number | null = myIdx !== null ? (myIdx === 0 ? 1 : 0) : null;
   const mySlot: BsSlot | null = myIdx !== null ? (myIdx === 0 ? 'A' : 'B') : null;
   const gs = mp.gameState;
 
@@ -1663,7 +1663,7 @@ export function BattleshipGame({ wsUrl, gameId, initialRoomCode, quickPlay: isQu
             <p className="text-xs text-zinc-500 uppercase tracking-wider font-semibold">{t('game.room.title')}</p>
             <div className="flex items-center gap-2">
               <span className="font-mono text-2xl font-black tracking-widest text-zinc-100">{mp.roomCode}</span>
-              <span className="text-xs text-zinc-500">{mp.playerCount}/2</span>
+              <span className="text-xs text-zinc-500">{mp.playerCount}/{mp.roomMaxPlayers}</span>
               {mp.spectatorCount > 0 && <span className="text-xs text-zinc-600 ml-1">{mp.spectatorCount} {t('game.room.watching')}</span>}
             </div>
             <button

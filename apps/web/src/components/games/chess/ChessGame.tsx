@@ -1061,7 +1061,7 @@ export function ChessGame({ wsUrl, gameId, initialRoomCode, quickPlay: isQuickPl
             <p className="text-xs text-zinc-500 uppercase tracking-wider font-semibold">{t('game.room.title')}</p>
             <div className="flex items-center gap-2">
               <span className="font-mono text-2xl font-black tracking-widest text-zinc-100">{mp.roomCode}</span>
-              <span className="text-xs text-zinc-500">{mp.playerCount}/2</span>
+              <span className="text-xs text-zinc-500">{mp.playerCount}/{mp.roomMaxPlayers}</span>
               {mp.spectatorCount > 0 && (
                 <span className="text-xs text-zinc-600 ml-1">{mp.spectatorCount} {t('game.room.watching')}</span>
               )}

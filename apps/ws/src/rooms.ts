@@ -14,7 +14,8 @@ export const PUBLIC_ROOM_EMPTY_CLEANUP_MS = 120_000;
 
 export interface RoomPlayer {
   socketId: string;
-  index: 0 | 1;
+  /** 0-based seat index. */
+  index: number;
   playerToken: string;
   nickname: string;
 }
@@ -26,26 +27,30 @@ export interface Room {
   roomName?: string;
   /** Game-specific config stored at room creation (currently only used by RPS). */
   gameConfig?: { mode?: string; bestOf?: number };
-  /** Only currently-connected players. Max 2. */
+  /** Minimum players needed to start the game (default 2). */
+  minPlayers: number;
+  /** Maximum players the room accepts (default 2). */
+  maxPlayers: number;
+  /** Only currently-connected players. */
   players: RoomPlayer[];
   /** Socket IDs of spectators (no seat, read-only). */
   spectators: Set<string>;
   state: AnyGameState | null;
   createdAt: number;
-  /** Player indices (0|1) who have voted for a rematch. */
-  rematchVotes: Set<0 | 1>;
+  /** Player indices who have voted for a rematch. */
+  rematchVotes: Set<number>;
   /** Unix ms when the match may begin; null when not in countdown. */
   matchStartsAt: number | null;
 }
 
 interface TokenSession {
   roomCode: string;
-  playerIndex: 0 | 1;
+  playerIndex: number;
   /** Non-null while the player is disconnected and the eviction timer is running */
   evictTimer: ReturnType<typeof setTimeout> | null;
 }
 
-export type EvictCallback = (room: Room, playerIndex: 0 | 1) => void;
+export type EvictCallback = (room: Room, playerIndex: number) => void;
 export type CleanupCallback = (room: Room) => void;
 
 // ─── RoomManager ──────────────────────────────────────────────────────────────
@@ -81,6 +86,8 @@ class RoomManager {
     visibility: RoomVisibility = 'private',
     roomName?: string,
     gameConfig?: { mode?: string; bestOf?: number },
+    minPlayers = 2,
+    maxPlayers = 2,
   ): Room {
     const code = this.generateCode();
     const room: Room = {
@@ -89,6 +96,8 @@ class RoomManager {
       visibility,
       roomName,
       gameConfig,
+      minPlayers,
+      maxPlayers,
       players: [{ socketId, index: 0, playerToken, nickname }],
       spectators: new Set(),
       state: null,
@@ -142,25 +151,37 @@ class RoomManager {
   }
 
   /**
-   * Join room as player 1. Returns Room on success or an error string.
+   * Join room as the next available player. Returns Room on success or an error string.
    * Call joinAsSpectator() instead if the room is full.
    */
   joinAsPlayer(
     code: string,
     socketId: string,
     playerToken: string,
-    nickname = 'Player 2',
-  ): Room | 'ROOM_NOT_FOUND' | 'ALREADY_IN_ROOM' {
+    nickname = 'Player',
+  ): Room | 'ROOM_NOT_FOUND' | 'ALREADY_IN_ROOM' | 'ROOM_FULL' {
     const room = this.rooms.get(code);
     if (!room) return 'ROOM_NOT_FOUND';
     if (room.players.some((p) => p.playerToken === playerToken || p.socketId === socketId)) {
       return 'ALREADY_IN_ROOM';
     }
+    if (room.players.length >= room.maxPlayers) {
+      return 'ROOM_FULL';
+    }
 
-    room.players.push({ socketId, index: 1, playerToken, nickname });
+    // Assign the next available index (fill gaps if any)
+    const usedIndices = new Set(room.players.map((p) => p.index));
+    // Also consider indices held by disconnected players with active sessions
+    for (const [, session] of this.tokenSessions) {
+      if (session.roomCode === code) usedIndices.add(session.playerIndex);
+    }
+    let nextIndex = 0;
+    while (usedIndices.has(nextIndex)) nextIndex++;
+
+    room.players.push({ socketId, index: nextIndex, playerToken, nickname });
     this.socketRoom.set(socketId, code);
     this.socketTokens.set(socketId, playerToken);
-    this.tokenSessions.set(playerToken, { roomCode: code, playerIndex: 1, evictTimer: null });
+    this.tokenSessions.set(playerToken, { roomCode: code, playerIndex: nextIndex, evictTimer: null });
     this.cancelRoomCleanup(code); // room is active again
     return room;
   }
@@ -204,6 +225,7 @@ class RoomManager {
   /**
    * Record a rematch vote from the player identified by socketId.
    * Returns { votes, ready } on success, null if socket is not a player in any room.
+   * Ready when all connected players have voted.
    */
   voteRematch(socketId: string): { votes: number; ready: boolean } | null {
     const code = this.socketRoom.get(socketId);
@@ -213,7 +235,7 @@ class RoomManager {
     const player = room.players.find((p) => p.socketId === socketId);
     if (!player) return null;
     room.rematchVotes.add(player.index);
-    return { votes: room.rematchVotes.size, ready: room.rematchVotes.size >= 2 };
+    return { votes: room.rematchVotes.size, ready: room.rematchVotes.size >= room.players.length };
   }
 
   /**
@@ -251,7 +273,7 @@ class RoomManager {
     }
 
     const [player] = room.players.splice(idx, 1);
-    // A rematch requires both players — cancel any pending votes when one leaves
+    // A rematch requires all players — cancel any pending votes when one leaves
     room.rematchVotes.clear();
     const token = this.socketTokens.get(socketId);
     this.socketTokens.delete(socketId);
@@ -280,7 +302,7 @@ class RoomManager {
     this.tokenSessions.delete(token);
 
     // Private rooms are fast-cleaned once all sessions expire.
-    // Public rooms are intentionally kept alive (as 0/2) until their scheduled cleanup
+    // Public rooms are intentionally kept alive (as 0/N) until their scheduled cleanup
     // timer fires so they remain visible in the lobby for the full grace period.
     const roomHasSession = [...this.tokenSessions.values()].some((s) => s.roomCode === room.code);
     if (!roomHasSession && room.players.length === 0 && room.spectators.size === 0) {

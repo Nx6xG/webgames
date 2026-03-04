@@ -11,6 +11,7 @@ import { recordMatchResult, recordDraw, updateNickname, getEntries } from './lea
 import type { RoomPlayerInfo, OpenRoomInfo, PublicRoomListItem, GameId, Match, ActionErrorCode, ChatMessage, LeaderboardMode, AnyGameState, InvitePayload } from 'shared';
 import type { Room } from './rooms.js';
 import { projectGameState } from './stateProjection.js';
+import { getGameCapacity } from './gameCapacity.js';
 import { InMemoryStorage } from './storage/inMemory.js';
 import type { Storage } from './storage/types.js';
 
@@ -24,6 +25,16 @@ function roomPlayers(room: Room): RoomPlayerInfo[] {
 }
 
 const COUNTDOWN_MS = 3000;
+
+/** Human-readable game names for global chat announcements */
+const GAME_DISPLAY_NAMES: Record<GameId, string> = {
+  tictactoe: 'Tic Tac Toe',
+  connect4: 'Connect 4',
+  rps: 'Rock Paper Scissors',
+  chess: 'Chess',
+  battleship: 'Battleship',
+  liarsbar: "Liar's Deck",
+};
 
 /** Per-gameId matchmaking queue: gameId → waiting room info */
 const quickPlayQueue = new Map<GameId, OpenRoomInfo>();
@@ -59,24 +70,61 @@ const inviteRateLimit = new Map<string, number>();
  * the countdown cannot start until the inviting player actually navigates to the
  * game page.
  */
-const roomGamePresence = new Map<string, { p0: Set<string>; p1: Set<string> }>();
+/** roomCode → playerIndex → set of active socket IDs for that seat */
+const roomGamePresence = new Map<string, Map<number, Set<string>>>();
 
-function getRoomPresence(roomCode: string): { p0: Set<string>; p1: Set<string> } {
+function getRoomPresence(roomCode: string): Map<number, Set<string>> {
   let rp = roomGamePresence.get(roomCode);
-  if (!rp) { rp = { p0: new Set(), p1: new Set() }; roomGamePresence.set(roomCode, rp); }
+  if (!rp) { rp = new Map(); roomGamePresence.set(roomCode, rp); }
   return rp;
+}
+
+/** Add a socket to the game-page presence for a given seat. */
+function addPresence(roomCode: string, playerIndex: number, socketId: string) {
+  const rp = getRoomPresence(roomCode);
+  let sockets = rp.get(playerIndex);
+  if (!sockets) { sockets = new Set(); rp.set(playerIndex, sockets); }
+  sockets.add(socketId);
+}
+
+/** Remove a socket from game-page presence for a given seat. */
+function removePresence(roomCode: string, playerIndex: number, socketId: string) {
+  const rp = roomGamePresence.get(roomCode);
+  if (!rp) return;
+  const sockets = rp.get(playerIndex);
+  if (sockets) {
+    sockets.delete(socketId);
+    if (sockets.size === 0) rp.delete(playerIndex);
+  }
+}
+
+/** Replace all sockets for a seat with a single new one (reconnect). */
+function replacePresence(roomCode: string, playerIndex: number, socketId: string) {
+  const rp = getRoomPresence(roomCode);
+  rp.set(playerIndex, new Set([socketId]));
 }
 
 function emitRoomReady(room: Room) {
   const rp = roomGamePresence.get(room.code);
-  const p0 = (rp?.p0.size ?? 0) > 0;
-  const p1 = (rp?.p1.size ?? 0) > 0;
+  const p0 = (rp?.get(0)?.size ?? 0) > 0;
+  const p1 = (rp?.get(1)?.size ?? 0) > 0;
   io.to(room.code).emit('room_ready', { roomCode: room.code, ready: p0 && p1, players: { p0, p1 } });
 }
 
-function tryStartCountdown(room: Room) {
+function allSeatedPlayersPresent(room: Room): boolean {
   const rp = roomGamePresence.get(room.code);
-  if (!rp || rp.p0.size === 0 || rp.p1.size === 0) return; // both must be present
+  if (!rp) return false;
+  for (const p of room.players) {
+    const sockets = rp.get(p.index);
+    if (!sockets || sockets.size === 0) return false;
+  }
+  return true;
+}
+
+function tryStartCountdown(room: Room) {
+  if (room.gameId === 'liarsbar') return; // liarsbar uses host-start instead of countdown
+  if (room.players.length < room.minPlayers) return; // not enough players yet
+  if (!allSeatedPlayersPresent(room)) return; // all must be on the game page
   if (room.matchStartsAt) return; // already issued
   startCountdown(room);
 }
@@ -121,13 +169,17 @@ function getPublicRoomList(): PublicRoomListItem[] {
     roomName: room.roomName,
     hostNickname: room.players[0]?.nickname ?? 'Unknown',
     playerCount: room.players.length,
-    maxPlayers: 2,
+    maxPlayers: room.maxPlayers,
     createdAt: room.createdAt,
   }));
-  // Sort: joinable (1/2) → empty (0/2) → full (2/2); newest-first within each group
+  // Sort: joinable (has space, not empty) → empty → full; newest-first within each group
   items.sort((a, b) => {
-    const pri = (n: number) => (n === 1 ? 0 : n === 0 ? 1 : 2);
-    const diff = pri(a.playerCount) - pri(b.playerCount);
+    const pri = (item: typeof a) => {
+      if (item.playerCount > 0 && item.playerCount < item.maxPlayers) return 0; // joinable
+      if (item.playerCount === 0) return 1; // empty
+      return 2; // full
+    };
+    const diff = pri(a) - pri(b);
     return diff !== 0 ? diff : b.createdAt - a.createdAt;
   });
   return items;
@@ -243,11 +295,33 @@ function emitRematchStarted(room: Room, state: AnyGameState) {
 
 roomManager.onPlayerEvicted((room, playerIndex) => {
   console.log(`[evict] player ${playerIndex} evicted from ${room.code}`);
+  // Remove evicted player from liarsbar lobby state
+  if (room.state && room.gameId === 'liarsbar') {
+    const lbState = room.state as import('shared').LiarsBarState;
+    if (lbState.phase === 'lobby') {
+      // Find the token that was at this room index
+      // The evicted player is already removed from room.players by this point,
+      // so we need to remove them from the game state by index.
+      // playerIndex corresponds to the original room seat, not game-state index.
+      // Re-sync game-state players to match room.players.
+      const roomTokens = new Set(room.players.map(p => p.playerToken));
+      lbState.players = lbState.players.filter(p => roomTokens.has(p.id));
+      lbState.hands = lbState.players.map(() => []);
+      // Update currentTurn to host if needed
+      if (lbState.players.length > 0) {
+        lbState.currentTurn = lbState.players[0].id;
+      }
+    }
+  }
   io.to(room.code).emit('player_left', {
     playerId: '(timeout)',
     playerIndex,
     playerCount: room.players.length,
   });
+  // Broadcast updated game state after liarsbar lobby change
+  if (room.state && room.gameId === 'liarsbar') {
+    emitGameState(room, room.state);
+  }
   if (room.visibility === 'public') broadcastOpenRooms();
 });
 
@@ -298,10 +372,8 @@ io.on('connection', (socket) => {
 
     // Register game-page socket presence; may trigger countdown if other player was waiting
     {
-      const rp = getRoomPresence(room.code);
-      const wasReady = rp.p0.size > 0 && rp.p1.size > 0;
-      if (player.index === 0) { rp.p0.clear(); rp.p0.add(socket.id); }
-      else { rp.p1.clear(); rp.p1.add(socket.id); }
+      const wasReady = allSeatedPlayersPresent(room);
+      replacePresence(room.code, player.index, socket.id);
       emitRoomReady(room);
       if (!wasReady) tryStartCountdown(room);
     }
@@ -311,6 +383,7 @@ io.on('connection', (socket) => {
       gameId: room.gameId,
       playerIndex: player.index,
       playerCount: room.players.length,
+      maxPlayers: room.maxPlayers,
       spectatorCount: room.spectators.size,
       state: room.state
         ? projectGameState(room.gameId, room.state, { playerIndex: player.index, isSpectator: false })
@@ -344,7 +417,7 @@ io.on('connection', (socket) => {
   });
 
   // ── create_room ───────────────────────────────────────────────────────────
-  socket.on('create_room', ({ playerToken, gameId = 'tictactoe', nickname, visibility = 'private', roomName, rpsConfig }) => {
+  socket.on('create_room', ({ playerToken, gameId = 'tictactoe', nickname, visibility = 'private', roomName, rpsConfig, ldConfig, maxPlayers: requestedMax }) => {
     identifiedTokens.set(socket.id, playerToken);
     nicknameMap.set(socket.id, nickname);
     if (!profiles.has(playerToken)) profiles.set(playerToken, { nickname });
@@ -371,11 +444,26 @@ io.on('connection', (socket) => {
     // Sanitize room name: strip whitespace, cap at 24 chars
     const sanitizedName = roomName?.trim().slice(0, 24) || undefined;
 
-    const gameConfig = gameId === 'rps' && rpsConfig ? rpsConfig : undefined;
-    const room = roomManager.createRoom(socket.id, playerToken, gameId, nickname, visibility, sanitizedName, gameConfig);
+    const gameConfig = gameId === 'rps' && rpsConfig
+      ? rpsConfig
+      : gameId === 'liarsbar' && ldConfig
+        ? ldConfig
+        : undefined;
+    const cap = getGameCapacity(gameId);
+    // Allow creator to choose maxPlayers within the game's valid range
+    const effectiveMax = requestedMax
+      ? Math.max(cap.min, Math.min(cap.max, requestedMax))
+      : cap.max;
+    const room = roomManager.createRoom(socket.id, playerToken, gameId, nickname, visibility, sanitizedName, gameConfig, cap.min, effectiveMax);
+    // Liarsbar: create lobby-phase state immediately so it can track players
+    if (gameId === 'liarsbar') {
+      const engine = engineRegistry[gameId];
+      room.state = engine.initialState([playerToken], 0, room.gameConfig);
+    }
+
     socket.join(room.code);
-    getRoomPresence(room.code).p0.add(socket.id);
-    socket.emit('room_created', { roomCode: room.code, playerIndex: 0, gameId: room.gameId, players: roomPlayers(room) });
+    addPresence(room.code, 0, socket.id);
+    socket.emit('room_created', { roomCode: room.code, playerIndex: 0, gameId: room.gameId, players: roomPlayers(room), maxPlayers: room.maxPlayers });
     // Empty history for the brand-new room
     socket.emit('chat_history', { scope: 'room', messages: [] });
     if (visibility === 'public') broadcastOpenRooms();
@@ -396,10 +484,8 @@ io.on('connection', (socket) => {
       const { room, player } = rejoin;
       socket.join(code);
       {
-        const rp = getRoomPresence(code);
-        const wasReady = rp.p0.size > 0 && rp.p1.size > 0;
-        if (player.index === 0) { rp.p0.clear(); rp.p0.add(socket.id); }
-        else { rp.p1.clear(); rp.p1.add(socket.id); }
+        const wasReady = allSeatedPlayersPresent(room);
+        replacePresence(code, player.index, socket.id);
         emitRoomReady(room);
         if (!wasReady) tryStartCountdown(room);
       }
@@ -408,6 +494,7 @@ io.on('connection', (socket) => {
         gameId: room.gameId,
         playerIndex: player.index,
         playerCount: room.players.length,
+        maxPlayers: room.maxPlayers,
         spectatorCount: room.spectators.size,
         state: room.state
           ? projectGameState(room.gameId, room.state, { playerIndex: player.index, isSpectator: false })
@@ -436,56 +523,86 @@ io.on('connection', (socket) => {
     }
 
     // ── Room has an open player seat ─────────────────────────────────────────
-    if (targetRoom.players.length < 2) {
+    if (targetRoom.players.length < targetRoom.maxPlayers) {
       const result = roomManager.joinAsPlayer(code, socket.id, playerToken, nickname);
       if (typeof result === 'string') {
         const msgs: Record<string, string> = {
           ROOM_NOT_FOUND: 'Room not found.',
           ALREADY_IN_ROOM: 'You are already in this room.',
+          ROOM_FULL: 'Room is full.',
         };
-        socket.emit('room_error', { code: result, message: msgs[result] ?? result });
+        socket.emit('room_error', { code: result as 'ROOM_NOT_FOUND' | 'ROOM_FULL' | 'ALREADY_IN_ROOM', message: msgs[result] ?? result });
         return;
       }
 
       const room = result;
-      const playerIds = room.players
-        .slice()
-        .sort((a, b) => a.index - b.index)
-        .map((p) => p.playerToken) as [string, string];
-      const engine = engineRegistry[room.gameId];
-      const startingPlayerIndex: 0 | 1 = Math.random() < 0.5 ? 0 : 1;
-      const state = engine.initialState(playerIds, startingPlayerIndex, room.gameConfig);
-      room.state = state;
-
+      const joiner = room.players.find((p) => p.playerToken === playerToken)!;
       socket.join(code);
-      getRoomPresence(code).p1.add(socket.id);
+      addPresence(code, joiner.index, socket.id);
+
+      // Initialize game state when the room reaches minPlayers for the first time.
+      // Liarsbar uses a lobby phase — state is created immediately but the host
+      // must send lb_start to begin dealing cards.
+      if (!room.state && room.players.length >= room.minPlayers) {
+        const playerIds = room.players
+          .slice()
+          .sort((a, b) => a.index - b.index)
+          .map((p) => p.playerToken);
+        const engine = engineRegistry[room.gameId];
+        const startingPlayerIndex = Math.floor(Math.random() * playerIds.length);
+        const state = engine.initialState(playerIds, startingPlayerIndex, room.gameConfig);
+        room.state = state;
+      }
+      // For liarsbar, update the lobby state when new players join
+      // (add the new player to the game state's player list).
+      if (room.state && room.gameId === 'liarsbar') {
+        const lbState = room.state as import('shared').LiarsBarState;
+        if (lbState.phase === 'lobby' && !lbState.players.some(p => p.id === playerToken)) {
+          lbState.players.push({
+            id: playerToken,
+            lives: 3,
+            handCount: 0,
+            eliminated: false,
+          });
+          lbState.hands.push([]);
+        }
+      }
+
       socket.emit('room_joined', {
         roomCode: code,
         gameId: room.gameId,
-        playerIndex: 1,
+        playerIndex: joiner.index,
         isSpectator: false,
         playerCount: room.players.length,
+        maxPlayers: room.maxPlayers,
         spectatorCount: room.spectators.size,
-        state: projectGameState(room.gameId, state, { playerIndex: 1, isSpectator: false }),
+        state: room.state
+          ? projectGameState(room.gameId, room.state, { playerIndex: joiner.index, isSpectator: false })
+          : null,
         players: roomPlayers(room),
       });
       socket.emit('chat_history', { scope: 'room', messages: roomChats.get(code) ?? [] });
-      // player_joined goes to player 0 only (no spectators yet when game starts)
-      const p0sock = io.sockets.sockets.get(room.players.find((p) => p.index === 0)?.socketId ?? '');
-      if (p0sock) {
-        p0sock.emit('player_joined', {
-          playerId: socket.id,
-          playerIndex: 1,
-          playerCount: room.players.length,
-          spectatorCount: room.spectators.size,
-          state: projectGameState(room.gameId, state, { playerIndex: 0, isSpectator: false }),
-          players: roomPlayers(room),
-        });
+      // Notify all existing players about the new joiner
+      for (const p of room.players) {
+        if (p.playerToken === playerToken) continue;
+        const pSock = io.sockets.sockets.get(p.socketId);
+        if (pSock) {
+          pSock.emit('player_joined', {
+            playerId: socket.id,
+            playerIndex: joiner.index,
+            playerCount: room.players.length,
+            spectatorCount: room.spectators.size,
+            state: room.state
+              ? projectGameState(room.gameId, room.state, { playerIndex: p.index, isSpectator: false })
+              : null,
+            players: roomPlayers(room),
+          });
+        }
       }
       if (room.visibility === 'public') broadcastOpenRooms();
       emitRoomReady(room);
       tryStartCountdown(room);
-      console.log(`[room] ${socket.id} joined ${code} as player 1`);
+      console.log(`[room] ${socket.id} joined ${code} as player ${joiner.index}`);
       return;
     }
 
@@ -504,6 +621,7 @@ io.on('connection', (socket) => {
       playerIndex: null,
       isSpectator: true,
       playerCount: room.players.length,
+      maxPlayers: room.maxPlayers,
       spectatorCount: room.spectators.size,
       state: room.state
         ? projectGameState(room.gameId, room.state, { playerIndex: null, isSpectator: true })
@@ -625,6 +743,30 @@ io.on('connection', (socket) => {
             if (psocket) psocket.emit('history', { items: getHistory(p.nickname) });
           }
         }
+
+        // Broadcast win announcement to global chat
+        if (!('draw' in result)) {
+          const winnerToken = nextState.winner as string;
+          const winnerNick = room.players.find((p) => p.playerToken === winnerToken)?.nickname
+            ?? profiles.get(winnerToken)?.nickname ?? 'Unknown';
+          const opponents = room.players
+            .filter((p) => p.playerToken !== winnerToken)
+            .map((p) => p.nickname);
+          const gameName = GAME_DISPLAY_NAMES[room.gameId] ?? room.gameId;
+          const oppText = opponents.length > 0 ? ` gegen ${opponents.join(', ')}` : '';
+          const sysMsg: ChatMessage = {
+            id: randomUUID(),
+            scope: 'global',
+            playerToken: 'system',
+            nickname: 'System',
+            message: `🏆 ${winnerNick} hat ${gameName}${oppText} gewonnen!`,
+            ts: Date.now(),
+            system: true,
+          };
+          globalChat.push(sysMsg);
+          if (globalChat.length > GLOBAL_CHAT_BUF) globalChat.shift();
+          io.to('global').emit('chat_message', { message: sysMsg });
+        }
       }
     } catch (err) {
       const msg = err instanceof Error ? err.message : 'Unknown error';
@@ -660,8 +802,8 @@ io.on('connection', (socket) => {
       socket.emit('rematch_error', { code: 'GAME_NOT_OVER', message: 'The game is still in progress.' });
       return;
     }
-    if (room.players.length < 2) {
-      socket.emit('rematch_error', { code: 'OPPONENT_DISCONNECTED', message: 'Your opponent is not connected.' });
+    if (room.players.length < room.minPlayers) {
+      socket.emit('rematch_error', { code: 'OPPONENT_DISCONNECTED', message: 'Not enough players connected.' });
       return;
     }
     if (room.rematchVotes.has(player.index)) {
@@ -677,8 +819,8 @@ io.on('connection', (socket) => {
       const playerIds = room.players
         .slice()
         .sort((a, b) => a.index - b.index)
-        .map((p) => p.playerToken) as [string, string];
-      const startingPlayerIndex: 0 | 1 = Math.random() < 0.5 ? 0 : 1;
+        .map((p) => p.playerToken);
+      const startingPlayerIndex = Math.floor(Math.random() * playerIds.length);
       const state = engine.initialState(playerIds, startingPlayerIndex, room.gameConfig);
       room.state = state;
       room.rematchVotes.clear();
@@ -723,46 +865,74 @@ io.on('connection', (socket) => {
     const entry = quickPlayQueue.get(gameId);
     if (entry) {
       const waitingRoom = roomManager.getRoom(entry.roomCode);
-      if (waitingRoom && waitingRoom.players.length < 2) {
-        // Join the waiting room as player 1
+      if (waitingRoom && waitingRoom.players.length < waitingRoom.maxPlayers) {
         const result = roomManager.joinAsPlayer(entry.roomCode, socket.id, playerToken, nickname);
         if (typeof result !== 'string') {
-          quickPlayQueue.delete(gameId);
-          broadcastOpenRooms();
           const room = result;
-          const playerIds = room.players
-            .slice()
-            .sort((a, b) => a.index - b.index)
-            .map((p) => p.playerToken) as [string, string];
-          const startingPlayerIndex: 0 | 1 = Math.random() < 0.5 ? 0 : 1;
-          const state = engineRegistry[room.gameId].initialState(playerIds, startingPlayerIndex, room.gameConfig);
-          room.state = state;
+          const joiner = room.players.find((p) => p.playerToken === playerToken)!;
+
+          // Remove from queue once room has enough players to start
+          if (room.players.length >= room.minPlayers) {
+            quickPlayQueue.delete(gameId);
+            broadcastOpenRooms();
+          }
+
+          // Initialize game when minPlayers reached (first time)
+          if (!room.state && room.players.length >= room.minPlayers) {
+            const playerIds = room.players
+              .slice()
+              .sort((a, b) => a.index - b.index)
+              .map((p) => p.playerToken);
+            const startingPlayerIndex = Math.floor(Math.random() * playerIds.length);
+            room.state = engineRegistry[room.gameId].initialState(playerIds, startingPlayerIndex, room.gameConfig);
+          }
+          // For liarsbar, add the new player to the lobby state
+          if (room.state && room.gameId === 'liarsbar') {
+            const lbState = room.state as import('shared').LiarsBarState;
+            if (lbState.phase === 'lobby' && !lbState.players.some(p => p.id === playerToken)) {
+              lbState.players.push({
+                id: playerToken,
+                lives: 3,
+                handCount: 0,
+                eliminated: false,
+              });
+              lbState.hands.push([]);
+            }
+          }
 
           socket.join(entry.roomCode);
-          getRoomPresence(room.code).p1.add(socket.id);
+          addPresence(room.code, joiner.index, socket.id);
           socket.emit('room_joined', {
             roomCode: entry.roomCode,
             gameId: room.gameId,
-            playerIndex: 1,
+            playerIndex: joiner.index,
             isSpectator: false,
             playerCount: room.players.length,
+            maxPlayers: room.maxPlayers,
             spectatorCount: room.spectators.size,
-            state: projectGameState(room.gameId, state, { playerIndex: 1, isSpectator: false }),
+            state: room.state
+              ? projectGameState(room.gameId, room.state, { playerIndex: joiner.index, isSpectator: false })
+              : null,
             players: roomPlayers(room),
           });
           socket.emit('chat_history', { scope: 'room', messages: roomChats.get(entry.roomCode) ?? [] });
           socket.emit('quick_play_joined', { roomCode: entry.roomCode });
-          // player_joined goes to player 0 only (no spectators when game starts)
-          const qp0sock = io.sockets.sockets.get(room.players.find((p) => p.index === 0)?.socketId ?? '');
-          if (qp0sock) {
-            qp0sock.emit('player_joined', {
-              playerId: socket.id,
-              playerIndex: 1,
-              playerCount: room.players.length,
-              spectatorCount: room.spectators.size,
-              state: projectGameState(room.gameId, state, { playerIndex: 0, isSpectator: false }),
-              players: roomPlayers(room),
-            });
+          // Notify all existing players
+          for (const p of room.players) {
+            if (p.playerToken === playerToken) continue;
+            const pSock = io.sockets.sockets.get(p.socketId);
+            if (pSock) {
+              pSock.emit('player_joined', {
+                playerId: socket.id,
+                playerIndex: joiner.index,
+                playerCount: room.players.length,
+                spectatorCount: room.spectators.size,
+                state: room.state
+                  ? projectGameState(room.gameId, room.state, { playerIndex: p.index, isSpectator: false })
+                  : null,
+                players: roomPlayers(room),
+              });
+            }
           }
           emitRoomReady(room);
           tryStartCountdown(room);
@@ -776,16 +946,22 @@ io.on('connection', (socket) => {
     }
 
     // No waiting room — create one and enter the queue
-    const room = roomManager.createRoom(socket.id, playerToken, gameId, nickname, 'public');
+    const cap = getGameCapacity(gameId);
+    const room = roomManager.createRoom(socket.id, playerToken, gameId, nickname, 'public', undefined, undefined, cap.min, cap.max);
+    // Liarsbar: create lobby-phase state immediately
+    if (gameId === 'liarsbar') {
+      room.state = engineRegistry[gameId].initialState([playerToken], 0, room.gameConfig);
+    }
     quickPlayQueue.set(gameId, { roomCode: room.code, gameId, hostNickname: nickname, createdAt: Date.now() });
     broadcastOpenRooms();
     socket.join(room.code);
-    getRoomPresence(room.code).p0.add(socket.id);
+    addPresence(room.code, 0, socket.id);
     socket.emit('room_created', {
       roomCode: room.code,
       playerIndex: 0,
       gameId: room.gameId,
       players: roomPlayers(room),
+      maxPlayers: room.maxPlayers,
     });
     socket.emit('chat_history', { scope: 'room', messages: [] });
     socket.emit('quick_play_joined', { roomCode: room.code });
@@ -1023,12 +1199,8 @@ io.on('connection', (socket) => {
 
     if (result.type === 'player') {
       // Update game-socket presence before broadcasting
-      const rp = roomGamePresence.get(room.code);
-      if (rp) {
-        if (result.player.index === 0) rp.p0.delete(socket.id);
-        else rp.p1.delete(socket.id);
-        emitRoomReady(room);
-      }
+      removePresence(room.code, result.player.index, socket.id);
+      emitRoomReady(room);
       // Broadcast immediately; eviction callback will fire again after 30 s if they don't return
       io.to(room.code).emit('player_left', {
         playerId: socket.id,

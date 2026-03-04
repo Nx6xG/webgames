@@ -24,7 +24,7 @@ function checkStatus(
 }
 
 export const ticTacToeEngine: GameEngine<TicTacToeState, TicTacToeAction> = {
-  initialState([p0, p1]: [string, string], startingPlayerIndex: 0 | 1 = 0): TicTacToeState {
+  initialState([p0, p1]: string[], startingPlayerIndex: number = 0): TicTacToeState {
     const first = startingPlayerIndex === 0 ? p0 : p1;
     return {
       board: Array(9).fill(null) as Cell[],

@@ -68,6 +68,8 @@ const CATEGORY_TAG_KEYS: Record<string, string> = {
   'puzzle':       'lobby.tags.puzzle',
   'casual':       'lobby.tags.casual',
   'arcade':       'lobby.tags.arcade',
+  'cards':        'lobby.tags.cards',
+  'bluff':        'lobby.tags.bluff',
 };
 
 const CATEGORY_COLORS: Record<string, string> = {
@@ -79,6 +81,8 @@ const CATEGORY_COLORS: Record<string, string> = {
   'puzzle':       'bg-sky-900/40 text-sky-300 border-sky-800',
   'casual':       'bg-teal-900/40 text-teal-300 border-teal-800',
   'arcade':       'bg-fuchsia-900/40 text-fuchsia-300 border-fuchsia-800',
+  'cards':        'bg-orange-900/40 text-orange-300 border-orange-800',
+  'bluff':        'bg-pink-900/40 text-pink-300 border-pink-800',
 };
 
 function SingleplayerCard({ game }: { game: typeof SINGLEPLAYER_GAMES[number] }) {
