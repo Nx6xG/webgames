@@ -16,6 +16,24 @@ export type AnyGameState = TicTacToeState | Connect4State | RpsState | ChessStat
 /** Union of all possible game actions across every registered game. */
 export type AnyGameAction = TicTacToeAction | Connect4Action | RpsAction | ChessAction | BattleshipAction | LiarsBarAction;
 
+// ─── Cosmetics ───────────────────────────────────────────────────────────────
+
+export interface CosmeticsSlots {
+  frame?: string;   // e.g. 'bronze', 'fire'
+  head?: string;    // e.g. 'crown', 'wizard_hat'
+  portal?: string;  // e.g. 'void', 'nebula'
+  aura?: string;    // e.g. 'softGlow', 'electric'
+  banner?: string;  // e.g. 'sunset', 'aurora' — profile card background gradient
+  cardColor?: string; // e.g. 'card-purple' — profile card body background
+}
+
+export interface CosmeticsSelection {
+  avatarId?: string;
+  nameColor?: string;
+  slots: CosmeticsSlots;
+  badges?: string[];  // multi-select, max 3 shown
+}
+
 // ─── Invites ─────────────────────────────────────────────────────────────────
 
 export interface InvitePayload {
@@ -46,6 +64,10 @@ export interface OnlineUser {
   connections: number;
   /** Most specific activity across all of this token's sockets. */
   activity?: PresenceActivity;
+  avatarId?: string;
+  nameColor?: string;
+  avatarFrame?: string;
+  cosmetics?: CosmeticsSelection;
 }
 
 // ─── Nickname / players ───────────────────────────────────────────────────────
@@ -54,6 +76,10 @@ export interface OnlineUser {
 export interface RoomPlayerInfo {
   index: number;
   nickname: string;
+  avatarId?: string;
+  nameColor?: string;
+  avatarFrame?: string;
+  cosmetics?: CosmeticsSelection;
 }
 
 /** A completed match stored in personal history */
@@ -87,6 +113,10 @@ export interface PublicRoomListItem {
   playerCount: number;
   maxPlayers: number;
   createdAt: number;
+  hostAvatarId?: string;
+  hostNameColor?: string;
+  hostAvatarFrame?: string;
+  hostCosmetics?: CosmeticsSelection;
 }
 
 // ─── Chat ────────────────────────────────────────────────────────────────────
@@ -104,6 +134,10 @@ export interface ChatMessage {
   ts: number;
   /** True for server-generated announcements (e.g. win broadcasts) */
   system?: boolean;
+  avatarId?: string;
+  nameColor?: string;
+  avatarFrame?: string;
+  cosmetics?: CosmeticsSelection;
 }
 
 // ─── Stats ───────────────────────────────────────────────────────────────────
@@ -267,13 +301,13 @@ export interface ServerToClientEvents {
   match_starting: (data: { startsInMs: number }) => void;
 
   /** Emitted to the socket after identify — echoes back the stable token */
-  session_info: (data: { token: string; nickname: string }) => void;
+  session_info: (data: { token: string; nickname: string; avatarId?: string; nameColor?: string; avatarFrame?: string; cosmetics?: CosmeticsSelection }) => void;
 
   /** Emitted to the sender after a successful set_nickname */
-  nickname_set: (data: { nickname: string }) => void;
+  nickname_set: (data: { nickname: string; avatarId?: string; nameColor?: string; avatarFrame?: string; cosmetics?: CosmeticsSelection }) => void;
 
-  /** Broadcast to a room when a player's nickname changes */
-  room_profile: (data: { playerToken: string; nickname: string }) => void;
+  /** Broadcast to a room when a player's profile (nickname/avatar/color) changes */
+  room_profile: (data: { playerToken: string; nickname: string; avatarId?: string; nameColor?: string; avatarFrame?: string; cosmetics?: CosmeticsSelection }) => void;
 
   /** A single new chat message broadcast to scope members */
   chat_message: (data: { message: ChatMessage }) => void;
@@ -313,7 +347,7 @@ export interface ClientToServerEvents {
    * Sent immediately after connecting. If the server has a live session for
    * this token the socket will receive room_rejoined; otherwise nothing happens.
    */
-  identify: (data: { playerToken: string; nickname: string }) => void;
+  identify: (data: { playerToken: string; nickname: string; avatarId?: string; nameColor?: string; avatarFrame?: string; cosmetics?: CosmeticsSelection }) => void;
 
   /** playerToken is stored server-side so the seat can survive a refresh */
   create_room: (data: { playerToken: string; gameId?: GameId; nickname: string; visibility?: RoomVisibility; roomName?: string; rpsConfig?: { mode: string; bestOf?: number }; ldConfig?: { mode: string }; maxPlayers?: number }) => void;
@@ -345,8 +379,8 @@ export interface ClientToServerEvents {
    */
   quick_play: (data: { gameId: GameId; playerToken: string; nickname: string }) => void;
 
-  /** Update the player's global display name. Server replies with nickname_set or chat_error. */
-  set_nickname: (data: { nickname: string }) => void;
+  /** Update the player's global display name and/or avatar. Server replies with nickname_set or chat_error. */
+  set_nickname: (data: { nickname: string; avatarId?: string; nameColor?: string; avatarFrame?: string; cosmetics?: CosmeticsSelection }) => void;
 
   /** Send a chat message to scope 'room' or 'global'. */
   chat_send: (data: { scope: ChatScope; roomCode?: string; message: string }) => void;

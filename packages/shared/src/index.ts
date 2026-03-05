@@ -113,4 +113,6 @@ export type {
   OnlineUser,
   PresenceActivity,
   InvitePayload,
+  CosmeticsSlots,
+  CosmeticsSelection,
 } from './protocol';

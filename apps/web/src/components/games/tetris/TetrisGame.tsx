@@ -15,6 +15,7 @@ import { getStats, recordRun, clearStats } from './stats';
 import type { TetrisStats } from './stats';
 import type { TetrisState, TetrisAction, TetrominoKind, Piece } from './types';
 import { useI18n } from '@/components/providers/LanguageProvider';
+import { useAchievements } from '@/hooks/useAchievements';
 
 // ── Constants ─────────────────────────────────────────────────────────────────
 
@@ -114,6 +115,7 @@ function getGhostPiece(board: TetrisState['board'], active: Piece): Piece {
 
 export function TetrisGame() {
   const { t } = useI18n();
+  const ach = useAchievements('tetris');
   const [state, setState] = useState<TetrisState>(createInitialState);
   const [countdown, setCountdown] = useState(3);
   const [stats, setStats] = useState<TetrisStats | null>(null);
@@ -165,6 +167,12 @@ export function TetrisGame() {
       tickRef.current = null;
     }
   }, [state.status, state.level, dispatch]);
+
+  // ── Achievement tracking ──────────────────────────────────────────────────
+  useEffect(() => {
+    if (state.status === 'running') ach.trackPlay();
+    if (state.status === 'countdown') ach.reset();
+  }, [state.status]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // ── Record stats on gameover ────────────────────────────────────────────────
 

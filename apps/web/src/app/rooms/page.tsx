@@ -3,7 +3,12 @@ import { RoomsClient } from '@/components/RoomsClient';
 
 export const metadata: Metadata = { title: 'Open Rooms — Web Games' };
 
-export default function RoomsPage() {
+export default async function RoomsPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ game?: string }>;
+}) {
   const wsUrl = process.env.NEXT_PUBLIC_WS_URL ?? '';
-  return <RoomsClient wsUrl={wsUrl} />;
+  const { game } = await searchParams;
+  return <RoomsClient wsUrl={wsUrl} initialGameFilter={game} />;
 }

@@ -143,3 +143,245 @@ body {
     snake-food-appear 280ms cubic-bezier(0.34, 1.56, 0.64, 1) both,
     snake-food-pulse  2s   280ms ease-in-out infinite;
 }
+
+/* ── Avatar frame animations ─────────────────────────────────────────────── */
+
+/* All animated frames use a ::before pseudo-element for the visual ring/glow
+   so the inner content (emoji) stays sharp and unblurred. The wrapper must be
+   position: relative and overflow: visible. */
+
+/* ── Bronze: subtle warm glow ── */
+@keyframes wg-bronze-glow {
+  0%, 100% { opacity: 0.55; }
+  50%      { opacity: 0.85; }
+}
+
+.wg-frame-bronze {
+  position: relative;
+}
+.wg-frame-bronze::before {
+  content: '';
+  position: absolute;
+  inset: -2px;
+  border-radius: 9999px;
+  border: 2px solid #b45309;
+  box-shadow: 0 0 6px 1px rgba(180, 83, 9, 0.35);
+  animation: wg-bronze-glow 3s ease-in-out infinite;
+  pointer-events: none;
+}
+
+/* ── Silver: slow pulse glow ── */
+@keyframes wg-silver-pulse {
+  0%, 100% { box-shadow: 0 0 4px 1px rgba(209, 213, 219, 0.2); opacity: 0.7; }
+  50%      { box-shadow: 0 0 10px 3px rgba(209, 213, 219, 0.45); opacity: 1; }
+}
+
+.wg-frame-silver {
+  position: relative;
+}
+.wg-frame-silver::before {
+  content: '';
+  position: absolute;
+  inset: -2px;
+  border-radius: 9999px;
+  border: 2px solid #d1d5db;
+  animation: wg-silver-pulse 2.5s ease-in-out infinite;
+  pointer-events: none;
+}
+
+/* ── Gold: shimmer sweep ── */
+@keyframes wg-gold-shimmer {
+  0%   { background-position: -200% 0; }
+  100% { background-position: 200% 0; }
+}
+
+.wg-frame-gold {
+  position: relative;
+}
+.wg-frame-gold::before {
+  content: '';
+  position: absolute;
+  inset: -2px;
+  border-radius: 9999px;
+  border: 2px solid #facc15;
+  box-shadow: 0 0 8px 1px rgba(250, 204, 21, 0.3);
+  /* Shimmer highlight via conic/linear gradient */
+  background: linear-gradient(
+    110deg,
+    transparent 20%,
+    rgba(255, 255, 255, 0.35) 45%,
+    rgba(255, 255, 255, 0.5) 50%,
+    rgba(255, 255, 255, 0.35) 55%,
+    transparent 80%
+  );
+  background-size: 200% 100%;
+  animation: wg-gold-shimmer 3s ease-in-out infinite;
+  /* Use mask to only show the shimmer on the ring border */
+  -webkit-mask: radial-gradient(circle, transparent calc(100% - 4px), black calc(100% - 4px));
+  mask: radial-gradient(circle, transparent calc(100% - 4px), black calc(100% - 4px));
+  pointer-events: none;
+}
+
+/* ── Fire: animated flame effect ── */
+@keyframes wg-fire-flicker {
+  0%, 100% { opacity: 0.75; box-shadow: 0 0 8px 2px rgba(255, 120, 0, 0.5), 0 0 16px 4px rgba(255, 60, 0, 0.25); }
+  25%      { opacity: 1;    box-shadow: 0 0 10px 3px rgba(255, 140, 0, 0.6), 0 0 20px 6px rgba(255, 80, 0, 0.3); }
+  50%      { opacity: 0.85; box-shadow: 0 0 12px 3px rgba(255, 100, 0, 0.55), 0 0 24px 6px rgba(255, 40, 0, 0.35); }
+  75%      { opacity: 0.95; box-shadow: 0 0 9px 2px rgba(255, 160, 0, 0.55), 0 0 18px 5px rgba(255, 60, 0, 0.28); }
+}
+
+.wg-frame-fire {
+  position: relative;
+}
+/* Base ring + flicker glow */
+.wg-frame-fire::before {
+  content: '';
+  position: absolute;
+  inset: -2px;
+  border-radius: 9999px;
+  border: 2px solid #f97316;
+  animation: wg-fire-flicker 1.5s ease-in-out infinite;
+  pointer-events: none;
+}
+/* SVG flame ring (rendered in React) replaces the old CSS conic-gradient ::after */
+
+/* ── Layer 2: rising flame tongue animation ── */
+@keyframes wg-flame-tongue-rise {
+  0%   { opacity: 0.3; transform: translateY(0); }
+  30%  { opacity: 0.9; }
+  60%  { opacity: 0.7; transform: translateY(-3px); }
+  80%  { opacity: 0.2; transform: translateY(-5px); }
+  100% { opacity: 0.3; transform: translateY(0); }
+}
+
+.wg-flame-tongue {
+  animation: wg-flame-tongue-rise 3s ease-in-out infinite;
+  transform-origin: center center;
+}
+
+/* ── Portal: rotating conic gradient behind avatar ── */
+@keyframes wg-portal-spin {
+  from { transform: rotate(0deg); }
+  to   { transform: rotate(360deg); }
+}
+
+.wg-portal-void {
+  position: absolute;
+  inset: -4px;
+  border-radius: 9999px;
+  background: conic-gradient(
+    from 0deg,
+    rgba(88, 28, 135, 0.6),
+    rgba(67, 56, 202, 0.4),
+    rgba(88, 28, 135, 0.1),
+    rgba(67, 56, 202, 0.4),
+    rgba(88, 28, 135, 0.6)
+  );
+  animation: wg-portal-spin 4s linear infinite;
+  pointer-events: none;
+  /* Mask out the center so only the ring shows */
+  -webkit-mask: radial-gradient(circle, transparent 60%, black 62%);
+  mask: radial-gradient(circle, transparent 60%, black 62%);
+}
+
+.wg-portal-nebula {
+  position: absolute;
+  inset: -5px;
+  border-radius: 9999px;
+  background: conic-gradient(
+    from 0deg,
+    rgba(236, 72, 153, 0.5),
+    rgba(139, 92, 246, 0.5),
+    rgba(59, 130, 246, 0.4),
+    rgba(236, 72, 153, 0.3),
+    rgba(139, 92, 246, 0.5),
+    rgba(236, 72, 153, 0.5)
+  );
+  animation: wg-portal-spin 6s linear infinite;
+  pointer-events: none;
+  -webkit-mask: radial-gradient(circle, transparent 55%, black 58%);
+  mask: radial-gradient(circle, transparent 55%, black 58%);
+}
+
+/* ── Aura: ambient glow around avatar ── */
+@keyframes wg-aura-pulse {
+  0%, 100% { opacity: 0.4; }
+  50%      { opacity: 0.75; }
+}
+
+@keyframes wg-aura-electric {
+  0%, 100% { opacity: 0.5; box-shadow: 0 0 6px 2px rgba(59, 130, 246, 0.4); }
+  25%      { opacity: 0.9; box-shadow: 0 0 10px 4px rgba(99, 102, 241, 0.6); }
+  50%      { opacity: 0.6; box-shadow: 0 0 14px 5px rgba(59, 130, 246, 0.5); }
+  75%      { opacity: 0.85; box-shadow: 0 0 8px 3px rgba(139, 92, 246, 0.55); }
+}
+
+.wg-aura-softGlow {
+  position: absolute;
+  inset: -3px;
+  border-radius: 9999px;
+  box-shadow: 0 0 8px 3px rgba(250, 204, 21, 0.25);
+  animation: wg-aura-pulse 3s ease-in-out infinite;
+  pointer-events: none;
+}
+
+.wg-aura-electric {
+  position: absolute;
+  inset: -3px;
+  border-radius: 9999px;
+  animation: wg-aura-electric 1.8s ease-in-out infinite;
+  pointer-events: none;
+}
+
+.wg-aura-shadow {
+  position: absolute;
+  inset: -4px;
+  border-radius: 9999px;
+  box-shadow: 0 0 10px 4px rgba(0, 0, 0, 0.7), 0 0 20px 8px rgba(30, 0, 50, 0.4);
+  animation: wg-aura-pulse 2.5s ease-in-out infinite;
+  pointer-events: none;
+}
+
+/* ── Profile card banners ────────────────────────────────────────────────── */
+
+.wg-banner-default  { background: linear-gradient(135deg, #27272a, #18181b); }
+.wg-banner-sunset   { background: linear-gradient(135deg, #f97316, #ec4899 50%, #8b5cf6); }
+.wg-banner-ocean    { background: linear-gradient(135deg, #06b6d4, #3b82f6 50%, #1e3a5f); }
+.wg-banner-forest   { background: linear-gradient(135deg, #059669, #065f46 50%, #1a2e1a); }
+.wg-banner-aurora   { background: linear-gradient(135deg, #22d3ee, #a78bfa 50%, #f472b6); }
+.wg-banner-lava     { background: linear-gradient(135deg, #ef4444, #f97316 50%, #fbbf24); }
+.wg-banner-neon     { background: linear-gradient(135deg, #7c3aed, #ec4899 50%, #06b6d4); }
+
+/* ── Profile card body colors ───────────────────────────────────────────── */
+
+.wg-card-default  { background: #0f1117; }
+.wg-card-purple   { background: linear-gradient(180deg, #1b1328, #0f1117); }
+.wg-card-blue     { background: linear-gradient(180deg, #13223a, #0f1117); }
+.wg-card-red      { background: linear-gradient(180deg, #2a1212, #0f1117); }
+.wg-card-gold     { background: linear-gradient(180deg, #2b220d, #0f1117); }
+
+/* ── Reduced motion: disable all frame animations ── */
+@media (prefers-reduced-motion: reduce) {
+  .wg-frame-bronze::before,
+  .wg-frame-silver::before,
+  .wg-frame-gold::before,
+  .wg-frame-fire::before {
+    animation: none;
+  }
+  /* Hide the SVG flame overlay; static ring from staticClass remains */
+  .wg-flame-svg {
+    display: none;
+  }
+  .wg-flame-tongue {
+    animation: none;
+  }
+  .wg-portal-void,
+  .wg-portal-nebula {
+    animation: none;
+  }
+  .wg-aura-softGlow,
+  .wg-aura-electric,
+  .wg-aura-shadow {
+    animation: none;
+  }
+}

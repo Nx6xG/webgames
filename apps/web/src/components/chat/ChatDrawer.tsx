@@ -2,7 +2,7 @@
 
 import { useEffect } from 'react';
 import type { ChatMessage, ChatScope } from 'shared';
-import { ChatPanel } from './ChatPanel';
+import { ChatPanelWithProfile as ChatPanel } from './ChatPanelWithProfile';
 
 interface ChatDrawerProps {
   open: boolean;

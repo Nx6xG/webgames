@@ -9,10 +9,13 @@ import { useMultiplayer } from '@/hooks/useMultiplayer';
 import type { GameComponentProps } from '@/lib/gameRegistry';
 import { CountdownOverlay } from '@/components/CountdownOverlay';
 import { WaitingForConnectionOverlay } from '@/components/WaitingForConnectionOverlay';
-import { ChatPanel } from '@/components/chat/ChatPanel';
+import { ChatPanelWithProfile as ChatPanel } from '@/components/chat/ChatPanelWithProfile';
 import { NicknameEditor } from '@/components/NicknameEditor';
 import { GameInfoModal } from '@/components/GameInfoModal';
 import { useI18n } from '@/components/providers/LanguageProvider';
+import { AvatarBubble } from '@/components/ui/AvatarBubble';
+import { getNameColorClass } from '@/lib/nameColors';
+import { useAchievements } from '@/hooks/useAchievements';
 
 // ── Cell display types ────────────────────────────────────────────────────────
 
@@ -605,6 +608,7 @@ export function BattleshipGame({ wsUrl, gameId, initialRoomCode, quickPlay: isQu
   const router    = useRouter();
   const mp        = useMultiplayer<BattleshipState>(wsUrl, gameId);
   const { t }     = useI18n();
+  const ach       = useAchievements('battleship');
 
   const [joinInput,       setJoinInput]       = useState(initialRoomCode ?? '');
   const [copied,          setCopied]           = useState(false);
@@ -677,6 +681,19 @@ export function BattleshipGame({ wsUrl, gameId, initialRoomCode, quickPlay: isQu
     prevTotalRef.current = total;
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [mp.roomMessages.length, mp.globalMessages.length]);
+
+  // ── Achievement tracking ──────────────────────────────────────────────────
+  useEffect(() => {
+    if (mp.phase === 'playing' && !mp.isSpectator) ach.trackPlay();
+  }, [mp.phase]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  useEffect(() => {
+    const gs = mp.gameState;
+    const mySlotAch: BsSlot | null = mp.playerIndex !== null ? (mp.playerIndex === 0 ? 'A' : 'B') : null;
+    if (gs?.phase === 'finished' && mySlotAch !== null && gs.winner === mySlotAch) {
+      ach.trackWin();
+    }
+  }, [mp.gameState?.phase]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Auto-advance activeShipId to the next unplaced ship after a successful placement
   const myIdx = mp.playerIndex;
@@ -951,6 +968,7 @@ export function BattleshipGame({ wsUrl, gameId, initialRoomCode, quickPlay: isQu
     navigator.clipboard.writeText(`${window.location.origin}/games/${gameId}?room=${mp.roomCode}`).then(() => {
       setCopied(true);
       setTimeout(() => setCopied(false), 2000);
+      ach.trackInvite();
     });
   }
 
@@ -1684,8 +1702,8 @@ export function BattleshipGame({ wsUrl, gameId, initialRoomCode, quickPlay: isQu
                   const isMe = !mp.isSpectator && mp.playerIndex === idx;
                   return (
                     <div key={idx} className="flex items-center gap-2 text-xs">
-                      <span className="w-2 h-2 rounded-full bg-indigo-500 shrink-0" />
-                      <span className="text-zinc-300 truncate">{p.nickname}</span>
+                      <AvatarBubble avatarId={p.avatarId} avatarFrame={p.avatarFrame} nickname={p.nickname} size="sm" cosmetics={p.cosmetics} />
+                      <span className={`truncate ${getNameColorClass(p.cosmetics?.nameColor ?? p.nameColor) || 'text-zinc-300'}`}>{p.nickname}</span>
                       {isMe && <span className="text-zinc-600 shrink-0">{t('game.common.you')}</span>}
                     </div>
                   );

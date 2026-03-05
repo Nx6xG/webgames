@@ -1,4 +1,4 @@
-import type { AnyGameState, GameId, RoomVisibility } from 'shared';
+import type { AnyGameState, GameId, RoomVisibility, CosmeticsSelection } from 'shared';
 
 const CODE_CHARS = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
 const CODE_LENGTH = 6;
@@ -18,6 +18,13 @@ export interface RoomPlayer {
   index: number;
   playerToken: string;
   nickname: string;
+  avatarId?: string;
+  nameColor?: string;
+  avatarFrame?: string;
+  banner?: string;
+  cardColor?: string;
+  badges?: string[];
+  cosmetics?: CosmeticsSelection;
 }
 
 export interface Room {

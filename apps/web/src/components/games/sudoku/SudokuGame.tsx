@@ -5,6 +5,7 @@ import { generateSudoku } from './generator';
 import { emptyStats, loadStats, saveStats, totalGames, updateStats } from './stats';
 import type { Board, Difficulty, GamePhase } from './types';
 import type { SudokuStats } from './stats';
+import { useAchievements } from '@/hooks/useAchievements';
 
 // ── Module-level helpers ───────────────────────────────────────────────────────
 
@@ -127,6 +128,8 @@ const DIFF_LABEL: Record<Difficulty, string> = {
 // ── Component ──────────────────────────────────────────────────────────────────
 
 export function SudokuGame() {
+  const ach = useAchievements('sudoku');
+
   // ── Config form state ─────────────────────────────────────────────────────────
   const [formDiff, setFormDiff] = useState<Difficulty>('medium');
 
@@ -150,6 +153,13 @@ export function SudokuGame() {
 
   // ── Load stats on mount ───────────────────────────────────────────────────────
   useEffect(() => { setStats(loadStats()); }, []);
+
+  // ── Achievement tracking ──────────────────────────────────────────────────
+  useEffect(() => {
+    if (phase === 'playing') ach.trackPlay();
+    if (phase === 'won') ach.trackWin();
+    if (phase === 'config') ach.reset();
+  }, [phase]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // ── Timer ─────────────────────────────────────────────────────────────────────
   useEffect(() => {

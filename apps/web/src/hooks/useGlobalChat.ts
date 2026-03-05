@@ -4,6 +4,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { getWsUrl } from '@/lib/getWsUrl';
 import { io, type Socket } from 'socket.io-client';
 import type { ServerToClientEvents, ClientToServerEvents, ChatMessage, ChatScope } from 'shared';
+import { loadCosmetics } from '@/lib/cosmetics';
 
 type GameSocket = Socket<ServerToClientEvents, ClientToServerEvents>;
 
@@ -21,7 +22,8 @@ export function useGlobalChat(wsUrl: string, nickname: string) {
   useEffect(() => {
     nicknameRef.current = nickname;
     if (nickname && socketRef.current?.connected) {
-      socketRef.current.emit('set_nickname', { nickname });
+      const c = loadCosmetics();
+      socketRef.current.emit('set_nickname', { nickname, avatarId: c.avatarId || undefined, nameColor: c.nameColor || undefined, avatarFrame: c.slots?.frame || undefined, cosmetics: c });
     }
   }, [nickname]);
 
@@ -43,7 +45,8 @@ export function useGlobalChat(wsUrl: string, nickname: string) {
     socket.on('connect', () => {
       setConnected(true);
       const nick = nicknameRef.current || localStorage.getItem(NICK_KEY) || 'Guest';
-      socket.emit('identify', { playerToken: token, nickname: nick });
+      const c = loadCosmetics();
+      socket.emit('identify', { playerToken: token, nickname: nick, avatarId: c.avatarId || undefined, nameColor: c.nameColor || undefined, avatarFrame: c.slots?.frame || undefined, cosmetics: c });
     });
     socket.on('disconnect', () => setConnected(false));
     socket.on('connect_error', () => setConnected(false));

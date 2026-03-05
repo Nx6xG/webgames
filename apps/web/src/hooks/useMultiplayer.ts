@@ -15,7 +15,9 @@ import type {
   Match,
   ChatMessage,
   ChatScope,
+  CosmeticsSelection,
 } from 'shared';
+import { loadCosmetics, saveCosmetics, mergeCosmetics } from '@/lib/cosmetics';
 
 type GameSocket = Socket<ServerToClientEvents, ClientToServerEvents>;
 
@@ -48,6 +50,8 @@ export interface MultiplayerState<TState extends AnyGameState = AnyGameState> {
   history: Match[];
   /** This player's nickname (from localStorage, set once on connect). */
   myNickname: string;
+  /** This player's avatar ID (from localStorage). */
+  myAvatarId: string;
   /** Current countdown label ('3'|'2'|'1'|'Go!'|null). Non-null while pre-game countdown is running. */
   matchCountdown: string | null;
   /**
@@ -76,6 +80,12 @@ export interface MultiplayerActions {
   sendChat: (scope: ChatScope, message: string) => void;
   /** Update this player's global nickname. Validated and confirmed by server. */
   setNickname: (nickname: string) => void;
+  /** Update this player's avatar. Stored locally and synced to server. */
+  setAvatarId: (id: string) => void;
+  /** Update this player's name color. Stored locally and synced to server. */
+  setNameColor: (color: string | undefined) => void;
+  /** Update this player's avatar frame. Stored locally and synced to server. */
+  setAvatarFrame: (frame: string | undefined) => void;
 }
 
 function makeLobbyState<TState extends AnyGameState>(): MultiplayerState<TState> {
@@ -97,6 +107,7 @@ function makeLobbyState<TState extends AnyGameState>(): MultiplayerState<TState>
     players: [],
     history: [],
     myNickname: '',
+    myAvatarId: '',
     matchCountdown: null,
     roomReady: false,
     roomMessages: [],
@@ -145,6 +156,7 @@ export function useMultiplayer<TState extends AnyGameState = AnyGameState>(
   const socketRef = useRef<GameSocket | null>(null);
   const tokenRef = useRef<string>('');
   const nicknameRef = useRef<string>('');
+  const cosmeticsRef = useRef<CosmeticsSelection>({ slots: {} });
   const gameIdRef = useRef<GameId>(gameId);
   const cdTimersRef = useRef<ReturnType<typeof setTimeout>[]>([]);
 
@@ -157,6 +169,7 @@ export function useMultiplayer<TState extends AnyGameState = AnyGameState>(
   useEffect(() => {
     tokenRef.current = getOrCreateToken();
     nicknameRef.current = getOrCreateNickname();
+    cosmeticsRef.current = loadCosmetics();
 
     const socket: GameSocket = io(wsUrl || getWsUrl(), {
       autoConnect: false,
@@ -173,8 +186,9 @@ export function useMultiplayer<TState extends AnyGameState = AnyGameState>(
 
     // ── Connection lifecycle ───────────────────────────────────────────────
     socket.on('connect', () => {
-      set((prev) => ({ ...prev, connection: 'connected', error: null, myNickname: nicknameRef.current }));
-      socket.emit('identify', { playerToken: tokenRef.current, nickname: nicknameRef.current });
+      const c = cosmeticsRef.current;
+      set((prev) => ({ ...prev, connection: 'connected', error: null, myNickname: nicknameRef.current, myAvatarId: c.avatarId || '' }));
+      socket.emit('identify', { playerToken: tokenRef.current, nickname: nicknameRef.current, avatarId: c.avatarId || undefined, nameColor: c.nameColor || undefined, avatarFrame: c.slots?.frame || undefined, cosmetics: c });
       socket.emit('presence_update', { activity: { kind: 'game', gameId: gameIdRef.current } });
       socket.emit('get_stats', { gameId: gameIdRef.current });
       socket.emit('get_history');
@@ -371,15 +385,60 @@ export function useMultiplayer<TState extends AnyGameState = AnyGameState>(
       });
     });
 
-    socket.on('nickname_set', ({ nickname }) => {
+    socket.on('nickname_set', ({ nickname, avatarId, nameColor, avatarFrame, cosmetics }) => {
       nicknameRef.current = nickname;
       if (typeof window !== 'undefined') localStorage.setItem(NICK_KEY, nickname);
-      set((prev) => ({ ...prev, myNickname: nickname }));
+      // Sync cosmetics from server response
+      if (cosmetics) {
+        cosmeticsRef.current = cosmetics;
+        saveCosmetics(cosmetics);
+      } else {
+        // Fallback: build from legacy fields
+        const patch: Partial<CosmeticsSelection> = {};
+        if (avatarId !== undefined) patch.avatarId = avatarId;
+        if (nameColor !== undefined) patch.nameColor = nameColor || undefined;
+        if (avatarFrame !== undefined) patch.slots = { frame: avatarFrame || undefined };
+        cosmeticsRef.current = mergeCosmetics(cosmeticsRef.current, patch);
+        saveCosmetics(cosmeticsRef.current);
+      }
+      set((prev) => ({ ...prev, myNickname: nickname, ...(avatarId !== undefined ? { myAvatarId: avatarId } : {}) }));
     });
 
     socket.on('chat_error', ({ message }) => {
       set((prev) => ({ ...prev, chatError: message }));
       setTimeout(() => set((prev) => ({ ...prev, chatError: null })), 4000);
+    });
+
+    // Live cosmetics / nickname updates from other players in the room.
+    // RoomPlayerInfo doesn't carry playerToken, so we match by finding the
+    // player whose old nickname/avatarId most closely matches. This is best-effort;
+    // full player list is re-synced on rejoin.
+    socket.on('room_profile', ({ nickname, avatarId: aid, nameColor: nc, avatarFrame: af, cosmetics: cos }) => {
+      set((prev) => {
+        // Try to find which player changed. If cosmetics has avatarId, match on that;
+        // otherwise try matching by nickname (old value still in players list).
+        const updated = [...prev.players];
+        let matched = false;
+        for (let i = 0; i < updated.length; i++) {
+          const old = updated[i];
+          // Skip self (our own changes are handled by nickname_set)
+          if (old.nickname === prev.myNickname) continue;
+          // Match: same old nickname, or (old avatarId matches before the change)
+          if (old.nickname === nickname || (aid && old.avatarId === aid)) {
+            updated[i] = {
+              ...old,
+              nickname,
+              avatarId: cos?.avatarId ?? aid ?? old.avatarId,
+              nameColor: cos?.nameColor ?? nc ?? old.nameColor,
+              avatarFrame: cos?.slots?.frame ?? af ?? old.avatarFrame,
+              cosmetics: cos ?? old.cosmetics,
+            };
+            matched = true;
+            break;
+          }
+        }
+        return matched ? { ...prev, players: updated } : prev;
+      });
     });
 
     return () => {
@@ -417,7 +476,7 @@ export function useMultiplayer<TState extends AnyGameState = AnyGameState>(
     if (socketRef.current && code) {
       socketRef.current.emit('leave_room', { roomCode: code });
     }
-    set((prev) => ({ ...makeLobbyState<TState>(), connection: prev.connection, stats: prev.stats, history: prev.history, myNickname: prev.myNickname, globalMessages: prev.globalMessages }));
+    set((prev) => ({ ...makeLobbyState<TState>(), connection: prev.connection, stats: prev.stats, history: prev.history, myNickname: prev.myNickname, myAvatarId: prev.myAvatarId, globalMessages: prev.globalMessages }));
   }, []);
 
   const sendAction = useCallback((action: AnyGameAction) => {
@@ -453,14 +512,44 @@ export function useMultiplayer<TState extends AnyGameState = AnyGameState>(
     });
   }, []);
 
+  const emitCosmetics = useCallback(() => {
+    const c = cosmeticsRef.current;
+    socketRef.current?.emit('set_nickname', {
+      nickname: nicknameRef.current,
+      avatarId: c.avatarId || undefined,
+      nameColor: c.nameColor || undefined,
+      avatarFrame: c.slots?.frame || undefined,
+      cosmetics: c,
+    });
+  }, []);
+
   const setNickname = useCallback((nickname: string) => {
     const trimmed = nickname.trim().slice(0, 16);
     if (trimmed.length < 2) return;
     nicknameRef.current = trimmed;
     if (typeof window !== 'undefined') localStorage.setItem(NICK_KEY, trimmed);
     set((prev) => ({ ...prev, myNickname: trimmed }));
-    socketRef.current?.emit('set_nickname', { nickname: trimmed });
-  }, []);
+    emitCosmetics();
+  }, [emitCosmetics]);
 
-  return { ...s, createRoom, joinRoom, quickPlay, leaveRoom, sendAction, requestRematch, clearError, sendChat, setNickname };
+  const setAvatarId = useCallback((id: string) => {
+    cosmeticsRef.current = mergeCosmetics(cosmeticsRef.current, { avatarId: id });
+    saveCosmetics(cosmeticsRef.current);
+    set((prev) => ({ ...prev, myAvatarId: id }));
+    emitCosmetics();
+  }, [emitCosmetics]);
+
+  const setNameColor = useCallback((color: string | undefined) => {
+    cosmeticsRef.current = mergeCosmetics(cosmeticsRef.current, { nameColor: color });
+    saveCosmetics(cosmeticsRef.current);
+    emitCosmetics();
+  }, [emitCosmetics]);
+
+  const setAvatarFrame = useCallback((frame: string | undefined) => {
+    cosmeticsRef.current = mergeCosmetics(cosmeticsRef.current, { slots: { frame: frame || undefined } });
+    saveCosmetics(cosmeticsRef.current);
+    emitCosmetics();
+  }, [emitCosmetics]);
+
+  return { ...s, createRoom, joinRoom, quickPlay, leaveRoom, sendAction, requestRematch, clearError, sendChat, setNickname, setAvatarId, setNameColor, setAvatarFrame };
 }

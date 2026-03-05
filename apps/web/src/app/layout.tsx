@@ -3,6 +3,7 @@ import './globals.css';
 import { NicknameProvider } from '@/components/providers/NicknameProvider';
 import { LanguageProvider } from '@/components/providers/LanguageProvider';
 import { PatchNotesFloatingButton } from '@/components/PatchNotesFloatingButton';
+import { AchievementToastProvider } from '@/components/ui/AchievementToasts';
 
 export const metadata: Metadata = {
   title: 'Web Games',
@@ -18,7 +19,9 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
       </head>
       <body className="antialiased overflow-x-hidden">
         <LanguageProvider>
-          <NicknameProvider>{children}</NicknameProvider>
+          <AchievementToastProvider>
+            <NicknameProvider>{children}</NicknameProvider>
+          </AchievementToastProvider>
         </LanguageProvider>
         <PatchNotesFloatingButton />
       </body>

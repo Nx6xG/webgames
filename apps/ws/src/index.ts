@@ -8,7 +8,7 @@ import { rateLimiter } from './rateLimiter.js';
 import { getStats, getAllStats, recordResult } from './stats.js';
 import { addMatch, getHistory } from './matchHistory.js';
 import { recordMatchResult, recordDraw, updateNickname, getEntries } from './leaderboard.js';
-import type { RoomPlayerInfo, OpenRoomInfo, PublicRoomListItem, GameId, Match, ActionErrorCode, ChatMessage, LeaderboardMode, AnyGameState, InvitePayload, PresenceActivity } from 'shared';
+import type { RoomPlayerInfo, OpenRoomInfo, PublicRoomListItem, GameId, Match, ActionErrorCode, ChatMessage, LeaderboardMode, AnyGameState, InvitePayload, PresenceActivity, CosmeticsSelection } from 'shared';
 import type { Room } from './rooms.js';
 import { projectGameState } from './stateProjection.js';
 import { getGameCapacity } from './gameCapacity.js';
@@ -17,11 +17,27 @@ import type { Storage } from './storage/types.js';
 
 const storage: Storage = new InMemoryStorage();
 
+// ── Cosmetics helpers ─────────────────────────────────────────────────────────
+
+function buildCosmetics(p: { avatarId?: string; nameColor?: string; avatarFrame?: string; banner?: string; cardColor?: string; badges?: string[] }): CosmeticsSelection {
+  return { avatarId: p.avatarId, nameColor: p.nameColor, slots: { frame: p.avatarFrame, banner: p.banner, cardColor: p.cardColor }, badges: p.badges };
+}
+
+function applyCosmetics(target: { avatarId?: string; nameColor?: string; avatarFrame?: string; banner?: string; cardColor?: string; badges?: string[] }, c?: CosmeticsSelection) {
+  if (!c) return;
+  if (c.avatarId !== undefined) target.avatarId = c.avatarId;
+  if (c.nameColor !== undefined) target.nameColor = c.nameColor;
+  if (c.slots?.frame !== undefined) target.avatarFrame = c.slots.frame;
+  if (c.slots?.banner !== undefined) target.banner = c.slots.banner;
+  if (c.slots?.cardColor !== undefined) target.cardColor = c.slots.cardColor;
+  if (c.badges !== undefined) target.badges = c.badges;
+}
+
 function roomPlayers(room: Room): RoomPlayerInfo[] {
   return room.players
     .slice()
     .sort((a, b) => a.index - b.index)
-    .map((p) => ({ index: p.index, nickname: p.nickname }));
+    .map((p) => ({ index: p.index, nickname: p.nickname, avatarId: p.avatarId, nameColor: p.nameColor, avatarFrame: p.avatarFrame, cosmetics: buildCosmetics(p) }));
 }
 
 const COUNTDOWN_MS = 3000;
@@ -44,8 +60,8 @@ const nicknameMap = new Map<string, string>();
 
 // ── Presence (online users) ───────────────────────────────────────────────────
 
-/** playerToken → { nickname, sockets: Set of active socketIds } */
-const presence = new Map<string, { nickname: string; sockets: Set<string> }>();
+/** playerToken → { nickname, avatarId, nameColor, sockets: Set of active socketIds } */
+const presence = new Map<string, { nickname: string; avatarId?: string; nameColor?: string; avatarFrame?: string; banner?: string; cardColor?: string; badges?: string[]; sockets: Set<string> }>();
 
 /** socketId → current activity for that socket */
 const socketActivity = new Map<string, PresenceActivity>();
@@ -65,11 +81,15 @@ function bestActivity(sockets: Set<string>): PresenceActivity | undefined {
 
 function buildPresenceList() {
   return [...presence.entries()]
-    .map(([playerToken, { nickname, sockets }]) => ({
+    .map(([playerToken, { nickname, avatarId, nameColor, avatarFrame, banner, cardColor, badges, sockets }]) => ({
       playerToken,
       nickname,
       connections: sockets.size,
       activity: bestActivity(sockets),
+      avatarId,
+      nameColor,
+      avatarFrame,
+      cosmetics: buildCosmetics({ avatarId, nameColor, avatarFrame, banner, cardColor, badges }),
     }))
     .sort((a, b) => a.nickname.localeCompare(b.nickname, undefined, { sensitivity: 'base' }));
 }
@@ -192,6 +212,10 @@ function getPublicRoomList(): PublicRoomListItem[] {
     playerCount: room.players.length,
     maxPlayers: room.maxPlayers,
     createdAt: room.createdAt,
+    hostAvatarId: room.players[0]?.avatarId,
+    hostNameColor: room.players[0]?.nameColor,
+    hostAvatarFrame: room.players[0]?.avatarFrame,
+    hostCosmetics: room.players[0] ? buildCosmetics(room.players[0]) : undefined,
   }));
   // Sort: joinable (has space, not empty) → empty → full; newest-first within each group
   items.sort((a, b) => {
@@ -208,8 +232,8 @@ function getPublicRoomList(): PublicRoomListItem[] {
 
 // ── Chat ──────────────────────────────────────────────────────────────────────
 
-/** playerToken → profile (nickname) */
-const profiles = new Map<string, { nickname: string }>();
+/** playerToken → profile (nickname, avatar, name color) */
+const profiles = new Map<string, { nickname: string; avatarId?: string; nameColor?: string; avatarFrame?: string; banner?: string; cardColor?: string; badges?: string[] }>();
 /** Global chat buffer — last 100 messages */
 const globalChat: ChatMessage[] = [];
 /** roomCode → chat buffer — last 50 messages */
@@ -368,20 +392,35 @@ io.on('connection', (socket) => {
   // ── identify ──────────────────────────────────────────────────────────────
   // Sent by the client immediately after connecting.
   // Restores the player's seat if their token matches a live session.
-  socket.on('identify', ({ playerToken, nickname }) => {
+  socket.on('identify', ({ playerToken, nickname, avatarId, nameColor, avatarFrame, cosmetics }) => {
     identifiedTokens.set(socket.id, playerToken);
     nicknameMap.set(socket.id, nickname);
     // Initialise profile from the stored nickname if no profile exists yet
-    if (!profiles.has(playerToken)) profiles.set(playerToken, { nickname });
-    socket.emit('session_info', { token: playerToken, nickname });
+    if (!profiles.has(playerToken)) profiles.set(playerToken, { nickname, avatarId, nameColor, avatarFrame });
+    else {
+      const prof = profiles.get(playerToken)!;
+      if (avatarId !== undefined) prof.avatarId = avatarId;
+      if (nameColor !== undefined) prof.nameColor = nameColor;
+      if (avatarFrame !== undefined) prof.avatarFrame = avatarFrame;
+    }
+    // Apply unified cosmetics (overwrites individual fields if present)
+    applyCosmetics(profiles.get(playerToken)!, cosmetics);
+    const profile = profiles.get(playerToken)!;
+    socket.emit('session_info', { token: playerToken, nickname, avatarId: profile.avatarId, nameColor: profile.nameColor, avatarFrame: profile.avatarFrame, cosmetics: buildCosmetics(profile) });
 
     // Update presence
     const presEntry = presence.get(playerToken);
     if (presEntry) {
       presEntry.sockets.add(socket.id);
       presEntry.nickname = nickname; // prefer latest nickname
+      if (avatarId !== undefined) presEntry.avatarId = avatarId;
+      if (nameColor !== undefined) presEntry.nameColor = nameColor;
+      if (avatarFrame !== undefined) presEntry.avatarFrame = avatarFrame;
+      if (profile.banner !== undefined) presEntry.banner = profile.banner;
+      if (profile.cardColor !== undefined) presEntry.cardColor = profile.cardColor;
+      if (profile.badges !== undefined) presEntry.badges = profile.badges;
     } else {
-      presence.set(playerToken, { nickname, sockets: new Set([socket.id]) });
+      presence.set(playerToken, { nickname, avatarId: profile.avatarId, nameColor: profile.nameColor, avatarFrame: profile.avatarFrame, banner: profile.banner, cardColor: profile.cardColor, badges: profile.badges, sockets: new Set([socket.id]) });
     }
     broadcastPresence();
 
@@ -389,6 +428,11 @@ io.on('connection', (socket) => {
     if (!result) return; // no live session → client stays in lobby
 
     const { room, player } = result;
+    const identifyProfile = profiles.get(playerToken);
+    player.avatarId = identifyProfile?.avatarId;
+    player.nameColor = identifyProfile?.nameColor;
+    player.avatarFrame = identifyProfile?.avatarFrame;
+    player.cardColor = identifyProfile?.cardColor;
     socket.join(room.code);
 
     // Register game-page socket presence; may trigger countdown if other player was waiting
@@ -478,6 +522,14 @@ io.on('connection', (socket) => {
       ? Math.max(cap.min, Math.min(cap.max, requestedMax))
       : cap.max;
     const room = roomManager.createRoom(socket.id, playerToken, gameId, nickname, visibility, sanitizedName, gameConfig, cap.min, effectiveMax);
+    // Set avatar + name color on the room player from profile
+    const creatorPlayer = room.players.find((p) => p.playerToken === playerToken);
+    if (creatorPlayer) {
+      const crProf = profiles.get(playerToken);
+      creatorPlayer.avatarId = crProf?.avatarId;
+      creatorPlayer.nameColor = crProf?.nameColor;
+      creatorPlayer.avatarFrame = crProf?.avatarFrame;
+    }
     // Liarsbar: create lobby-phase state immediately so it can track players
     if (gameId === 'liarsbar') {
       const engine = engineRegistry[gameId];
@@ -564,6 +616,7 @@ io.on('connection', (socket) => {
 
       const room = result;
       const joiner = room.players.find((p) => p.playerToken === playerToken)!;
+      { const joinProf = profiles.get(playerToken); joiner.avatarId = joinProf?.avatarId; joiner.nameColor = joinProf?.nameColor; joiner.avatarFrame = joinProf?.avatarFrame; }
       socket.join(code);
       addPresence(code, joiner.index, socket.id);
 
@@ -724,6 +777,12 @@ io.on('connection', (socket) => {
         playerIndex: player.index,
       });
       room.state = nextState;
+      // DEV: verify liarsbar lives broadcast
+      if (room.gameId === 'liarsbar' && 'players' in nextState) {
+        const lbPlayers = (nextState as { players: Array<{ id: string; lives: number }> }).players;
+        const sockCount = io.sockets.adapter.rooms.get(room.code)?.size ?? 0;
+        console.log(`[LD broadcast] ${room.code} → ${sockCount} sockets, lives: ${lbPlayers.map(p => `${p.id.slice(0, 6)}:${p.lives}`).join(', ')}`);
+      }
       emitGameState(room, nextState);
 
       // Record result and broadcast updated stats when a game just ended
@@ -901,6 +960,7 @@ io.on('connection', (socket) => {
         if (typeof result !== 'string') {
           const room = result;
           const joiner = room.players.find((p) => p.playerToken === playerToken)!;
+          { const qpJoinProf = profiles.get(playerToken); joiner.avatarId = qpJoinProf?.avatarId; joiner.nameColor = qpJoinProf?.nameColor; joiner.avatarFrame = qpJoinProf?.avatarFrame; }
 
           // Remove from queue once room has enough players to start
           if (room.players.length >= room.minPlayers) {
@@ -981,6 +1041,7 @@ io.on('connection', (socket) => {
     // No waiting room — create one and enter the queue
     const cap = getGameCapacity(gameId);
     const room = roomManager.createRoom(socket.id, playerToken, gameId, nickname, 'public', undefined, undefined, cap.min, cap.max);
+    { const qpCreator = room.players.find((p) => p.playerToken === playerToken); if (qpCreator) { const qpProf = profiles.get(playerToken); qpCreator.avatarId = qpProf?.avatarId; qpCreator.nameColor = qpProf?.nameColor; qpCreator.avatarFrame = qpProf?.avatarFrame; } }
     // Liarsbar: create lobby-phase state immediately
     if (gameId === 'liarsbar') {
       room.state = engineRegistry[gameId].initialState([playerToken], 0, room.gameConfig);
@@ -1009,7 +1070,7 @@ io.on('connection', (socket) => {
   });
 
   // ── set_nickname ──────────────────────────────────────────────────────────
-  socket.on('set_nickname', ({ nickname }) => {
+  socket.on('set_nickname', ({ nickname, avatarId, nameColor, avatarFrame, cosmetics }) => {
     const token = identifiedTokens.get(socket.id);
     if (!token) return;
 
@@ -1019,25 +1080,40 @@ io.on('connection', (socket) => {
       return;
     }
 
-    profiles.set(token, { nickname: clean });
+    const prof = profiles.get(token) ?? { nickname: clean };
+    prof.nickname = clean;
+    if (avatarId !== undefined) prof.avatarId = avatarId;
+    if (nameColor !== undefined) prof.nameColor = nameColor || undefined;
+    if (avatarFrame !== undefined) prof.avatarFrame = avatarFrame || undefined;
+    applyCosmetics(prof, cosmetics);
+    profiles.set(token, prof);
     nicknameMap.set(socket.id, clean);
     updateNickname(token, clean);
-    socket.emit('nickname_set', { nickname: clean });
+    const profCosmetics = buildCosmetics(prof);
+    socket.emit('nickname_set', { nickname: clean, avatarId: prof.avatarId, nameColor: prof.nameColor, avatarFrame: prof.avatarFrame, cosmetics: profCosmetics });
 
-    // Sync presence nickname
+    // Sync presence
     const presEntry = presence.get(token);
     if (presEntry) {
       presEntry.nickname = clean;
+      if (avatarId !== undefined) presEntry.avatarId = avatarId;
+      if (nameColor !== undefined) presEntry.nameColor = nameColor || undefined;
+      if (avatarFrame !== undefined) presEntry.avatarFrame = avatarFrame || undefined;
+      applyCosmetics(presEntry, cosmetics);
       broadcastPresence();
     }
 
-    // Update nickname in any room the player is currently in
+    // Update in any room the player is currently in
     const room = roomManager.getRoomBySocket(socket.id);
     if (room) {
       const player = roomManager.getPlayer(room, socket.id);
       if (player) {
         player.nickname = clean;
-        io.to(room.code).emit('room_profile', { playerToken: token, nickname: clean });
+        if (avatarId !== undefined) player.avatarId = avatarId;
+        if (nameColor !== undefined) player.nameColor = nameColor || undefined;
+        if (avatarFrame !== undefined) player.avatarFrame = avatarFrame || undefined;
+        applyCosmetics(player, cosmetics);
+        io.to(room.code).emit('room_profile', { playerToken: token, nickname: clean, avatarId: prof.avatarId, nameColor: prof.nameColor, avatarFrame: prof.avatarFrame, cosmetics: profCosmetics });
       }
     }
   });
@@ -1068,6 +1144,10 @@ io.on('connection', (socket) => {
       nickname,
       message: clean,
       ts: Date.now(),
+      avatarId: profile?.avatarId,
+      nameColor: profile?.nameColor,
+      avatarFrame: profile?.avatarFrame,
+      cosmetics: profile ? buildCosmetics(profile) : undefined,
     };
 
     if (scope === 'global') {

@@ -8,10 +8,13 @@ import { useMultiplayer } from '@/hooks/useMultiplayer';
 import type { GameComponentProps } from '@/lib/gameRegistry';
 import { CountdownOverlay } from '@/components/CountdownOverlay';
 import { WaitingForConnectionOverlay } from '@/components/WaitingForConnectionOverlay';
-import { ChatPanel } from '@/components/chat/ChatPanel';
+import { ChatPanelWithProfile as ChatPanel } from '@/components/chat/ChatPanelWithProfile';
 import { NicknameEditor } from '@/components/NicknameEditor';
 import { GameInfoModal } from '@/components/GameInfoModal';
 import { useI18n } from '@/components/providers/LanguageProvider';
+import { AvatarBubble } from '@/components/ui/AvatarBubble';
+import { getNameColorClass } from '@/lib/nameColors';
+import { useAchievements } from '@/hooks/useAchievements';
 
 // ── Piece rendering ────────────────────────────────────────────────────────────
 
@@ -268,6 +271,7 @@ export function ChessGame({ wsUrl, gameId, initialRoomCode, quickPlay: isQuickPl
   const router = useRouter();
   const mp = useMultiplayer<ChessState>(wsUrl, gameId);
   const { t } = useI18n();
+  const ach = useAchievements('chess');
   const [joinInput, setJoinInput]               = useState(initialRoomCode ?? '');
   const [copied, setCopied]                     = useState(false);
   const [pgnCopied, setPgnCopied]               = useState(false);
@@ -320,6 +324,18 @@ export function ChessGame({ wsUrl, gameId, initialRoomCode, quickPlay: isQuickPl
     prevTotalRef.current = total;
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [mp.roomMessages.length, mp.globalMessages.length]);
+
+  // ── Achievement tracking ──────────────────────────────────────────────────
+  useEffect(() => {
+    if (mp.phase === 'playing' && !mp.isSpectator) ach.trackPlay();
+  }, [mp.phase]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  useEffect(() => {
+    const gs = mp.gameState;
+    if (gs?.status === 'win' && mp.playerIndex !== null && gs.winner === gs.players[mp.playerIndex]?.id) {
+      ach.trackWin();
+    }
+  }, [mp.gameState?.status]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // ── Reset selection on state update; sync replay step to latest move ─────────
 
@@ -507,6 +523,7 @@ export function ChessGame({ wsUrl, gameId, initialRoomCode, quickPlay: isQuickPl
     navigator.clipboard.writeText(url).then(() => {
       setCopied(true);
       setTimeout(() => setCopied(false), 2000);
+      ach.trackInvite();
     });
   }
 
@@ -1084,8 +1101,9 @@ export function ChessGame({ wsUrl, gameId, initialRoomCode, quickPlay: isQuickPl
                   const isMe = !mp.isSpectator && mp.playerIndex === idx;
                   return (
                     <div key={idx} className="flex items-center gap-2 text-xs">
+                      <AvatarBubble avatarId={p.avatarId} avatarFrame={p.avatarFrame} nickname={p.nickname} size="sm" cosmetics={p.cosmetics} />
                       <span className={`w-3 h-3 rounded-sm border ${idx === 0 ? 'bg-white border-zinc-400' : 'bg-zinc-900 border-zinc-600'}`} />
-                      <span className="text-zinc-300 truncate">{p.nickname}</span>
+                      <span className={`truncate ${getNameColorClass(p.cosmetics?.nameColor ?? p.nameColor) || 'text-zinc-300'}`}>{p.nickname}</span>
                       {isMe && <span className="text-zinc-600 shrink-0">{t('game.common.you')}</span>}
                     </div>
                   );

@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useI18n } from '@/components/providers/LanguageProvider';
+import { useAchievements } from '@/hooks/useAchievements';
 
 // ── Constants ────────────────────────────────────────────────────────────────
 
@@ -83,6 +84,7 @@ function addHighscore(score: number): HighscoreEntry[] {
 
 export function FlappyGame() {
   const { t } = useI18n();
+  const ach = useAchievements('flappy');
 
   // ── State ────────────────────────────────────────────────────────────────
   const [phase, setPhase] = useState<Phase>('idle');
@@ -110,6 +112,12 @@ export function FlappyGame() {
 
   // Sync refs
   useEffect(() => { phaseRef.current = phase; }, [phase]);
+
+  // Achievement tracking
+  useEffect(() => {
+    if (phase === 'playing') ach.trackPlay();
+    if (phase === 'idle') ach.reset();
+  }, [phase]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Load persisted data
   useEffect(() => {

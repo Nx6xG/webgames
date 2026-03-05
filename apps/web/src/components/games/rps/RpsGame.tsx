@@ -8,10 +8,13 @@ import { useMultiplayer } from '@/hooks/useMultiplayer';
 import type { GameComponentProps } from '@/lib/gameRegistry';
 import { CountdownOverlay } from '@/components/CountdownOverlay';
 import { WaitingForConnectionOverlay } from '@/components/WaitingForConnectionOverlay';
-import { ChatPanel } from '@/components/chat/ChatPanel';
+import { ChatPanelWithProfile as ChatPanel } from '@/components/chat/ChatPanelWithProfile';
 import { NicknameEditor } from '@/components/NicknameEditor';
 import { GameInfoModal } from '@/components/GameInfoModal';
 import { useI18n } from '@/components/providers/LanguageProvider';
+import { AvatarBubble } from '@/components/ui/AvatarBubble';
+import { getNameColorClass } from '@/lib/nameColors';
+import { useAchievements } from '@/hooks/useAchievements';
 
 const PICKS: RpsPick[] = ['rock', 'paper', 'scissors'];
 
@@ -27,6 +30,7 @@ export function RpsGame({ wsUrl, gameId, initialRoomCode, quickPlay: isQuickPlay
   const router = useRouter();
   const mp = useMultiplayer<RpsState>(wsUrl, gameId);
   const { t } = useI18n();
+  const ach = useAchievements('rps');
   const [joinInput, setJoinInput]         = useState(initialRoomCode ?? '');
   const [copied, setCopied]               = useState(false);
   const [roomVisibility, setRoomVisibility] = useState<'private' | 'public'>('private');
@@ -73,6 +77,18 @@ export function RpsGame({ wsUrl, gameId, initialRoomCode, quickPlay: isQuickPlay
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [mp.roomMessages.length, mp.globalMessages.length]);
 
+  // ── Achievement tracking ──────────────────────────────────────────────────
+  useEffect(() => {
+    if (mp.phase === 'playing' && !mp.isSpectator) ach.trackPlay();
+  }, [mp.phase]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  useEffect(() => {
+    const gs = mp.gameState;
+    if (gs?.status === 'win' && mp.playerIndex !== null && gs.winner === gs.players[mp.playerIndex]?.id) {
+      ach.trackWin();
+    }
+  }, [mp.gameState?.status]); // eslint-disable-line react-hooks/exhaustive-deps
+
   const gs    = mp.gameState;
   const myIdx = mp.playerIndex; // 0 | 1 | null
 
@@ -110,6 +126,7 @@ export function RpsGame({ wsUrl, gameId, initialRoomCode, quickPlay: isQuickPlay
     navigator.clipboard.writeText(url).then(() => {
       setCopied(true);
       setTimeout(() => setCopied(false), 2000);
+      ach.trackInvite();
     });
   }
 
@@ -641,10 +658,11 @@ export function RpsGame({ wsUrl, gameId, initialRoomCode, quickPlay: isQuickPlay
                   const isMe = !mp.isSpectator && mp.playerIndex === idx;
                   return (
                     <div key={idx} className="flex items-center gap-2 text-xs">
+                      <AvatarBubble avatarId={p.avatarId} avatarFrame={p.avatarFrame} nickname={p.nickname} size="sm" cosmetics={p.cosmetics} />
                       <span className={`font-black text-sm ${idx === 0 ? 'text-indigo-400' : 'text-rose-400'}`}>
                         {idx === 0 ? '①' : '②'}
                       </span>
-                      <span className="text-zinc-300 truncate">{p.nickname}</span>
+                      <span className={`truncate ${getNameColorClass(p.cosmetics?.nameColor ?? p.nameColor) || 'text-zinc-300'}`}>{p.nickname}</span>
                       {isMe && <span className="text-zinc-600 shrink-0">{t('game.common.you')}</span>}
                     </div>
                   );

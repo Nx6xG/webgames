@@ -3,9 +3,41 @@
 import { useEffect, useRef, useState } from 'react';
 import type { ChatMessage, ChatScope } from 'shared';
 import { useI18n } from '@/components/providers/LanguageProvider';
+import { AvatarBubble } from '@/components/ui/AvatarBubble';
+import { getNameColorClass } from '@/lib/nameColors';
+import { getCosmeticDef } from '@/lib/cosmetics';
+import { Tooltip } from '@/components/ui/Tooltip';
 
 function formatTime(ts: number): string {
   return new Date(ts).toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' });
+}
+
+function BadgePills({ badges }: { badges?: string[] }) {
+  if (!badges || badges.length === 0) return null;
+  return (
+    <>
+      {badges.slice(0, 3).map((id) => {
+        const def = getCosmeticDef(id, 'badge');
+        if (!def) return null;
+        return (
+          <Tooltip key={id} content={<BadgeMiniTooltip def={def} />}>
+            <span className="text-[10px] leading-none">{def.emoji}</span>
+          </Tooltip>
+        );
+      })}
+    </>
+  );
+}
+
+/** Tiny tooltip for inline chat badges — just name + description */
+function BadgeMiniTooltip({ def }: { def: import('@/lib/cosmetics').CosmeticDef }) {
+  const { t } = useI18n();
+  return (
+    <div className="space-y-0.5">
+      <p className="text-[11px] font-bold text-zinc-100">{def.emoji} {t(def.labelKey)}</p>
+      {def.descriptionKey && <p className="text-[10px] text-zinc-400">{t(def.descriptionKey)}</p>}
+    </div>
+  );
 }
 
 export interface ChatPanelProps {
@@ -26,6 +58,8 @@ export interface ChatPanelProps {
   onOpenChange?: (open: boolean) => void;
   /** Show a rose unread badge on the collapsed header */
   showUnreadBadge?: boolean;
+  /** Called when a user clicks on a nickname in a chat message */
+  onClickNickname?: (msg: ChatMessage) => void;
   /**
    * @deprecated ChatPanel now tracks unread internally.
    * Kept for backward-compat; value is ignored.
@@ -60,6 +94,7 @@ export function ChatPanel({
   open: controlledOpen,
   onOpenChange,
   showUnreadBadge = false,
+  onClickNickname,
 }: ChatPanelProps) {
   const { t } = useI18n();
   const [scope, setScope] = useState<ChatScope>(mode === 'global' ? 'global' : 'room');
@@ -204,13 +239,19 @@ export function ChatPanel({
                         <p className="text-xs font-semibold text-amber-400/90 break-words leading-relaxed">{msg.message}</p>
                       ) : (
                         <>
-                          <div className="flex items-baseline gap-1.5 mb-0.5">
-                            <span className="text-xs font-semibold text-indigo-400 truncate max-w-[120px]">
+                          <div className="flex items-center gap-1.5 mb-0.5">
+                            <AvatarBubble avatarId={msg.avatarId} avatarFrame={msg.avatarFrame} nickname={msg.nickname} size="sm" cosmetics={msg.cosmetics} />
+                            <button
+                              type="button"
+                              onClick={() => onClickNickname?.(msg)}
+                              className={`text-xs font-semibold truncate max-w-[120px] text-left ${onClickNickname ? 'hover:underline cursor-pointer' : ''} ${getNameColorClass(msg.cosmetics?.nameColor ?? msg.nameColor) || 'text-indigo-400'}`}
+                            >
                               {msg.nickname}
-                            </span>
+                            </button>
+                            <BadgePills badges={msg.cosmetics?.badges} />
                             <span className="text-[10px] text-zinc-600 shrink-0">{formatTime(msg.ts)}</span>
                           </div>
-                          <p className="text-xs text-zinc-300 break-words leading-relaxed">{msg.message}</p>
+                          <p className="text-xs text-zinc-300 break-words leading-relaxed pl-[26px]">{msg.message}</p>
                         </>
                       )}
                     </div>
@@ -294,13 +335,19 @@ export function ChatPanel({
                 <p className="text-xs font-semibold text-amber-400/90 break-words leading-relaxed">{msg.message}</p>
               ) : (
                 <>
-                  <div className="flex items-baseline gap-1.5 mb-0.5">
-                    <span className="text-xs font-semibold text-indigo-400 truncate max-w-[130px]">
+                  <div className="flex items-center gap-1.5 mb-0.5">
+                    <AvatarBubble avatarId={msg.avatarId} avatarFrame={msg.avatarFrame} nickname={msg.nickname} size="sm" cosmetics={msg.cosmetics} />
+                    <button
+                      type="button"
+                      onClick={() => onClickNickname?.(msg)}
+                      className={`text-xs font-semibold truncate max-w-[130px] text-left ${onClickNickname ? 'hover:underline cursor-pointer' : ''} ${getNameColorClass(msg.cosmetics?.nameColor ?? msg.nameColor) || 'text-indigo-400'}`}
+                    >
                       {msg.nickname}
-                    </span>
+                    </button>
+                    <BadgePills badges={msg.cosmetics?.badges} />
                     <span className="text-[10px] text-zinc-600 shrink-0">{formatTime(msg.ts)}</span>
                   </div>
-                  <p className="text-xs text-zinc-300 break-words leading-relaxed">{msg.message}</p>
+                  <p className="text-xs text-zinc-300 break-words leading-relaxed pl-[26px]">{msg.message}</p>
                 </>
               )}
             </div>

@@ -8,7 +8,11 @@ import { useI18n } from '@/components/providers/LanguageProvider';
 import { useClickOutside, useEscape } from '@/hooks/useClickOutside';
 import { OnlineUsersDrawer } from './OnlineUsersDrawer';
 import { InviteDialog } from './InviteDialog';
-import type { InvitePayload, GameId } from 'shared';
+import { ProfileViewerModal } from '@/components/ui/ProfileViewerModal';
+import { resolveOtherProfile, resolveMyProfile } from '@/lib/profileData';
+import { useNickname } from '@/components/providers/NicknameProvider';
+import type { ProfileData } from '@/lib/profileData';
+import type { InvitePayload, GameId, OnlineUser } from 'shared';
 
 const TOKEN_KEY = 'wg_player_token';
 
@@ -31,10 +35,12 @@ export function OnlineNavChip({ wsUrl = '' }: { wsUrl?: string }) {
 
   const { t } = useI18n();
   const router = useRouter();
+  const { nickname: myNickname } = useNickname();
 
   const [open, setOpen]               = useState(false);
   const [myToken, setMyToken]         = useState('');
   const [inviteTarget, setInviteTarget] = useState<{ token: string; nickname: string } | null>(null);
+  const [viewedProfile, setViewedProfile] = useState<ProfileData | null>(null);
 
   // Refs covering every "inside" element: the chip trigger + the drawer panel.
   // useClickOutside fires when pointerdown lands outside ALL of them.
@@ -99,6 +105,14 @@ export function OnlineNavChip({ wsUrl = '' }: { wsUrl?: string }) {
     router.push(`/games/${gameId}?room=${roomCode}`);
   }
 
+  function handleViewProfile(user: OnlineUser) {
+    const isMe = user.playerToken === myToken;
+    const pd = isMe
+      ? resolveMyProfile(myNickname, myToken)
+      : resolveOtherProfile(user.playerToken, user.nickname, user.cosmetics);
+    setViewedProfile(pd);
+  }
+
   const hasNotifications = incomingInvites.length > 0 || !!sentInvite || !!inviteError || !!acceptedInvite;
 
   return (
@@ -130,6 +144,7 @@ export function OnlineNavChip({ wsUrl = '' }: { wsUrl?: string }) {
         myToken={myToken}
         onInvite={handleOpenInviteDialog}
         onJoinRoom={handleJoinRoom}
+        onViewProfile={handleViewProfile}
         panelRef={drawerPanelRef}
       />
 
@@ -260,6 +275,13 @@ export function OnlineNavChip({ wsUrl = '' }: { wsUrl?: string }) {
           )}
 
         </div>
+      )}
+      {/* ── Profile viewer modal ─────────────────────────────────────────── */}
+      {viewedProfile && (
+        <ProfileViewerModal
+          profile={viewedProfile}
+          onClose={() => setViewedProfile(null)}
+        />
       )}
     </>
   );

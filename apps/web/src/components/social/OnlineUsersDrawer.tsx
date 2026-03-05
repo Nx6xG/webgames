@@ -13,11 +13,12 @@ interface OnlineUsersDrawerProps {
   myToken: string;
   onInvite?: (token: string, nickname: string) => void;
   onJoinRoom?: (gameId: GameId, roomCode: string) => void;
+  onViewProfile?: (user: OnlineUser) => void;
   /** Ref forwarded from the parent so useClickOutside can treat the panel as "inside". */
   panelRef?: RefObject<HTMLDivElement | null>;
 }
 
-export function OnlineUsersDrawer({ open, onClose, users, connected, myToken, onInvite, onJoinRoom, panelRef }: OnlineUsersDrawerProps) {
+export function OnlineUsersDrawer({ open, onClose, users, connected, myToken, onInvite, onJoinRoom, onViewProfile, panelRef }: OnlineUsersDrawerProps) {
   const { t } = useI18n();
   // Escape + click-outside are handled by the parent (OnlineNavChip) via
   // useEscape / useClickOutside so we avoid the stale-closure trap of an
@@ -65,7 +66,7 @@ export function OnlineUsersDrawer({ open, onClose, users, connected, myToken, on
 
         {/* List */}
         <div className="flex-1 min-h-0 overflow-y-auto px-5 py-4">
-          <OnlineUsersPanel users={users} myToken={myToken} variant="drawer" onInvite={onInvite} onJoinRoom={onJoinRoom} />
+          <OnlineUsersPanel users={users} myToken={myToken} variant="drawer" onInvite={onInvite} onJoinRoom={onJoinRoom} onViewProfile={onViewProfile} />
         </div>
       </div>
     </>

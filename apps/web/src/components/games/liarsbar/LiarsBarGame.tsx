@@ -8,10 +8,13 @@ import { useMultiplayer } from '@/hooks/useMultiplayer';
 import type { GameComponentProps } from '@/lib/gameRegistry';
 import { CountdownOverlay } from '@/components/CountdownOverlay';
 import { WaitingForConnectionOverlay } from '@/components/WaitingForConnectionOverlay';
-import { ChatPanel } from '@/components/chat/ChatPanel';
+import { ChatPanelWithProfile as ChatPanel } from '@/components/chat/ChatPanelWithProfile';
 import { NicknameEditor } from '@/components/NicknameEditor';
 import { GameInfoModal } from '@/components/GameInfoModal';
 import { useI18n } from '@/components/providers/LanguageProvider';
+import { AvatarBubble } from '@/components/ui/AvatarBubble';
+import { getNameColorClass } from '@/lib/nameColors';
+import { useAchievements } from '@/hooks/useAchievements';
 
 // ── Compact viewport hook ────────────────────────────────────────────────────
 // Fires when viewport height ≤ 800px (covers 1366×768 and similar).
@@ -121,17 +124,25 @@ function RevealedCards({ cards, compact }: { cards: Card[]; compact: boolean }) 
 // ── Lives display ────────────────────────────────────────────────────────────
 
 function LivesDisplay({ lives, max, compact }: { lives: number; max: number; compact?: boolean }) {
+  const safeLives = Math.max(0, lives ?? 0);
   if (compact && max === 1) {
     return (
-      <span className={`text-[10px] font-bold uppercase tracking-wider ${lives > 0 ? 'text-emerald-400' : 'text-rose-500'}`}>
-        {lives > 0 ? '1/1' : '0/1'}
+      <span className={`text-[10px] font-bold uppercase tracking-wider ${safeLives > 0 ? 'text-emerald-400' : 'text-rose-500'}`}>
+        {safeLives > 0 ? '1/1' : '0/1'}
       </span>
     );
   }
   return (
     <span className="flex gap-0.5">
       {Array.from({ length: max }, (_, i) => (
-        <span key={i} className={`text-xs ${i < lives ? 'text-rose-400' : 'text-zinc-700'}`}>
+        <span
+          key={i}
+          className={`text-sm leading-none transition-all duration-300 ${
+            i < safeLives
+              ? 'text-rose-400 scale-100 opacity-100'
+              : 'text-zinc-700 scale-75 opacity-40'
+          }`}
+        >
           &#10084;&#65039;
         </span>
       ))}
@@ -164,6 +175,7 @@ export function LiarsBarGame({ wsUrl, gameId, initialRoomCode, quickPlay: isQuic
   const router = useRouter();
   const mp = useMultiplayer<LiarsBarState>(wsUrl, gameId);
   const { t } = useI18n();
+  const ach = useAchievements('liarsbar');
   const compact = useCompact();
   const [joinInput, setJoinInput] = useState(initialRoomCode ?? '');
   const [copied, setCopied] = useState(false);
@@ -177,6 +189,10 @@ export function LiarsBarGame({ wsUrl, gameId, initialRoomCode, quickPlay: isQuic
   const [selectedCards, setSelectedCards] = useState<Set<number>>(new Set());
   const [maxPlayers, setMaxPlayers] = useState(4);
   const [ldMode, setLdMode] = useState<LdMode>('classic');
+
+  // End-overlay latch — set once per finished match, cleared on rematch
+  const lastFinishKeyRef = useRef<string>('');
+  const [endOverlay, setEndOverlay] = useState<{ iWon: boolean; winnerNick: string | null } | null>(null);
 
   // Auto-join from invite link
   useEffect(() => {
@@ -212,6 +228,19 @@ export function LiarsBarGame({ wsUrl, gameId, initialRoomCode, quickPlay: isQuic
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [mp.roomMessages.length, mp.globalMessages.length]);
 
+  // ── Achievement tracking ──────────────────────────────────────────────────
+  useEffect(() => {
+    if (mp.phase === 'playing' && !mp.isSpectator) ach.trackPlay();
+  }, [mp.phase]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  useEffect(() => {
+    const gs = mp.gameState;
+    const myI = mp.playerIndex;
+    if (gs?.phase === 'ended' && gs?.winner && myI !== null && gs.winner === gs.players[myI]?.id) {
+      ach.trackWin();
+    }
+  }, [mp.gameState?.phase]); // eslint-disable-line react-hooks/exhaustive-deps
+
   // Clear selection when game state changes (new turn, reveal, etc.)
   useEffect(() => {
     setSelectedCards(new Set());
@@ -226,6 +255,24 @@ export function LiarsBarGame({ wsUrl, gameId, initialRoomCode, quickPlay: isQuic
     const serverPlayer = mp.players.find(p => p.index === idx);
     return serverPlayer?.nickname ?? `Player ${idx + 1}`;
   };
+
+  // Latch end-overlay exactly once per finished match; clear on phase reset (rematch)
+  const finishKey = gs?.phase === 'ended' && gs?.winner && !mp.isSpectator && myIdx !== null
+    ? `${mp.roomCode ?? ''}|${gs.winner}`
+    : '';
+
+  useEffect(() => {
+    if (!finishKey) {
+      lastFinishKeyRef.current = '';
+      setEndOverlay(null);
+      return;
+    }
+    if (finishKey === lastFinishKeyRef.current) return;
+    lastFinishKeyRef.current = finishKey;
+    const iWon = gs?.winner != null && myIdx !== null && gs.winner === gs.players[myIdx]?.id;
+    const winnerNick = gs?.winner ? getNickname(gs.winner) : null;
+    setEndOverlay({ iWon: !!iWon, winnerNick });
+  }, [finishKey]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const myHand: Card[] = (gs && myIdx !== null) ? (gs.hands?.[myIdx] ?? []) : [];
 
@@ -276,6 +323,7 @@ export function LiarsBarGame({ wsUrl, gameId, initialRoomCode, quickPlay: isQuic
     navigator.clipboard.writeText(url).then(() => {
       setCopied(true);
       setTimeout(() => setCopied(false), 2000);
+      ach.trackInvite();
     });
   }
 
@@ -420,6 +468,112 @@ export function LiarsBarGame({ wsUrl, gameId, initialRoomCode, quickPlay: isQuic
           label={t('game.ready.waiting')}
         />
 
+        {/* ── End-game overlay (Battleship-style) ────────────────────── */}
+        {endOverlay && (
+          <>
+            <style>{`
+              @keyframes ld-win-pop {
+                0%   { transform: scale(0.85); opacity: 0; }
+                100% { transform: scale(1);    opacity: 1; }
+              }
+              .ld-win-pop { animation: ld-win-pop 0.25s ease-out forwards; }
+              @keyframes ld-confetti-fall {
+                0%   { transform: translateY(0)     rotate(0deg);   opacity: 0.9; }
+                80%  { opacity: 0.75; }
+                100% { transform: translateY(420px) rotate(400deg); opacity: 0; }
+              }
+            `}</style>
+            <div style={{
+              position: 'absolute', inset: 0, zIndex: 30,
+              backgroundColor: 'rgba(0,0,0,0.50)',
+              display: 'flex', alignItems: 'center', justifyContent: 'center',
+              pointerEvents: 'none',
+            }}>
+              {/* Confetti on win */}
+              {endOverlay.iWon && (
+                <div style={{ position: 'absolute', inset: 0, overflow: 'hidden', pointerEvents: 'none' }}>
+                  {Array.from({ length: 14 }, (_, i) => (
+                    <div key={i} style={{
+                      position: 'absolute',
+                      width: 5 + (i % 3) * 3,
+                      height: 5 + (i % 3) * 3,
+                      borderRadius: i % 3 === 0 ? '50%' : '2px',
+                      backgroundColor: ['#818cf8', '#34d399', '#fbbf24', '#f87171', '#a78bfa', '#38bdf8'][i % 6],
+                      left: `${(i * 7 + 3) % 94}%`,
+                      top: '-12px',
+                      animation: `ld-confetti-fall ${1.4 + (i % 4) * 0.35}s ease-in ${i * 0.08}s infinite`,
+                    }} />
+                  ))}
+                </div>
+              )}
+              {/* Rose vignette on loss */}
+              {!endOverlay.iWon && (
+                <div style={{
+                  position: 'absolute', inset: 0, pointerEvents: 'none',
+                  background: 'radial-gradient(ellipse at center, transparent 30%, rgba(159,18,57,0.28) 100%)',
+                }} />
+              )}
+              {/* Card */}
+              <div
+                className="ld-win-pop bg-zinc-900/90 backdrop-blur rounded-2xl border border-zinc-700 px-10 py-8 text-center shadow-xl"
+                style={{ pointerEvents: 'auto', minWidth: 260, maxWidth: 360 }}
+              >
+                <p className={`text-4xl font-bold mb-2 ${endOverlay.iWon ? 'text-indigo-400' : 'text-rose-400'}`}>
+                  {endOverlay.iWon ? `🏆 ${t('liarsbar.winner')}!` : `💀 ${t('liarsbar.youLose')}`}
+                </p>
+                {endOverlay.winnerNick && (
+                  <p className="text-zinc-400 text-sm mb-1">
+                    {endOverlay.iWon ? '' : `${endOverlay.winnerNick} ${t('game.status.wins')}`}
+                  </p>
+                )}
+                {/* Mode badge */}
+                {gs && (
+                  <div className="flex justify-center mb-5 mt-2">
+                    <span className={`text-[10px] font-bold uppercase tracking-wider px-2.5 py-0.5 rounded-full ${
+                      gs.mode === 'roulette'
+                        ? 'bg-rose-950/80 text-rose-400 border border-rose-800/60'
+                        : 'bg-zinc-800/80 text-zinc-400 border border-zinc-700/60'
+                    }`}>
+                      {t(`liarsdeck.badge.${gs.mode}`)}
+                    </span>
+                  </div>
+                )}
+                {/* Round summary — remaining lives in classic */}
+                {gs && gs.mode === 'classic' && myIdx !== null && endOverlay.iWon && (
+                  <p className="text-xs text-zinc-500 mb-4">
+                    {gs.players[myIdx] && (
+                      <span>{gs.players[myIdx].lives}/{gs.maxLives} ❤️</span>
+                    )}
+                  </p>
+                )}
+                {mp.playerCount >= 2 && (
+                  <div className="flex flex-col items-center gap-2 mb-3">
+                    <button
+                      onClick={mp.requestRematch}
+                      disabled={mp.myVotedRematch}
+                      className="w-full px-5 py-2 rounded-lg bg-indigo-600 hover:bg-indigo-500 disabled:opacity-50 disabled:cursor-not-allowed text-white font-semibold text-sm transition-colors"
+                    >
+                      {mp.myVotedRematch ? t('game.actions.waitingRematch') : t('game.actions.rematch')}
+                    </button>
+                    {mp.rematchVotes > 0 && !mp.myVotedRematch && (
+                      <p className="text-xs text-amber-400">{t('game.status.opponentRematch')}</p>
+                    )}
+                    {mp.rematchError && (
+                      <p className="text-xs text-rose-400">{mp.rematchError}</p>
+                    )}
+                  </div>
+                )}
+                <button
+                  onClick={mp.leaveRoom}
+                  className="w-full px-4 py-2 text-sm rounded-lg border border-zinc-700 text-zinc-400 hover:border-zinc-500 hover:text-zinc-200 transition-colors"
+                >
+                  {t('game.actions.leaveRoom')}
+                </button>
+              </div>
+            </div>
+          </>
+        )}
+
         {/* ── Header + Ansage ───────────────────────────────────────────── */}
         {gs && (
           <div className={`flex flex-col items-center ${compact ? 'gap-1' : 'gap-3'} w-full`}>
@@ -510,6 +664,11 @@ export function LiarsBarGame({ wsUrl, gameId, initialRoomCode, quickPlay: isQuic
         {/* ── Players row ───────────────────────────────────────────────── */}
         {gs && (
           <div className={`flex flex-wrap ${compact ? 'gap-1.5' : 'gap-2.5'} justify-center w-full`}>
+            {/* DEV: verify both clients receive the same lives */}
+            {process.env.NODE_ENV === 'development' && gs.phase !== 'lobby' && (() => {
+              console.log('[LD lives]', gs.players.map(p => `${p.id.slice(0, 6)}:${p.lives}/${gs.maxLives}${p.eliminated ? ' X' : ''}`));
+              return null;
+            })()}
             {gs.players.map((player, idx) => {
               const nick = getNickname(player.id);
               const isActive = gs.phase !== 'ended' && gs.phase !== 'lobby' && gs.currentTurn === player.id;
@@ -540,7 +699,7 @@ export function LiarsBarGame({ wsUrl, gameId, initialRoomCode, quickPlay: isQuic
                     {isLobby && idx === 0 && <span className="text-amber-500 text-[10px] ml-1">&#9733;</span>}
                   </span>
 
-                  {!isLobby && <LivesDisplay lives={player.lives} max={gs.maxLives} compact />}
+                  {!isLobby && <LivesDisplay key={`${player.id}-${player.lives}`} lives={player.lives} max={gs.maxLives} compact />}
 
                   {!isLobby && player.eliminated && (
                     <span className="text-[9px] text-rose-400 font-black uppercase tracking-wider bg-rose-950/60 px-1.5 py-px rounded-full">
@@ -701,26 +860,7 @@ export function LiarsBarGame({ wsUrl, gameId, initialRoomCode, quickPlay: isQuic
           </div>
         )}
 
-        {/* Rematch */}
-        {!mp.isSpectator && gs && gs.phase === 'ended' && mp.playerCount >= 2 && (
-          <div className="flex flex-col items-center gap-1.5">
-            <button
-              onClick={mp.requestRematch}
-              disabled={mp.myVotedRematch}
-              className={`${compact ? 'px-5 py-2' : 'px-6 py-2.5'} rounded-xl bg-indigo-600 hover:bg-indigo-500 disabled:opacity-50 disabled:cursor-not-allowed text-white font-bold text-sm transition-all active:scale-[0.98]`}
-            >
-              {mp.myVotedRematch ? t('game.actions.waitingRematch') : t('game.actions.rematch')}
-            </button>
-            {mp.rematchVotes > 0 && !mp.myVotedRematch && (
-              <p className="text-xs text-amber-400">{t('game.status.opponentRematch')}</p>
-            )}
-            {mp.rematchError && (
-              <p className="text-xs text-rose-400 bg-rose-950/50 border border-rose-800 rounded-lg px-3 py-1.5">{mp.rematchError}</p>
-            )}
-          </div>
-        )}
-
-        {(mp.phase === 'ended' || mp.phase === 'playing' || mp.phase === 'waiting') && (
+        {(mp.phase === 'playing' || mp.phase === 'waiting') && (
           <button
             onClick={mp.leaveRoom}
             className={`${compact ? 'mt-0.5' : 'mt-1'} px-4 py-1.5 text-sm rounded-lg border border-zinc-700 text-zinc-400 hover:border-zinc-500 hover:text-zinc-200 transition-colors active:scale-[0.98]`}
@@ -881,8 +1021,9 @@ export function LiarsBarGame({ wsUrl, gameId, initialRoomCode, quickPlay: isQuic
                     const isMe = !mp.isSpectator && mp.playerIndex === p.index;
                     return (
                       <div key={p.index} className="flex items-center gap-2 text-xs">
+                        <AvatarBubble avatarId={p.avatarId} avatarFrame={p.avatarFrame} nickname={p.nickname} size="sm" cosmetics={p.cosmetics} />
                         <span className="text-zinc-500 font-mono w-4">{p.index + 1}.</span>
-                        <span className="text-zinc-300 truncate">{p.nickname}</span>
+                        <span className={`truncate ${getNameColorClass(p.cosmetics?.nameColor ?? p.nameColor) || 'text-zinc-300'}`}>{p.nickname}</span>
                         {isMe && <span className="text-zinc-600 shrink-0">{t('game.common.you')}</span>}
                       </div>
                     );

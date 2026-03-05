@@ -7,6 +7,7 @@ import {
 } from './stats';
 import type { Board, Difficulty, GameConfig, GameMode, GameStatus, Mark } from './types';
 import type { TttStats } from './stats';
+import { useAchievements } from '@/hooks/useAchievements';
 
 // ── Module-level helpers ───────────────────────────────────────────────────────
 
@@ -30,6 +31,8 @@ const EMPTY_BOARD: Board = Array(9).fill(null) as Board;
 // ── Component ──────────────────────────────────────────────────────────────────
 
 export function TicTacToeSolo() {
+  const ach = useAchievements('tictactoe-solo');
+
   // ── Config-screen form state ─────────────────────────────────────────────────
   const [formMode, setFormMode] = useState<GameMode>('pvp');
   const [formDiff, setFormDiff] = useState<Difficulty>('normal');
@@ -63,6 +66,21 @@ export function TicTacToeSolo() {
     setStats(newStats);
     saveStats(newStats);
   }, [status.kind, config, stats]);
+
+  // ── Achievement tracking ──────────────────────────────────────────────────
+  useEffect(() => {
+    if (config) ach.trackPlay();
+    if (!config) ach.reset();
+  }, [config]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  useEffect(() => {
+    if (status.kind === 'won' && config?.mode === 'ai' && status.winner === config.humanMark) {
+      ach.trackWin();
+    }
+    if (status.kind === 'won' && config?.mode === 'pvp') {
+      ach.trackWin();
+    }
+  }, [status.kind]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // ── Helpers ───────────────────────────────────────────────────────────────────
 

@@ -1,16 +1,21 @@
 'use client';
 
+import { useState, useMemo } from 'react';
 import Link from 'next/link';
 import { useOpenRooms } from '@/hooks/useOpenRooms';
 import type { PublicRoomListItem } from 'shared';
 import { useI18n } from '@/components/providers/LanguageProvider';
+import { AvatarBubble } from '@/components/ui/AvatarBubble';
+import { getNameColorClass } from '@/lib/nameColors';
 
 /** Internal game IDs → i18n title keys (reuses lobby.games.*.title) */
 const GAME_TITLE_KEYS: Record<string, string> = {
-  tictactoe: 'lobby.games.tictactoe.title',
+  tictactoe:  'lobby.games.tictactoe.title',
   connect4:   'lobby.games.connect4.title',
   rps:        'lobby.games.rps.title',
   chess:      'lobby.games.chess.title',
+  battleship: 'lobby.games.battleship.title',
+  liarsbar:   'lobby.games.liarsbar.title',
 };
 
 function timeAgo(ts: number): string {
@@ -56,7 +61,12 @@ function RoomRow({ room }: { room: PublicRoomListItem }) {
     <tr className="border-t border-zinc-800 hover:bg-zinc-800/40 transition-colors">
       <td className="px-4 py-3 text-sm text-zinc-300">{gameLabel}</td>
       <td className="px-4 py-3 text-sm text-zinc-200 truncate max-w-[160px]">{displayName}</td>
-      <td className="px-4 py-3 text-sm text-zinc-400 font-mono truncate max-w-[120px]">{room.hostNickname}</td>
+      <td className="px-4 py-3">
+        <div className="flex items-center gap-1.5">
+          <AvatarBubble avatarId={room.hostAvatarId} avatarFrame={room.hostAvatarFrame} nickname={room.hostNickname} size="sm" cosmetics={room.hostCosmetics} />
+          <span className={`text-sm font-mono truncate max-w-[100px] ${getNameColorClass(room.hostCosmetics?.nameColor ?? room.hostNameColor) || 'text-zinc-400'}`}>{room.hostNickname}</span>
+        </div>
+      </td>
       <td className="px-4 py-3">
         <div className="flex items-center gap-2">
           <StatusBadge playerCount={room.playerCount} maxPlayers={room.maxPlayers} />
@@ -85,15 +95,23 @@ function RoomRow({ room }: { room: PublicRoomListItem }) {
   );
 }
 
-export function RoomsClient({ wsUrl }: { wsUrl: string }) {
+const GAME_FILTER_OPTIONS = ['all', 'tictactoe', 'connect4', 'rps', 'chess', 'battleship', 'liarsbar'] as const;
+
+export function RoomsClient({ wsUrl, initialGameFilter }: { wsUrl: string; initialGameFilter?: string }) {
   const { rooms, connected } = useOpenRooms(wsUrl);
   const { t } = useI18n();
+  const [gameFilter, setGameFilter] = useState<string>(initialGameFilter ?? 'all');
 
-  const joinableCount = rooms.filter((r) => r.playerCount > 0 && r.playerCount < r.maxPlayers).length;
+  const filtered = useMemo(
+    () => gameFilter === 'all' ? rooms : rooms.filter((r) => r.gameId === gameFilter),
+    [rooms, gameFilter],
+  );
 
-  const roomCountLabel = rooms.length === 0
+  const joinableCount = filtered.filter((r) => r.playerCount > 0 && r.playerCount < r.maxPlayers).length;
+
+  const roomCountLabel = filtered.length === 0
     ? t('rooms.noRooms')
-    : `${rooms.length} ${t('rooms.publicRoomsLabel')}${joinableCount > 0 ? ` · ${joinableCount} ${t('rooms.joinableLabel')}` : ''}`;
+    : `${filtered.length} ${t('rooms.publicRoomsLabel')}${joinableCount > 0 ? ` · ${joinableCount} ${t('rooms.joinableLabel')}` : ''}`;
 
   return (
     <div className="min-h-screen bg-zinc-950 text-zinc-100">
@@ -122,16 +140,31 @@ export function RoomsClient({ wsUrl }: { wsUrl: string }) {
         </div>
 
         <div className="flex flex-col gap-6">
-          {/* Header row */}
-          <div className="flex items-center justify-between">
-            <p className="text-sm text-zinc-500">{roomCountLabel}</p>
-            <div className="flex items-center gap-1.5 text-xs text-zinc-500">
-              <span className={`w-1.5 h-1.5 rounded-full ${connected ? 'bg-emerald-400 animate-pulse' : 'bg-zinc-600'}`} />
-              {connected ? t('common.live') : t('status.connecting')}
+          {/* Filter chips + status */}
+          <div className="flex items-center justify-between gap-4 flex-wrap">
+            <div className="flex gap-1 p-1 bg-zinc-800 rounded-lg flex-wrap">
+              {GAME_FILTER_OPTIONS.map((gf) => (
+                <button
+                  key={gf}
+                  onClick={() => setGameFilter(gf)}
+                  className={`px-3 py-1 text-xs rounded-md font-medium transition-colors ${
+                    gameFilter === gf ? 'bg-zinc-700 text-zinc-100' : 'text-zinc-500 hover:text-zinc-300'
+                  }`}
+                >
+                  {gf === 'all' ? 'All' : t(GAME_TITLE_KEYS[gf] ?? gf)}
+                </button>
+              ))}
+            </div>
+            <div className="flex items-center gap-3">
+              <p className="text-sm text-zinc-500">{roomCountLabel}</p>
+              <div className="flex items-center gap-1.5 text-xs text-zinc-500">
+                <span className={`w-1.5 h-1.5 rounded-full ${connected ? 'bg-emerald-400 animate-pulse' : 'bg-zinc-600'}`} />
+                {connected ? t('common.live') : t('status.connecting')}
+              </div>
             </div>
           </div>
 
-          {rooms.length === 0 ? (
+          {filtered.length === 0 ? (
             <div className="rounded-xl border border-zinc-800 bg-zinc-900/50 flex flex-col items-center justify-center py-20 gap-3 text-center">
               <span className="text-4xl text-zinc-700">⊞</span>
               <p className="text-zinc-500 text-sm">{t('rooms.emptyTitle')}</p>
@@ -150,7 +183,7 @@ export function RoomsClient({ wsUrl }: { wsUrl: string }) {
                   </tr>
                 </thead>
                 <tbody>
-                  {rooms.map((room) => (
+                  {filtered.map((room) => (
                     <RoomRow key={room.code} room={room} />
                   ))}
                 </tbody>

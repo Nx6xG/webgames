@@ -1,9 +1,13 @@
 'use client';
 
 import Link from 'next/link';
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { webRegistry } from '@/lib/gameRegistry';
 import type { WebGameEntry } from '@/lib/gameRegistry';
+import { loadLocalProfile } from '@/lib/localStats';
+import type { GameStat } from '@/lib/localStats';
+import { ACHIEVEMENTS } from '@/lib/achievements/definitions';
+import { loadUnlocked } from '@/lib/achievements/store';
 
 // ── Singleplayer card metadata ───────────────────────────────────────────────
 const SINGLEPLAYER_GAMES = [
@@ -66,6 +70,8 @@ import { GlobalChatWidget } from '@/components/chat/GlobalChatWidget';
 import { ProfileMenu } from '@/components/ProfileMenu';
 import { OnlineNavChip } from '@/components/social/OnlineNavChip';
 import { useI18n } from '@/components/providers/LanguageProvider';
+import { GameDetailsModal } from '@/components/games/GameDetailsModal';
+import type { GameModalData } from '@/components/games/GameDetailsModal';
 
 /** Maps internal category IDs (used as CSS-class keys) to i18n message keys. */
 const CATEGORY_TAG_KEYS: Record<string, string> = {
@@ -94,7 +100,180 @@ const CATEGORY_COLORS: Record<string, string> = {
   'bluff':        'bg-pink-900/40 text-pink-300 border-pink-800',
 };
 
-function SingleplayerCard({ game }: { game: typeof SINGLEPLAYER_GAMES[number] }) {
+// ── Per-game controls i18n keys ──────────────────────────────────────────────
+
+const GAME_CONTROLS_KEY: Record<string, string> = {
+  tictactoe:       'modal.controls.tictactoe',
+  connect4:        'modal.controls.connect4',
+  rps:             'modal.controls.rps',
+  chess:           'modal.controls.chess',
+  battleship:      'modal.controls.battleship',
+  liarsbar:        'modal.controls.liarsbar',
+  '2048':          'modal.controls.2048',
+  snake:           'modal.controls.snake',
+  'tictactoe-solo':'modal.controls.tictactoe',
+  sudoku:          'modal.controls.sudoku',
+  tetris:          'modal.controls.tetris',
+  flappy:          'modal.controls.flappy',
+};
+
+// ── Badge system ─────────────────────────────────────────────────────────────
+
+type BadgeType = 'mostWins' | 'bestWinrate' | 'hardGame' | 'favorite' | 'new';
+
+interface BadgeInfo {
+  type: BadgeType;
+  icon: string;
+  labelKey: string;
+  tooltipKey: string;
+  colors: string;
+}
+
+const BADGE_CONFIG: Record<BadgeType, Omit<BadgeInfo, 'type'>> = {
+  mostWins:     { icon: '🏆', labelKey: 'cards.badge.mostWins',     tooltipKey: 'cards.badge.mostWinsTooltip',     colors: 'bg-amber-500/15 text-amber-400 border-amber-500/30' },
+  bestWinrate:  { icon: '🎯', labelKey: 'cards.badge.bestWinrate',  tooltipKey: 'cards.badge.bestWinrateTooltip',  colors: 'bg-emerald-500/15 text-emerald-400 border-emerald-500/30' },
+  hardGame:     { icon: '💀', labelKey: 'cards.badge.hardGame',     tooltipKey: 'cards.badge.hardGameTooltip',     colors: 'bg-rose-500/15 text-rose-300 border-rose-500/30' },
+  favorite:     { icon: '⭐', labelKey: 'cards.badge.favorite',     tooltipKey: 'cards.badge.favoriteTooltip',     colors: 'bg-yellow-500/15 text-yellow-400 border-yellow-500/30' },
+  new:          { icon: '🧪', labelKey: 'cards.badge.new',          tooltipKey: 'cards.badge.newTooltip',          colors: 'bg-sky-500/15 text-sky-400 border-sky-500/30' },
+};
+
+const WINRATE_MIN_PLAYS = 5;
+
+/** Compute a single badge per game from stats. Only one badge per card; each special badge assigned to at most one game. */
+function computeBadges(statsMap: Map<string, CardOverlayData>): Map<string, BadgeInfo> {
+  const badges = new Map<string, BadgeInfo>();
+  const entries = [...statsMap.entries()];
+
+  // Find best candidates
+  let topWinsId: string | null = null;
+  let topWins = 0;
+  let topWinrateId: string | null = null;
+  let topWinrate = 0;
+  let topLossesId: string | null = null;
+  let topLosses = 0;
+  let topPlaysId: string | null = null;
+  let topPlays = 0;
+
+  for (const [id, s] of entries) {
+    if (s.wins > topWins) { topWins = s.wins; topWinsId = id; }
+    if (s.plays >= WINRATE_MIN_PLAYS && s.winRate > topWinrate) { topWinrate = s.winRate; topWinrateId = id; }
+    const losses = s.plays - s.wins;
+    if (s.plays >= WINRATE_MIN_PLAYS && losses > topLosses) { topLosses = losses; topLossesId = id; }
+    if (s.plays > topPlays) { topPlays = s.plays; topPlaysId = id; }
+  }
+
+  // Assign unique badges by priority: mostWins > bestWinrate > hardGame > favorite
+  const claimed = new Set<string>();
+
+  if (topWinsId && topWins > 0) {
+    badges.set(topWinsId, { type: 'mostWins', ...BADGE_CONFIG.mostWins });
+    claimed.add(topWinsId);
+  }
+  if (topWinrateId && topWinrate > 0 && !claimed.has(topWinrateId)) {
+    badges.set(topWinrateId, { type: 'bestWinrate', ...BADGE_CONFIG.bestWinrate });
+    claimed.add(topWinrateId);
+  }
+  if (topLossesId && topLosses > 0 && !claimed.has(topLossesId)) {
+    badges.set(topLossesId, { type: 'hardGame', ...BADGE_CONFIG.hardGame });
+    claimed.add(topLossesId);
+  }
+  if (topPlaysId && topPlays > 0 && !claimed.has(topPlaysId)) {
+    badges.set(topPlaysId, { type: 'favorite', ...BADGE_CONFIG.favorite });
+    claimed.add(topPlaysId);
+  }
+
+  // "New" badge for games with 0 plays
+  for (const [id, s] of entries) {
+    if (s.plays === 0 && !claimed.has(id)) {
+      badges.set(id, { type: 'new', ...BADGE_CONFIG.new });
+    }
+  }
+
+  return badges;
+}
+
+// ── Per-game overlay data ────────────────────────────────────────────────────
+
+interface CardOverlayData {
+  plays: number;
+  wins: number;
+  winRate: number;
+  bestScore: number | null;
+  bestTime: number | null;
+  bestTile: number | null;
+  bestLines: number | null;
+  achUnlocked: number;
+  achTotal: number;
+}
+
+function formatTime(sec: number): string {
+  const m = Math.floor(sec / 60);
+  const s = Math.floor(sec % 60);
+  return `${m}:${s.toString().padStart(2, '0')}`;
+}
+
+/** Shared overlay rendered inside each card. */
+function StatsOverlay({ data, t }: { data: CardOverlayData | null; t: (k: string) => string }) {
+  const hasAny = data && (data.plays > 0 || data.bestScore !== null || data.bestTime !== null);
+
+  return (
+    <div className="absolute inset-x-0 top-0 z-10 rounded-t-2xl border-b border-zinc-700/60 bg-zinc-950/90 backdrop-blur-sm px-3 py-2 opacity-0 -translate-y-1 group-hover:opacity-100 group-hover:translate-y-0 group-focus-within:opacity-100 group-focus-within:translate-y-0 transition-all duration-200 pointer-events-none">
+      <p className="text-[9px] text-zinc-500 uppercase tracking-wider font-semibold mb-1">
+        {t('cards.progressTitle')}
+      </p>
+
+      {!hasAny ? (
+        <p className="text-[10px] text-zinc-600 italic">{t('cards.noStats')}</p>
+      ) : (
+        <div className="flex items-center gap-2 text-[10px] text-zinc-400 tabular-nums flex-wrap">
+          {data.plays > 0 && (
+            <>
+              <span>🎮 {data.plays}</span>
+              <span className="text-zinc-700">|</span>
+              <span>🏆 {data.wins}</span>
+              <span className="text-zinc-700">|</span>
+              <span>{data.winRate}%</span>
+            </>
+          )}
+          {data.achTotal > 0 && (
+            <>
+              {data.plays > 0 && <span className="text-zinc-700">|</span>}
+              <span className={data.achUnlocked > 0 ? 'text-yellow-400' : ''}>⭐ {data.achUnlocked}/{data.achTotal}</span>
+            </>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ── Card components ──────────────────────────────────────────────────────────
+
+function CardBadge({ badge, t }: { badge: BadgeInfo | null; t: (k: string) => string }) {
+  if (!badge) return null;
+  return (
+    <div className="absolute top-3 right-3 z-20 group/badge">
+      <span className={`text-[10px] px-2 py-0.5 rounded-full border backdrop-blur-sm font-medium ${badge.colors}`}>
+        {badge.icon} {t(badge.labelKey)}
+      </span>
+      <div className="pointer-events-none absolute bottom-full left-1/2 -translate-x-1/2 mb-2 whitespace-nowrap rounded-md bg-black/80 px-2 py-1 text-[10px] text-white opacity-0 transition group-hover/badge:opacity-100 backdrop-blur shadow-lg z-40">
+        {t(badge.tooltipKey)}
+      </div>
+    </div>
+  );
+}
+
+function SingleplayerCard({
+  game,
+  overlayData,
+  badge,
+  onOpenModal,
+}: {
+  game: typeof SINGLEPLAYER_GAMES[number];
+  overlayData: CardOverlayData | null;
+  badge: BadgeInfo | null;
+  onOpenModal?: () => void;
+}) {
   const { t } = useI18n();
   const [bestScore, setBestScore] = useState<number | null>(null);
 
@@ -110,7 +289,11 @@ function SingleplayerCard({ game }: { game: typeof SINGLEPLAYER_GAMES[number] })
   }, [game.bestScoreKey]);
 
   return (
-    <div className="rounded-2xl border border-[var(--cardBorder)] bg-[var(--card)] p-6 hover:border-indigo-700/60 hover:bg-zinc-800/50 transition-all duration-200">
+    <div
+      className="group relative rounded-2xl border border-[var(--cardBorder)] bg-[var(--card)] p-6 hover:border-purple-500/50 hover:bg-zinc-800/50 hover:scale-[1.02] hover:shadow-xl transition-all duration-200 ease-out overflow-hidden cursor-pointer"
+      onClick={onOpenModal}
+    >
+      <CardBadge badge={badge} t={t} />
       <div className="w-14 h-14 rounded-xl border bg-violet-950 border-violet-900 flex items-center justify-center mb-5 text-2xl select-none">
         {game.emoji}
       </div>
@@ -138,15 +321,28 @@ function SingleplayerCard({ game }: { game: typeof SINGLEPLAYER_GAMES[number] })
       </div>
       <Link
         href={game.href}
-        className="block w-full py-2 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-white text-sm font-semibold text-center transition-colors"
+        className="relative z-10 block w-full py-2 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-white text-sm font-semibold text-center transition-colors"
+        onClick={(e) => e.stopPropagation()}
       >
         {t('lobby.play')}
       </Link>
+
+      <StatsOverlay data={overlayData} t={t} />
     </div>
   );
 }
 
-function GameCard({ entry }: { entry: WebGameEntry }) {
+function GameCard({
+  entry,
+  overlayData,
+  badge,
+  onOpenModal,
+}: {
+  entry: WebGameEntry;
+  overlayData: CardOverlayData | null;
+  badge: BadgeInfo | null;
+  onOpenModal?: () => void;
+}) {
   const { manifest: game, titleKey, descKey, comingSoon } = entry;
   const { t } = useI18n();
 
@@ -174,7 +370,11 @@ function GameCard({ entry }: { entry: WebGameEntry }) {
   }
 
   return (
-    <div className="rounded-2xl border border-[var(--cardBorder)] bg-[var(--card)] p-6 hover:border-indigo-700/60 hover:bg-zinc-800/50 transition-all duration-200">
+    <div
+      className="group relative rounded-2xl border border-[var(--cardBorder)] bg-[var(--card)] p-6 hover:border-purple-500/50 hover:bg-zinc-800/50 hover:scale-[1.02] hover:shadow-xl transition-all duration-200 ease-out overflow-hidden cursor-pointer"
+      onClick={onOpenModal}
+    >
+      <CardBadge badge={badge} t={t} />
       <div className="w-14 h-14 rounded-xl border bg-indigo-950 border-indigo-900 flex items-center justify-center mb-5 text-2xl">⊞</div>
       <h3 className="font-bold text-lg mb-1">{t(titleKey)}</h3>
       <p className="text-sm mb-4 leading-relaxed text-zinc-400">{t(descKey)}</p>
@@ -188,7 +388,7 @@ function GameCard({ entry }: { entry: WebGameEntry }) {
           </span>
         ))}
       </div>
-      <div className="flex gap-2">
+      <div className="relative z-10 flex gap-2" onClick={(e) => e.stopPropagation()}>
         <Link
           href={`/games/${game.routeSlug}?quickplay=true`}
           className="flex-1 py-2 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-white text-sm font-semibold text-center transition-colors"
@@ -203,9 +403,13 @@ function GameCard({ entry }: { entry: WebGameEntry }) {
           {t('lobby.customGame')}
         </Link>
       </div>
+
+      <StatsOverlay data={overlayData} t={t} />
     </div>
   );
 }
+
+// ── Page ─────────────────────────────────────────────────────────────────────
 
 type GameFilter = 'all' | 'multiplayer' | 'singleplayer';
 
@@ -219,8 +423,99 @@ export default function HomePage() {
   const { t } = useI18n();
   const [filter, setFilter] = useState<GameFilter>('all');
 
+  // Modal state
+  const [modalData, setModalData] = useState<GameModalData | null>(null);
+
+  // Load all stats once on mount (SSR-safe: runs only on client)
+  const [statsMap, setStatsMap] = useState<Map<string, CardOverlayData> | null>(null);
+  const [badgeMap, setBadgeMap] = useState<Map<string, BadgeInfo>>(new Map());
+  const [favoriteGameId, setFavoriteGameId] = useState<string | null>(null);
+  const [unlockedSet, setUnlockedSet] = useState<Set<string>>(new Set());
+
+  useEffect(() => {
+    const profile = loadLocalProfile();
+    const unlocked = loadUnlocked();
+    setUnlockedSet(unlocked);
+
+    // Count achievements per game tag
+    const achTotalByTag = new Map<string, number>();
+    const achUnlockedByTag = new Map<string, number>();
+    for (const def of ACHIEVEMENTS) {
+      const tag = def.tags?.[0];
+      if (!tag) continue;
+      achTotalByTag.set(tag, (achTotalByTag.get(tag) ?? 0) + 1);
+      if (unlocked.has(def.id)) {
+        achUnlockedByTag.set(tag, (achUnlockedByTag.get(tag) ?? 0) + 1);
+      }
+    }
+
+    const map = new Map<string, CardOverlayData>();
+    for (const gs of profile.perGame) {
+      const tag = gs.gameId;
+      map.set(tag, {
+        plays: gs.plays,
+        wins: gs.wins,
+        winRate: gs.winRate,
+        bestScore: gs.bestScore,
+        bestTime: gs.bestTime,
+        bestTile: gs.bestTile,
+        bestLines: gs.bestLines,
+        achUnlocked: achUnlockedByTag.get(tag) ?? 0,
+        achTotal: achTotalByTag.get(tag) ?? 0,
+      });
+    }
+    setStatsMap(map);
+    setBadgeMap(computeBadges(map));
+    setFavoriteGameId(profile.favoriteGameId);
+  }, []);
+
   const showMultiplayer  = filter !== 'singleplayer';
   const showSingleplayer = filter !== 'multiplayer';
+
+  function openMultiplayerModal(entry: WebGameEntry) {
+    const s = statsMap?.get(entry.manifest.id);
+    setModalData({
+      gameId: entry.manifest.id,
+      emoji: '⊞',
+      titleKey: entry.titleKey,
+      descKey: entry.descKey,
+      tags: entry.manifest.categories,
+      controlsKey: GAME_CONTROLS_KEY[entry.manifest.id] ?? 'modal.controls.default',
+      mode: 'multiplayer',
+      playHref: `/games/${entry.manifest.routeSlug}?quickplay=true`,
+      customHref: `/games/${entry.manifest.routeSlug}`,
+      plays: s?.plays ?? 0,
+      wins: s?.wins ?? 0,
+      winRate: s?.winRate ?? 0,
+      bestScore: s?.bestScore ?? null,
+      bestTime: s?.bestTime ?? null,
+      bestTile: s?.bestTile ?? null,
+      bestLines: s?.bestLines ?? null,
+      isFavorite: favoriteGameId === entry.manifest.id,
+    });
+  }
+
+  function openSingleplayerModal(game: typeof SINGLEPLAYER_GAMES[number]) {
+    const s = statsMap?.get(game.id);
+    setModalData({
+      gameId: game.id,
+      emoji: game.emoji,
+      titleKey: game.titleKey,
+      descKey: game.descKey,
+      tags: game.tags,
+      controlsKey: GAME_CONTROLS_KEY[game.id] ?? 'modal.controls.default',
+      mode: 'singleplayer',
+      playHref: game.href,
+      plays: s?.plays ?? 0,
+      wins: s?.wins ?? 0,
+      winRate: s?.winRate ?? 0,
+      bestScore: s?.bestScore ?? null,
+      bestTime: s?.bestTime ?? null,
+      bestTile: s?.bestTile ?? null,
+      bestLines: s?.bestLines ?? null,
+      isFavorite: favoriteGameId === game.id,
+    });
+  }
 
   return (
     <main className="min-h-screen bg-[var(--bg)] text-[var(--fg)]">
@@ -234,9 +529,6 @@ export default function HomePage() {
           <nav className="ml-auto flex items-center gap-4">
             <Link href="/rooms" className="text-sm text-zinc-400 hover:text-zinc-100 transition-colors">
               {t('nav.rooms')}
-            </Link>
-            <Link href="/leaderboard" className="text-sm text-zinc-400 hover:text-zinc-100 transition-colors">
-              {t('nav.leaderboard')}
             </Link>
             <div className="w-px h-4 bg-zinc-700 shrink-0" aria-hidden />
             <OnlineNavChip />
@@ -288,7 +580,13 @@ export default function HomePage() {
           </h2>
           <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-4">
             {Object.values(webRegistry).map((entry) => (
-              <GameCard key={entry.manifest.id} entry={entry} />
+              <GameCard
+                key={entry.manifest.id}
+                entry={entry}
+                overlayData={statsMap?.get(entry.manifest.id) ?? null}
+                badge={badgeMap.get(entry.manifest.id) ?? null}
+                onOpenModal={() => openMultiplayerModal(entry)}
+              />
             ))}
           </div>
         </section>
@@ -302,13 +600,43 @@ export default function HomePage() {
           </h2>
           <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-4">
             {SINGLEPLAYER_GAMES.map((game) => (
-              <SingleplayerCard key={game.id} game={game} />
+              <SingleplayerCard
+                key={game.id}
+                game={game}
+                overlayData={statsMap?.get(game.id) ?? null}
+                badge={badgeMap.get(game.id) ?? null}
+                onOpenModal={() => openSingleplayerModal(game)}
+              />
             ))}
           </div>
         </section>
       )}
 
+      {/* Footer */}
+      <footer className="border-t border-[var(--cardBorder)] py-6">
+        <div className="max-w-5xl mx-auto px-6 flex items-center justify-between text-xs text-zinc-600">
+          <span>Web Games</span>
+          <a
+            href="https://buymeacoffee.com/nx6xg?status=1"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="text-zinc-500 hover:text-zinc-300 transition-colors flex items-center gap-1.5"
+          >
+            <span>☕</span>
+            {t('support.label')}
+          </a>
+        </div>
+      </footer>
+
       <GlobalChatWidget />
+
+      {modalData && (
+        <GameDetailsModal
+          data={modalData}
+          unlocked={unlockedSet}
+          onClose={() => setModalData(null)}
+        />
+      )}
     </main>
   );
 }

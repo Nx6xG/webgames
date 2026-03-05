@@ -8,6 +8,7 @@ import {
   keepPlaying as engineKeepPlaying,
 } from './engine';
 import type { Direction, GameState, HighscoreEntry, Tile } from './types';
+import { useAchievements } from '@/hooks/useAchievements';
 
 // ── Best-score persistence ────────────────────────────────────────────────────
 
@@ -113,6 +114,8 @@ function TileView({ tile }: { tile: Tile }) {
 // ── Component ─────────────────────────────────────────────────────────────────
 
 export function Game2048() {
+  const ach = useAchievements('2048');
+
   // Initialise with best=0 to avoid SSR/hydration mismatch;
   // the real persisted value is loaded after first mount.
   const [state, setState]           = useState<GameState>(() => createInitialState(0));
@@ -135,6 +138,12 @@ export function Game2048() {
   useEffect(() => {
     saveBest(state.best);
   }, [state.best]);
+
+  // ── Achievement tracking ──────────────────────────────────────────────────
+  useEffect(() => {
+    if (state.moves === 1) ach.trackPlay();
+    if (state.status === 'won') ach.trackWin();
+  }, [state.moves, state.status]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // ── Save highscore when the game ends ───────────────────────────────────────
   useEffect(() => {
@@ -162,7 +171,8 @@ export function Game2048() {
     startTimeRef.current = Date.now();
     savedRef.current     = false;
     setState((prev) => createInitialState(prev.best));
-  }, []);
+    ach.reset();
+  }, [ach]);
 
   const handleClearHighscores = useCallback(() => {
     deleteHighscores();

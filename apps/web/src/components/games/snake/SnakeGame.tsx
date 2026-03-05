@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { createInitialState, changeDirection, step, GRID_SIZE, TICK_MS } from './engine';
 import type { Direction, GameState, SnakeHighscoreEntry } from './types';
+import { useAchievements } from '@/hooks/useAchievements';
 
 // ── Best-score persistence ─────────────────────────────────────────────────────
 
@@ -106,6 +107,7 @@ function FoodVisual() {
 // ── Component ──────────────────────────────────────────────────────────────────
 
 export function SnakeGame() {
+  const ach = useAchievements('snake');
   const [state, setState]           = useState<GameState>(() => createInitialState(0));
   const [phase, setPhase]           = useState<Phase>('countdown');
   const [cdNum, setCdNum]           = useState(3); // 3 → 2 → 1 → 0 (displayed as "GO")
@@ -157,6 +159,12 @@ export function SnakeGame() {
     const id = setInterval(() => setState(prev => step(prev)), tickMs);
     return () => clearInterval(id);
   }, [phase, speedLevel]);
+
+  // ── Achievement tracking ──────────────────────────────────────────────────
+  useEffect(() => {
+    if (phase === 'running') ach.trackPlay();
+    if (phase === 'countdown') ach.reset();
+  }, [phase]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // ── Transition to over ────────────────────────────────────────────────────────
   useEffect(() => {

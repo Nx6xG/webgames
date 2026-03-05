@@ -2,6 +2,10 @@
 
 import type { OnlineUser, PresenceActivity, GameId } from 'shared';
 import { useI18n } from '@/components/providers/LanguageProvider';
+import { AvatarBubble } from '@/components/ui/AvatarBubble';
+import { getNameColorClass } from '@/lib/nameColors';
+import { getCosmeticDef } from '@/lib/cosmetics';
+import { BadgeIcon } from '@/components/ui/BadgeIcon';
 
 const GAME_DISPLAY_NAMES: Record<GameId, string> = {
   tictactoe: 'Tic Tac Toe',
@@ -40,9 +44,11 @@ interface OnlineUsersPanelProps {
   onInvite?: (token: string, nickname: string) => void;
   /** When provided, shows a join button for users in public rooms. */
   onJoinRoom?: (gameId: GameId, roomCode: string) => void;
+  /** When provided, clicking a user's name/avatar opens their profile. */
+  onViewProfile?: (user: OnlineUser) => void;
 }
 
-export function OnlineUsersPanel({ users, myToken, variant = 'card', onInvite, onJoinRoom }: OnlineUsersPanelProps) {
+export function OnlineUsersPanel({ users, myToken, variant = 'card', onInvite, onJoinRoom, onViewProfile }: OnlineUsersPanelProps) {
   const { t } = useI18n();
 
   const list = (
@@ -55,15 +61,26 @@ export function OnlineUsersPanel({ users, myToken, variant = 'card', onInvite, o
             const isMe = u.playerToken === myToken;
             const act = u.activity;
             const publicRoom = act?.kind === 'room' && act.isPublic === true ? act : null;
+            const clickable = !!onViewProfile;
             return (
               <li key={u.playerToken} className="flex items-start gap-2 min-w-0">
-                <span className="w-1.5 h-1.5 rounded-full bg-emerald-500/70 shrink-0 mt-1.5" aria-hidden />
-                <div className="flex-1 min-w-0">
-                  <span className={`text-sm truncate block ${isMe ? 'text-indigo-300 font-medium' : 'text-zinc-300'}`}>
-                    {u.nickname}
-                  </span>
-                  <ActivityLabel activity={u.activity} t={t} />
-                </div>
+                <button
+                  type="button"
+                  onClick={() => onViewProfile?.(u)}
+                  disabled={!clickable}
+                  className={`flex items-start gap-2 min-w-0 flex-1 text-left ${clickable ? 'cursor-pointer hover:bg-zinc-800/50 -mx-1 px-1 py-0.5 rounded-lg transition-colors' : ''}`}
+                >
+                  <AvatarBubble avatarId={u.avatarId} avatarFrame={u.avatarFrame} nickname={u.nickname} size="sm" className="mt-0.5 shrink-0" cosmetics={u.cosmetics} />
+                  <div className="flex-1 min-w-0">
+                    <span className={`text-sm truncate block ${isMe ? 'text-indigo-300 font-medium' : (getNameColorClass(u.cosmetics?.nameColor ?? u.nameColor) || 'text-zinc-300')}`}>
+                      {u.nickname}
+                      {u.cosmetics?.badges?.slice(0, 3).map((id) => (
+                        <BadgeIcon key={id} badgeId={id} size="sm" />
+                      ))}
+                    </span>
+                    <ActivityLabel activity={u.activity} t={t} />
+                  </div>
+                </button>
                 {isMe ? (
                   <span className="shrink-0 text-xs text-zinc-600 mt-0.5">{t('online.you')}</span>
                 ) : publicRoom && onJoinRoom ? (
