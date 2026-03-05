@@ -96,7 +96,7 @@ export function PatchNotesDialog({ content, open, onClose }: PatchNotesDialogPro
           className={[
             'pointer-events-auto',
             'w-full max-w-[780px]',
-            'max-h-[72vh]',
+            'max-h-[85vh]',
             'flex flex-col',
             'bg-zinc-950 border border-zinc-800/80',
             'rounded-2xl shadow-[0_24px_80px_rgba(0,0,0,0.6)]',
@@ -136,23 +136,11 @@ export function PatchNotesDialog({ content, open, onClose }: PatchNotesDialogPro
             </div>
           </div>
 
-          {/* ── Scrollable content with fade shadows ─────────────── */}
-          <div className="relative flex-1 min-h-0">
-            {/* Top fade */}
-            <div
-              className="pointer-events-none absolute inset-x-0 top-0 h-5 z-10 bg-gradient-to-b from-zinc-950 to-transparent"
-              aria-hidden="true"
-            />
-
-            <div className="h-full overflow-y-auto px-6 py-5 scroll-smooth">
+          {/* ── Scrollable content ─────────────────────────────────── */}
+          <div className="flex-1 min-h-0 overflow-y-auto scroll-smooth">
+            <div className="px-6 pt-5 pb-14">
               <Markdown components={mdComponents}>{content}</Markdown>
             </div>
-
-            {/* Bottom fade */}
-            <div
-              className="pointer-events-none absolute inset-x-0 bottom-0 h-8 z-10 bg-gradient-to-t from-zinc-950 to-transparent"
-              aria-hidden="true"
-            />
           </div>
 
           {/* ── Footer ─────────────────────────────────────────── */}

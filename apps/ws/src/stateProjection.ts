@@ -116,12 +116,21 @@ function projectLiarsBar(state: LiarsBarState, ctx: ViewerCtx): LiarsBarState {
     ? { ...state.lastClaim, cards: [] }
     : null;
 
-  // Strip roulette bulletPos and rngSeed (anti-cheat)
+  // Strip bulletPos from per-player revolvers (anti-cheat: only expose cylinderPos)
+  let projectedRevolvers: Record<string, { cylinderPos: number; bulletPos: number }> | undefined;
+  if (state.revolvers) {
+    projectedRevolvers = {};
+    for (const [key, rv] of Object.entries(state.revolvers)) {
+      projectedRevolvers[key] = { cylinderPos: rv.cylinderPos, bulletPos: -1 };
+    }
+  }
+
+  // Legacy single roulette (backward compat for mid-game migration)
   const projectedRoulette = state.roulette
     ? { cylinderPos: state.roulette.cylinderPos, bulletPos: -1 }
     : undefined;
 
-  const base = { ...state, deck: [], discard: [], lastClaim: projectedClaim, rngSeed: 0, roulette: projectedRoulette };
+  const base = { ...state, deck: [], discard: [], lastClaim: projectedClaim, rngSeed: 0, revolvers: projectedRevolvers, roulette: projectedRoulette };
 
   if (ctx.isSpectator || ctx.playerIndex === null) {
     return { ...base, hands: emptyHands };

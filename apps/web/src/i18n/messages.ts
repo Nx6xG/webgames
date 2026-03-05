@@ -325,6 +325,12 @@ export const messages: Record<Lang, Record<string, string>> = {
     'tetris.emptyHighscores':      'Noch keine Einträge.',
     'sudoku.notes':                'Notizen',
     'sudoku.notesHint':            'Notizen an — Zahlen toggeln Kandidaten · N zum Wechseln',
+    'sudoku.lives':                'Leben',
+    'sudoku.life_lost':            'Falsch – 1 Leben verloren',
+    'sudoku.game_over':            'Game Over',
+    'sudoku.no_lives':             'Keine Leben mehr übrig.',
+    'sudoku.try_again':            'Nochmal',
+    'sudoku.new_puzzle':           'Neues Rätsel',
 
     // ── Liar's Deck ──────────────────────────────────────────────────────────
     'liarsbar.play':               'Spielen',
@@ -1102,6 +1108,12 @@ export const messages: Record<Lang, Record<string, string>> = {
     'tetris.emptyHighscores':      'No runs yet.',
     'sudoku.notes':                'Notes',
     'sudoku.notesHint':            'Notes on — numbers toggle candidates · N to switch',
+    'sudoku.lives':                'Lives',
+    'sudoku.life_lost':            'Wrong – 1 life lost',
+    'sudoku.game_over':            'Game Over',
+    'sudoku.no_lives':             'No lives remaining.',
+    'sudoku.try_again':            'Try Again',
+    'sudoku.new_puzzle':           'New Puzzle',
 
     // ── Liar's Deck ──────────────────────────────────────────────────────────
     'liarsbar.play':               'Play',

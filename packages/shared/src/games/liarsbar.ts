@@ -144,7 +144,13 @@ export interface LiarsBarState {
   /** Seeded RNG state (uint32). Used for deterministic randomness. */
   rngSeed: number;
 
-  /** Revolver state — only present in roulette mode. */
+  /** Per-player revolver states — only present in roulette mode. Keyed by player token. */
+  revolvers?: Record<string, LdRouletteState>;
+
+  /**
+   * @deprecated Single shared revolver. Kept for backward compat migration only.
+   * New games use `revolvers` (per-player). Ignored if `revolvers` is present.
+   */
   roulette?: LdRouletteState;
 
   /** Last penalty result — shown in UI, cleared on next normal action. */
@@ -221,14 +227,30 @@ function shuffle<T>(arr: T[]): T[] {
 
 interface PenaltyResult {
   players: LbPlayer[];
-  roulette?: LdRouletteState;
+  revolvers?: Record<string, LdRouletteState>;
   rngSeed: number;
   lastPenalty: LdLastPenalty;
 }
 
 /**
+ * Get the per-player revolver map. Handles migration from legacy single `roulette` field.
+ */
+function getRevolvers(state: LiarsBarState): Record<string, LdRouletteState> {
+  if (state.revolvers) return state.revolvers;
+  // Migrate from legacy shared roulette
+  if (state.roulette) {
+    const map: Record<string, LdRouletteState> = {};
+    for (const p of state.players) {
+      map[p.id] = { ...state.roulette };
+    }
+    return map;
+  }
+  return {};
+}
+
+/**
  * Resolve a penalty for a player. In classic mode, deducts a life.
- * In roulette mode, pulls the trigger (1/6 chance to fire).
+ * In roulette mode, pulls the trigger on THAT PLAYER'S revolver only.
  */
 function resolvePenalty(
   state: LiarsBarState,
@@ -248,8 +270,10 @@ function resolvePenalty(
     };
   }
 
-  // Roulette mode
-  const roul = state.roulette!;
+  // Roulette mode — per-player revolver
+  const revolverMap = getRevolvers(state);
+  const loserId = state.players[loserIdx].id;
+  const roul = revolverMap[loserId] ?? { cylinderPos: 0, bulletPos: 0 };
   const newCylinderPos = (roul.cylinderPos + 1) % 6;
   const fired = newCylinderPos === roul.bulletPos;
 
@@ -259,19 +283,21 @@ function resolvePenalty(
     return { ...p }; // survived — still 1 life
   });
 
-  let newRoulette: LdRouletteState = { ...roul, cylinderPos: newCylinderPos };
+  let newRoul: LdRouletteState = { ...roul, cylinderPos: newCylinderPos };
   let newSeed = state.rngSeed;
 
-  // If fired, re-initialize cylinder for next round (new random bullet position)
+  // If fired, re-initialize THIS player's cylinder (new random bullet position)
   if (fired) {
     let bp: number;
     [newSeed, bp] = seededRandInt(newSeed, 6);
-    newRoulette = { cylinderPos: 0, bulletPos: bp };
+    newRoul = { cylinderPos: 0, bulletPos: bp };
   }
+
+  const newRevolvers = { ...revolverMap, [loserId]: newRoul };
 
   return {
     players: newPlayers,
-    roulette: newRoulette,
+    revolvers: newRevolvers,
     rngSeed: newSeed,
     lastPenalty: { playerIndex: loserIdx, fired, reason },
   };
@@ -382,7 +408,9 @@ export function createInitialState(
     mode,
     maxLives,
     rngSeed,
-    roulette: mode === 'roulette' ? { cylinderPos: 0, bulletPos: 0 } : undefined,
+    revolvers: mode === 'roulette'
+      ? Object.fromEntries(playerIds.map(id => [id, { cylinderPos: 0, bulletPos: 0 }]))
+      : undefined,
   };
 }
 
@@ -415,12 +443,16 @@ function dealAndStart(state: LiarsBarState): LiarsBarState {
   let startIdx: number;
   [seed, startIdx] = seededRandInt(seed, state.players.length);
 
-  // For roulette: pick random bullet position
-  let roulette = state.roulette;
+  // For roulette: pick independent random bullet position per player
+  let revolvers = state.revolvers;
   if (state.mode === 'roulette') {
-    let bp: number;
-    [seed, bp] = seededRandInt(seed, 6);
-    roulette = { cylinderPos: 0, bulletPos: bp };
+    const rv: Record<string, LdRouletteState> = {};
+    for (const p of state.players) {
+      let bp: number;
+      [seed, bp] = seededRandInt(seed, 6);
+      rv[p.id] = { cylinderPos: 0, bulletPos: bp };
+    }
+    revolvers = rv;
   }
 
   return {
@@ -440,7 +472,8 @@ function dealAndStart(state: LiarsBarState): LiarsBarState {
     status: 'ongoing',
     nextCardId: nid,
     rngSeed: seed,
-    roulette,
+    revolvers,
+    roulette: undefined,
     lastPenalty: undefined,
     players: state.players.map((p) => ({
       ...p,
@@ -615,7 +648,8 @@ function handleCall(
       winner: winnerId,
       status: 'win',
       rngSeed: penalty.rngSeed,
-      roulette: penalty.roulette ?? state.roulette,
+      revolvers: penalty.revolvers ?? state.revolvers,
+      roulette: undefined,
       lastPenalty: penalty.lastPenalty,
     };
   }
@@ -660,7 +694,8 @@ function handleCall(
     lastReveal: reveal,
     nextCardId: nid,
     rngSeed: penalty.rngSeed,
-    roulette: penalty.roulette ?? state.roulette,
+    revolvers: penalty.revolvers ?? state.revolvers,
+    roulette: undefined,
     lastPenalty: penalty.lastPenalty,
   };
 }

@@ -1,11 +1,14 @@
 'use client';
 
-import { useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { generateSudoku } from './generator';
 import { emptyStats, loadStats, saveStats, totalGames, updateStats } from './stats';
 import type { Board, Difficulty, GamePhase } from './types';
 import type { SudokuStats } from './stats';
 import { useAchievements } from '@/hooks/useAchievements';
+import { useI18n } from '@/components/providers/LanguageProvider';
+
+const MAX_LIVES = 3;
 
 // ── Module-level helpers ───────────────────────────────────────────────────────
 
@@ -128,6 +131,7 @@ const DIFF_LABEL: Record<Difficulty, string> = {
 // ── Component ──────────────────────────────────────────────────────────────────
 
 export function SudokuGame() {
+  const { t } = useI18n();
   const ach = useAchievements('sudoku');
 
   // ── Config form state ─────────────────────────────────────────────────────────
@@ -146,6 +150,12 @@ export function SudokuGame() {
   // ── Notes state ───────────────────────────────────────────────────────────────
   const [notesMode, setNotesMode] = useState<boolean>(false);
   const [notes,     setNotes]     = useState<Notes>(emptyNotes);
+
+  // ── Lives state ─────────────────────────────────────────────────────────────
+  const [lives, setLives] = useState(MAX_LIVES);
+  const [shakeCell, setShakeCell] = useState<string | null>(null);   // "r,c" key
+  const [lifeLostToast, setLifeLostToast] = useState(false);
+  const [wrongCells, setWrongCells] = useState<Set<string>>(() => new Set());
 
   // ── Stats state ───────────────────────────────────────────────────────────────
   const [stats, setStats] = useState<SudokuStats>(emptyStats);
@@ -177,6 +187,42 @@ export function SudokuGame() {
     saveStats(newStats);
   }, [phase, difficulty, elapsedSec, stats]);
 
+  // ── Lives helpers ────────────────────────────────────────────────────────────
+  /** Check if placing `n` at (r,c) is wrong. If so, deduct a life and animate. */
+  const penalizeWrong = useCallback((r: number, c: number, n: number): boolean => {
+    if (n === solution[r][c]) return false;           // correct — no penalty
+    if (n === puzzle[r][c]) return false;              // same wrong value already there — no double-penalty
+    const key = `${r},${c}`;
+    setShakeCell(key);
+    setLifeLostToast(true);
+    setTimeout(() => setShakeCell(null), 500);
+    setTimeout(() => setLifeLostToast(false), 1800);
+    setLives(prev => {
+      const next = prev - 1;
+      if (next <= 0) setTimeout(() => setPhase('gameOver'), 60);
+      return next;
+    });
+    return true;
+  }, [solution, puzzle]);
+
+  /** Update wrongCells after placing value `n` at (r,c). Call AFTER penalizeWrong. */
+  const updateWrongMark = useCallback((r: number, c: number, n: number) => {
+    const key = `${r},${c}`;
+    if (n === solution[r][c]) {
+      // Correct → remove from wrong set
+      setWrongCells(prev => { const next = new Set(prev); next.delete(key); return next; });
+    } else {
+      // Wrong → add to wrong set
+      setWrongCells(prev => new Set(prev).add(key));
+    }
+  }, [solution]);
+
+  /** Remove cell from wrongCells when cleared. */
+  const clearWrongMark = useCallback((r: number, c: number) => {
+    const key = `${r},${c}`;
+    setWrongCells(prev => { const next = new Set(prev); next.delete(key); return next; });
+  }, []);
+
   // ── Keyboard input ────────────────────────────────────────────────────────────
   useEffect(() => {
     if (phase !== 'playing') return;
@@ -201,6 +247,8 @@ export function SudokuGame() {
           else nb[r][c].add(n);
           setNotes(nb);
         } else {
+          penalizeWrong(r, c, n);
+          updateWrongMark(r, c, n);
           const nb = puzzle.map(row => [...row]);
           nb[r][c] = n;
           setPuzzle(nb);
@@ -211,6 +259,7 @@ export function SudokuGame() {
         if (!selected) return;
         const [r, c] = selected;
         if (prefilled[r][c]) return;
+        clearWrongMark(r, c);
         const nb = puzzle.map(row => [...row]);
         nb[r][c] = 0;
         setPuzzle(nb);
@@ -225,7 +274,7 @@ export function SudokuGame() {
 
     document.addEventListener('keydown', onKey);
     return () => document.removeEventListener('keydown', onKey);
-  }, [phase, selected, puzzle, prefilled, notesMode, notes]);
+  }, [phase, selected, puzzle, prefilled, notesMode, notes, penalizeWrong, updateWrongMark, clearWrongMark]);
 
   // ── Game actions ──────────────────────────────────────────────────────────────
 
@@ -244,6 +293,8 @@ export function SudokuGame() {
       setElapsedSec(0);
       setNotesMode(false);
       setNotes(emptyNotes());
+      setLives(MAX_LIVES);
+      setWrongCells(new Set());
       savedRef.current = false;
       setPhase('playing');
     }, 50);
@@ -257,6 +308,8 @@ export function SudokuGame() {
     setNotes(emptyNotes());
     setSelected(null);
     setElapsedSec(0);
+    setLives(MAX_LIVES);
+    setWrongCells(new Set());
     setPhase('playing');
   }
 
@@ -288,6 +341,8 @@ export function SudokuGame() {
       else nb[r][c].add(n);
       setNotes(nb);
     } else {
+      penalizeWrong(r, c, n);
+      updateWrongMark(r, c, n);
       const nb = puzzle.map(row => [...row]);
       nb[r][c] = n;
       setPuzzle(nb);
@@ -300,6 +355,7 @@ export function SudokuGame() {
     if (phase !== 'playing' || !selected) return;
     const [r, c] = selected;
     if (prefilled[r][c]) return;
+    clearWrongMark(r, c);
     const nb = puzzle.map(row => [...row]);
     nb[r][c] = 0;
     setPuzzle(nb);
@@ -309,6 +365,7 @@ export function SudokuGame() {
     if (phase !== 'playing' || !selected) return;
     const [r, c] = selected;
     if (prefilled[r][c]) return;
+    clearWrongMark(r, c);
     const hintVal = solution[r][c];
     const nb = puzzle.map(row => [...row]);
     nb[r][c] = hintVal;
@@ -388,6 +445,14 @@ export function SudokuGame() {
           <span className="text-xs font-semibold uppercase tracking-wider px-2 py-0.5 rounded-full border border-zinc-700 text-zinc-400">
             {DIFF_LABEL[difficulty]}
           </span>
+          {/* Lives */}
+          <span className="flex items-center gap-0.5 text-sm" aria-label={`${lives} ${t('sudoku.lives')}`}>
+            {Array.from({ length: MAX_LIVES }, (_, i) => (
+              <span key={i} className={`transition-all duration-300 ${i < lives ? 'text-rose-500 scale-100' : 'text-zinc-700 scale-75'}`}>
+                ♥
+              </span>
+            ))}
+          </span>
           <span className="text-sm font-mono tabular-nums text-zinc-300 min-w-[3.5rem] text-right">
             {formatTime(elapsedSec)}
           </span>
@@ -407,6 +472,8 @@ export function SudokuGame() {
             selected={selected}
             conflicts={conflicts}
             notes={notes}
+            shakeCell={shakeCell}
+            wrongCells={wrongCells}
             onCellClick={handleCellClick}
           />
 
@@ -433,7 +500,36 @@ export function SudokuGame() {
               </div>
             </div>
           )}
+
+          {/* Game Over overlay */}
+          {phase === 'gameOver' && (
+            <div className="absolute inset-0 rounded-xl bg-zinc-950/90 backdrop-blur-[2px] flex flex-col items-center justify-center gap-3 z-10">
+              <p className="text-3xl font-black text-rose-400">{t('sudoku.game_over')}</p>
+              <p className="text-sm text-zinc-400">{t('sudoku.no_lives')}</p>
+              <div className="flex gap-3 mt-2">
+                <button
+                  onClick={handleRestart}
+                  className="px-5 py-2 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-white text-sm font-semibold transition-colors"
+                >
+                  {t('sudoku.try_again')}
+                </button>
+                <button
+                  onClick={handleNewPuzzle}
+                  className="px-5 py-2 rounded-lg border border-zinc-700 hover:border-zinc-500 text-zinc-400 hover:text-zinc-200 text-sm font-semibold transition-colors"
+                >
+                  {t('sudoku.new_puzzle')}
+                </button>
+              </div>
+            </div>
+          )}
         </div>
+
+        {/* Life lost toast */}
+        {lifeLostToast && (
+          <div className="flex items-center justify-center gap-1.5 py-1.5 px-3 rounded-lg bg-rose-950/60 border border-rose-800/40 text-rose-400 text-xs font-semibold animate-pulse">
+            <span>♥</span> {t('sudoku.life_lost')}
+          </div>
+        )}
 
         {/* Number pad */}
         <div className="flex flex-col gap-2">
@@ -532,10 +628,12 @@ interface BoardProps {
   selected:  [number, number] | null;
   conflicts: Set<string>;
   notes:     Notes;
+  shakeCell: string | null;
+  wrongCells: Set<string>;
   onCellClick: (r: number, c: number) => void;
 }
 
-function SudokuBoard({ puzzle, prefilled, selected, conflicts, notes, onCellClick }: BoardProps) {
+function SudokuBoard({ puzzle, prefilled, selected, conflicts, notes, shakeCell, wrongCells, onCellClick }: BoardProps) {
   return (
     // Outer container: 2px border + thick box gap (3px) via bg + rounded
     <div className="grid grid-cols-3 gap-[3px] bg-zinc-500 border-2 border-zinc-500 rounded overflow-hidden select-none">
@@ -553,6 +651,7 @@ function SudokuBoard({ puzzle, prefilled, selected, conflicts, notes, onCellClic
 
               const isSelected  = selected !== null && selected[0] === r && selected[1] === c;
               const isConflict  = conflicts.has(key);
+              const isWrong     = wrongCells.has(key);
               const isPre       = prefilled[r][c];
 
               let inRegion  = false;
@@ -568,28 +667,33 @@ function SudokuBoard({ puzzle, prefilled, selected, conflicts, notes, onCellClic
                 sameValue = v !== 0 && sv !== 0 && v === sv && !isSelected;
               }
 
-              // Background priority: selected > conflict > sameValue > inRegion > prefilled > normal
+              // Background priority: selected+wrong > selected > wrong > conflict > sameValue > inRegion > prefilled > normal
               const bg =
-                isSelected && isConflict ? 'bg-rose-900/70'  :
-                isSelected               ? 'bg-indigo-800/60' :
-                isConflict               ? 'bg-rose-950/80'   :
-                sameValue                ? 'bg-indigo-950/80' :
-                inRegion && isPre        ? 'bg-zinc-800'      :
-                inRegion                 ? 'bg-zinc-800/70'   :
-                isPre                    ? 'bg-zinc-850'      : 'bg-zinc-900';
+                isSelected && isWrong    ? 'bg-rose-900/70'    :
+                isSelected && isConflict ? 'bg-rose-900/70'    :
+                isSelected               ? 'bg-indigo-800/60'  :
+                isWrong                  ? 'bg-rose-950/60'    :
+                isConflict               ? 'bg-rose-950/80'    :
+                sameValue                ? 'bg-indigo-950/80'  :
+                inRegion && isPre        ? 'bg-zinc-800'       :
+                inRegion                 ? 'bg-zinc-800/70'    :
+                isPre                    ? 'bg-zinc-850'       : 'bg-zinc-900';
 
-              // Text style
+              // Text style — wrong cells always red
               const txt =
-                isConflict ? 'text-rose-400 font-bold' :
-                isPre      ? 'text-zinc-100 font-black' :
+                isWrong    ? 'text-rose-400 font-bold'    :
+                isConflict ? 'text-rose-400 font-bold'    :
+                isPre      ? 'text-zinc-100 font-black'   :
                 v !== 0    ? 'text-indigo-300 font-semibold' : '';
+
+              const isShaking = shakeCell === key;
 
               return (
                 <button
                   key={key}
                   onClick={() => onCellClick(r, c)}
                   aria-label={`Row ${r + 1} column ${c + 1}${v ? `, value ${v}` : ''}`}
-                  className={`aspect-square relative overflow-hidden transition-colors cursor-pointer ${bg}`}
+                  className={`aspect-square relative overflow-hidden transition-colors cursor-pointer ${bg}${isShaking ? ' animate-[shake_0.4s_ease-in-out]' : ''}`}
                 >
                   {v !== 0 ? (
                     <span className={`absolute inset-0 flex items-center justify-center text-sm ${txt}`}>

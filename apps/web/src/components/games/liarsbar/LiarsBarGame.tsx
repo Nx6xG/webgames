@@ -599,22 +599,44 @@ export function LiarsBarGame({ wsUrl, gameId, initialRoomCode, quickPlay: isQuic
         {/* ── Status banner ─────────────────────────────────────────────── */}
         <StatusBanner />
 
-        {/* ── Roulette cylinder ─────────────────────────────────────────── */}
-        {gs && gs.mode === 'roulette' && gs.roulette && inGame && (
-          <div className={`flex items-center gap-2 ${compact ? 'px-2 py-0.5' : 'px-3 py-1.5'} rounded-full border border-zinc-800 bg-zinc-900/60`}>
-            <span className="text-[10px] text-zinc-500 uppercase tracking-wider font-semibold">{t('liarsdeck.cylinder')}</span>
-            <div className="flex gap-1">
-              {Array.from({ length: 6 }, (_, i) => (
+        {/* ── Roulette cylinders (per-player) ────────────────────────────── */}
+        {gs && gs.mode === 'roulette' && gs.revolvers && inGame && (
+          <div className={`flex flex-wrap items-center justify-center gap-2 ${compact ? 'gap-1.5' : 'gap-2'}`}>
+            {gs.players.filter(p => !p.eliminated).map((player) => {
+              const rv = gs.revolvers![player.id];
+              if (!rv) return null;
+              const isActive = player.id === gs.currentTurn;
+              return (
                 <div
-                  key={i}
-                  className={`w-2 h-2 rounded-full border transition-all duration-300 ${
-                    i === gs.roulette!.cylinderPos
-                      ? 'border-rose-500 bg-rose-500/50 shadow-sm shadow-rose-500/30'
-                      : 'border-zinc-700 bg-zinc-800'
+                  key={player.id}
+                  className={`flex items-center gap-1.5 ${compact ? 'px-2 py-0.5' : 'px-2.5 py-1'} rounded-full border transition-colors ${
+                    isActive
+                      ? 'border-rose-700/60 bg-rose-950/30'
+                      : 'border-zinc-800 bg-zinc-900/60'
                   }`}
-                />
-              ))}
-            </div>
+                >
+                  <span className={`text-[10px] font-semibold truncate max-w-[60px] ${isActive ? 'text-rose-300' : 'text-zinc-500'}`}>
+                    {getNickname(player.id)}
+                  </span>
+                  <div className="flex gap-0.5">
+                    {Array.from({ length: 6 }, (_, i) => (
+                      <div
+                        key={i}
+                        className={`w-1.5 h-1.5 rounded-full border transition-all duration-300 ${
+                          i < rv.cylinderPos
+                            ? 'border-zinc-600 bg-zinc-600'
+                            : i === rv.cylinderPos
+                              ? isActive
+                                ? 'border-rose-500 bg-rose-500/50 shadow-sm shadow-rose-500/30'
+                                : 'border-amber-500 bg-amber-500/40'
+                              : 'border-zinc-700 bg-zinc-800'
+                        }`}
+                      />
+                    ))}
+                  </div>
+                </div>
+              );
+            })}
           </div>
         )}
 
