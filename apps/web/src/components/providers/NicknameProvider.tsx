@@ -60,7 +60,8 @@ export function NicknameProvider({ children }: { children: React.ReactNode }) {
     if (clean.length < 2) return;
     setStoredNickname(clean);
     setNicknameState(clean);
-  }, []);
+    if (cloudSync.isActive) cloudSync.syncNickname(clean);
+  }, [cloudSync]);
 
   const updateCosmetics = useCallback((patch: Partial<CosmeticsSelection>) => {
     setCosmeticsState((prev) => {
@@ -71,9 +72,11 @@ export function NicknameProvider({ children }: { children: React.ReactNode }) {
     });
   }, [cloudSync]);
 
-  // Re-read cosmetics from localStorage after cloud sync completes
+  // Re-read nickname + cosmetics from localStorage after cloud sync completes
   useEffect(() => {
     function onSyncDone() {
+      const stored = getStoredNickname();
+      if (stored) setNicknameState(stored);
       setCosmeticsState(loadCosmetics());
     }
     window.addEventListener('webgames:cloud-sync-done', onSyncDone);

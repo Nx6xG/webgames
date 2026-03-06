@@ -3,7 +3,7 @@ import type { CosmeticsSelection } from 'shared';
 import type { AchievementStats } from '@/lib/achievements/definitions';
 import type { CosmeticSlot } from '@/lib/cosmetics';
 import { loadCosmetics, saveCosmetics } from '@/lib/cosmetics';
-import { getStoredNickname } from '@/lib/nickname';
+import { getStoredNickname, setStoredNickname } from '@/lib/nickname';
 import {
   loadStats,
   saveStats,
@@ -151,7 +151,11 @@ export function mergeUnlockedCosmetics(
 
 // ── Profile bootstrap ────────────────────────────────────────────────────
 
-/** Ensure a profiles row exists for the user. Does not overwrite existing rows. */
+/**
+ * Ensure a profiles row exists for the user.
+ * If one already exists, load its nickname into localStorage (cloud wins).
+ * If none exists, create one using the current local nickname as fallback.
+ */
 export async function ensureProfile(
   sb: SupabaseClient,
   userId: string,
@@ -161,7 +165,7 @@ export async function ensureProfile(
 
   const { data, error: selectErr } = await sb
     .from('profiles')
-    .select('id')
+    .select('id, nickname')
     .eq('id', userId)
     .maybeSingle();
 
@@ -170,7 +174,13 @@ export async function ensureProfile(
   }
 
   if (data) {
-    console.log('[ensureProfile] row already exists, skipping insert');
+    console.log('[ensureProfile] row already exists');
+    // Cloud nickname is source of truth — write it to localStorage
+    const cloudNick = (data as { nickname?: string }).nickname;
+    if (cloudNick) {
+      console.log('[ensureProfile] applying cloud nickname:', cloudNick);
+      setStoredNickname(cloudNick);
+    }
     return;
   }
 
@@ -183,6 +193,21 @@ export async function ensureProfile(
     console.error('[ensureProfile] insert error:', insertErr);
   } else {
     console.log('[ensureProfile] profile created successfully');
+  }
+}
+
+/** Update the cloud profile nickname (for manual edits while logged in). */
+export async function saveCloudNickname(
+  sb: SupabaseClient,
+  userId: string,
+  nickname: string,
+): Promise<void> {
+  const { error } = await sb
+    .from('profiles')
+    .update({ nickname })
+    .eq('id', userId);
+  if (error) {
+    console.error('[saveCloudNickname] error:', error);
   }
 }
 
@@ -200,6 +225,17 @@ export function markSyncDone(userId: string): void {
   localStorage.setItem(SYNC_DONE_PREFIX + userId, '1');
 }
 
+// ── Safe wrapper ─────────────────────────────────────────────────────────────
+
+/** Run an async step, logging but never throwing on failure. */
+async function safe(label: string, fn: () => Promise<void>): Promise<void> {
+  try {
+    await fn();
+  } catch (err) {
+    console.error(`[cloudSync] ${label} failed:`, err);
+  }
+}
+
 // ── Initial sync (first login — merge local ↔ cloud) ─────────────────────
 
 export async function runInitialSync(
@@ -208,7 +244,7 @@ export async function runInitialSync(
   email?: string,
 ): Promise<void> {
   // Bootstrap profile row (no-op if already exists)
-  await ensureProfile(sb, userId, email);
+  await safe('ensureProfile', () => ensureProfile(sb, userId, email));
 
   // Load local data
   const localCosmetics = loadCosmetics();
@@ -216,13 +252,13 @@ export async function runInitialSync(
   const localStats = loadStats();
   const localUnlockedCosmetics = loadUnlockedCosmetics();
 
-  // Load cloud data
+  // Load cloud data (each fetch is individually safe)
   const [cloudCosmetics, cloudUnlocked, cloudStats, cloudUnlockedCosmetics] =
     await Promise.all([
-      fetchCloudCosmetics(sb, userId),
-      fetchCloudAchievements(sb, userId),
-      fetchCloudStats(sb, userId),
-      fetchCloudUnlockedCosmetics(sb, userId),
+      fetchCloudCosmetics(sb, userId).catch((e) => { console.error('[cloudSync] fetchCosmetics:', e); return null; }),
+      fetchCloudAchievements(sb, userId).catch((e) => { console.error('[cloudSync] fetchAchievements:', e); return null; }),
+      fetchCloudStats(sb, userId).catch((e) => { console.error('[cloudSync] fetchStats:', e); return null; }),
+      fetchCloudUnlockedCosmetics(sb, userId).catch((e) => { console.error('[cloudSync] fetchUnlockedCosmetics:', e); return null; }),
     ]);
 
   // Merge cosmetics (local wins per field, cloud fills gaps)
@@ -265,12 +301,12 @@ export async function runInitialSync(
   saveStats(mergedStats);
   saveUnlockedCosmetics(mergedUnlockedCosmetics);
 
-  // Save merged → cloud
+  // Save merged → cloud (each save is individually safe)
   await Promise.all([
-    saveCloudCosmetics(sb, userId, mergedCosmetics),
-    saveCloudAchievements(sb, userId, mergedUnlocked),
-    saveCloudStats(sb, userId, mergedStats),
-    saveCloudUnlockedCosmetics(sb, userId, mergedUnlockedCosmetics),
+    safe('saveCosmetics', () => saveCloudCosmetics(sb, userId, mergedCosmetics)),
+    safe('saveAchievements', () => saveCloudAchievements(sb, userId, mergedUnlocked)),
+    safe('saveStats', () => saveCloudStats(sb, userId, mergedStats)),
+    safe('saveUnlockedCosmetics', () => saveCloudUnlockedCosmetics(sb, userId, mergedUnlockedCosmetics)),
   ]);
 
   markSyncDone(userId);
@@ -284,10 +320,10 @@ export async function loadCloudToLocal(
 ): Promise<void> {
   const [cloudCosmetics, cloudUnlocked, cloudStats, cloudUnlockedCosmetics] =
     await Promise.all([
-      fetchCloudCosmetics(sb, userId),
-      fetchCloudAchievements(sb, userId),
-      fetchCloudStats(sb, userId),
-      fetchCloudUnlockedCosmetics(sb, userId),
+      fetchCloudCosmetics(sb, userId).catch((e) => { console.error('[cloudSync] fetchCosmetics:', e); return null; }),
+      fetchCloudAchievements(sb, userId).catch((e) => { console.error('[cloudSync] fetchAchievements:', e); return null; }),
+      fetchCloudStats(sb, userId).catch((e) => { console.error('[cloudSync] fetchStats:', e); return null; }),
+      fetchCloudUnlockedCosmetics(sb, userId).catch((e) => { console.error('[cloudSync] fetchUnlockedCosmetics:', e); return null; }),
     ]);
 
   if (cloudCosmetics) saveCosmetics(cloudCosmetics);

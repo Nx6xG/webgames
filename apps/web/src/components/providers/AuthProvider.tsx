@@ -17,6 +17,8 @@ import {
   runInitialSync,
 } from '@/lib/cloudSync';
 
+const SYNC_TIMEOUT_MS = 10_000;
+
 interface AuthContextValue {
   user: User | null;
   session: Session | null;
@@ -37,6 +39,16 @@ const AuthContext = createContext<AuthContextValue>({
   signOut: async () => {},
 });
 
+/** Race a promise against a timeout. Rejects with Error('Sync timeout') on expiry. */
+function withTimeout<T>(promise: Promise<T>, ms: number): Promise<T> {
+  return Promise.race([
+    promise,
+    new Promise<never>((_, reject) =>
+      setTimeout(() => reject(new Error('Sync timeout')), ms),
+    ),
+  ]);
+}
+
 export function AuthProvider({ children }: { children: React.ReactNode }) {
   const sb = getSupabase();
   const isConfigured = sb !== null;
@@ -50,55 +62,70 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   // Restore session on mount + subscribe to auth changes
   useEffect(() => {
     if (!sb) return;
+    const client = sb; // narrow for closures
 
     let mounted = true;
 
-    sb.auth.getSession().then(async ({ data: { session: s } }) => {
+    /**
+     * Run cloud sync for a user. Guarded by syncingRef to prevent double-runs.
+     * Always resets isSyncing in finally — even on timeout or error.
+     */
+    async function performSync(u: User) {
+      if (syncingRef.current) return;
+      syncingRef.current = true;
+      if (mounted) setIsSyncing(true);
+
+      try {
+        const syncWork = hasSyncedBefore(u.id)
+          ? (async () => {
+              await ensureProfile(client, u.id, u.email);
+              await loadCloudToLocal(client, u.id);
+            })()
+          : runInitialSync(client, u.id, u.email);
+
+        await withTimeout(syncWork, SYNC_TIMEOUT_MS);
+      } catch (err) {
+        console.error('[AuthProvider] sync error:', err);
+      } finally {
+        // Always reset — even if unmounted (ref is shared across mounts)
+        syncingRef.current = false;
+        if (mounted) {
+          setIsSyncing(false);
+          window.dispatchEvent(new Event('webgames:cloud-sync-done'));
+        }
+      }
+    }
+
+    // 1. Restore session from storage
+    sb.auth.getSession().then(({ data: { session: s } }) => {
       if (!mounted) return;
       setSession(s);
       setUser(s?.user ?? null);
       setIsLoading(false);
 
-      // Ensure profile row exists on every session restore
+      // Run full sync on session restore (not just ensureProfile)
       if (s?.user) {
-        await ensureProfile(sb, s.user.id, s.user.email).catch((err) =>
-          console.error('[AuthProvider] ensureProfile (restore) error:', err),
-        );
+        performSync(s.user);
       }
     });
 
+    // 2. Listen for auth state changes (fresh sign-in, sign-out, token refresh)
     const {
       data: { subscription },
-    } = sb.auth.onAuthStateChange(async (_event, s) => {
+    } = sb.auth.onAuthStateChange((_event, s) => {
       if (!mounted) return;
       setSession(s);
       setUser(s?.user ?? null);
       setIsLoading(false);
 
-      if (_event === 'SIGNED_IN' && s?.user && !syncingRef.current) {
-        syncingRef.current = true;
-        setIsSyncing(true);
-        try {
-          if (hasSyncedBefore(s.user.id)) {
-            await ensureProfile(sb, s.user.id, s.user.email);
-            await loadCloudToLocal(sb, s.user.id);
-          } else {
-            await runInitialSync(sb, s.user.id, s.user.email);
-          }
-        } catch (err) {
-          console.error('[AuthProvider] sync error:', err);
-        } finally {
-          if (mounted) {
-            setIsSyncing(false);
-            syncingRef.current = false;
-            window.dispatchEvent(new Event('webgames:cloud-sync-done'));
-          }
-        }
+      if (_event === 'SIGNED_IN' && s?.user) {
+        performSync(s.user);
       }
     });
 
     return () => {
       mounted = false;
+      syncingRef.current = false; // Reset guard on cleanup (React Strict Mode)
       subscription.unsubscribe();
     };
   }, [sb]);

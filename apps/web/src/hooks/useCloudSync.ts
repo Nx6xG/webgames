@@ -11,6 +11,7 @@ import {
   saveCloudAchievements,
   saveCloudStats,
   saveCloudUnlockedCosmetics,
+  saveCloudNickname,
 } from '@/lib/cloudSync';
 
 const DEBOUNCE_MS = 1000;
@@ -74,5 +75,14 @@ export function useCloudSync() {
     [user, debounce],
   );
 
-  return { isActive, syncCosmetics, syncAchievements, syncStats, syncUnlockedCosmetics };
+  const syncNickname = useCallback(
+    (nick: string) => {
+      const sb = getSupabase();
+      if (!sb || !user) return;
+      debounce('nickname', () => saveCloudNickname(sb, user.id, nick));
+    },
+    [user, debounce],
+  );
+
+  return { isActive, syncCosmetics, syncAchievements, syncStats, syncUnlockedCosmetics, syncNickname };
 }
