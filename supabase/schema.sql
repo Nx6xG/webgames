@@ -13,8 +13,8 @@ create table if not exists profiles (
 
 alter table profiles enable row level security;
 
-create policy "Users can read own profile"
-  on profiles for select using (auth.uid() = id);
+create policy "Anyone can read profiles"
+  on profiles for select using (true);
 
 create policy "Users can insert own profile"
   on profiles for insert with check (auth.uid() = id);
@@ -31,8 +31,8 @@ create table if not exists user_cosmetics (
 
 alter table user_cosmetics enable row level security;
 
-create policy "Users can read own cosmetics"
-  on user_cosmetics for select using (auth.uid() = user_id);
+create policy "Anyone can read cosmetics"
+  on user_cosmetics for select using (true);
 
 create policy "Users can insert own cosmetics"
   on user_cosmetics for insert with check (auth.uid() = user_id);
@@ -49,8 +49,8 @@ create table if not exists user_achievements (
 
 alter table user_achievements enable row level security;
 
-create policy "Users can read own achievements"
-  on user_achievements for select using (auth.uid() = user_id);
+create policy "Anyone can read achievements"
+  on user_achievements for select using (true);
 
 create policy "Users can insert own achievements"
   on user_achievements for insert with check (auth.uid() = user_id);
@@ -71,8 +71,8 @@ create table if not exists user_stats (
 
 alter table user_stats enable row level security;
 
-create policy "Users can read own stats"
-  on user_stats for select using (auth.uid() = user_id);
+create policy "Anyone can read stats"
+  on user_stats for select using (true);
 
 create policy "Users can insert own stats"
   on user_stats for insert with check (auth.uid() = user_id);

@@ -751,6 +751,11 @@ export const messages: Record<Lang, Record<string, string>> = {
     'profileViewer.noStats':     'Keine Statistiken verfügbar',
     'profileViewer.noStatsHint': 'Verfügbar sobald Accounts hinzugefügt werden',
 
+    // ── Public profiles ──────────────────────────────────────────────────
+    'pub.notFound':       'Profil nicht gefunden',
+    'pub.notFoundDesc':   'Dieses öffentliche Profil ist nicht verfügbar.',
+    'pub.localOnly':      'Nur lokal gespeichert. Für geräteübergreifenden Sync anmelden.',
+
     // ── Leaderboards page ────────────────────────────────────────────────
     'leaderboards.title':        'Bestenliste',
     'leaderboards.subtitle':     'Deine persönlichen Bestleistungen',
@@ -769,6 +774,17 @@ export const messages: Record<Lang, Record<string, string>> = {
     'leaderboards.score':        'Score',
     'leaderboards.date':         'Datum',
     'leaderboards.topRuns':      'Top Runs',
+
+    // ── Cloud leaderboards ───────────────────────────────────────────────
+    'lb.cloudSubtitle':   'Ranglisten aller synchronisierten Spieler',
+    'lb.global':          'Gesamt-Ranglisten',
+    'lb.mostWins':        'Meiste Siege',
+    'lb.mostPlayed':      'Meiste Spiele',
+    'lb.bestWinrate':     'Beste Siegquote',
+    'lb.perGame':         'Pro Spiel',
+    'lb.guestHint':       'Leaderboards stehen mit synchronisierten Accounts zur Verfügung.',
+    'lb.noData':          'Noch keine Ranglisten-Daten verfügbar.',
+    'lb.noGameData':      'Noch keine Daten für dieses Spiel.',
 
     // ── Game display names (for profile/leaderboard cards) ───────────────
     'game.name.tictactoe':       'Tic-Tac-Toe',
@@ -1546,6 +1562,11 @@ export const messages: Record<Lang, Record<string, string>> = {
     'profileViewer.noStats':     'No stats available yet',
     'profileViewer.noStatsHint': 'Available once accounts are added',
 
+    // ── Public profiles ──────────────────────────────────────────────────
+    'pub.notFound':       'Profile not found',
+    'pub.notFoundDesc':   'This public profile is not available.',
+    'pub.localOnly':      'Stored locally only. Sign in for cross-device sync.',
+
     // ── Leaderboards page ────────────────────────────────────────────────
     'leaderboards.title':        'Leaderboards',
     'leaderboards.subtitle':     'Your personal bests',
@@ -1564,6 +1585,17 @@ export const messages: Record<Lang, Record<string, string>> = {
     'leaderboards.score':        'Score',
     'leaderboards.date':         'Date',
     'leaderboards.topRuns':      'Top Runs',
+
+    // ── Cloud leaderboards ───────────────────────────────────────────────
+    'lb.cloudSubtitle':   'Rankings across all synced players',
+    'lb.global':          'Global Rankings',
+    'lb.mostWins':        'Most Wins',
+    'lb.mostPlayed':      'Most Played',
+    'lb.bestWinrate':     'Best Win Rate',
+    'lb.perGame':         'Per Game',
+    'lb.guestHint':       'Leaderboards are available with synced accounts.',
+    'lb.noData':          'No leaderboard data available yet.',
+    'lb.noGameData':      'No data for this game yet.',
 
     // ── Game display names (for profile/leaderboard cards) ───────────────
     'game.name.tictactoe':       'Tic-Tac-Toe',
