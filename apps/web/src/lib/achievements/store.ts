@@ -97,7 +97,7 @@ export function unlockFrame(frame: string): boolean {
 
 // ── Unlocked cosmetics (slot-based) ─────────────────────────────────────────
 
-type UnlockedCosmeticsMap = Record<CosmeticSlot, string[]>;
+export type UnlockedCosmeticsMap = Record<CosmeticSlot, string[]>;
 
 function defaultCosmeticsMap(): UnlockedCosmeticsMap {
   return { frame: [], head: [], portal: [], aura: [], banner: [], cardColor: [], badge: [] };

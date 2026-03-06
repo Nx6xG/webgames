@@ -783,6 +783,18 @@ export const messages: Record<Lang, Record<string, string>> = {
     'game.name.flappy':          'Flappy Bird',
     'game.name.sudoku':          'Sudoku',
     'game.name.tictactoe-solo':  'TicTacToe Solo',
+
+    // ── Auth ──────────────────────────────────────────────────────────────
+    'auth.signIn':       'Anmelden',
+    'auth.signOut':      'Abmelden',
+    'auth.emailLabel':   'E-Mail-Adresse',
+    'auth.sendLink':     'Link senden',
+    'auth.checkEmail':   'Prüfe dein Postfach!',
+    'auth.signedInAs':   'Angemeldet als',
+    'auth.guestHint':    'Melde dich an, um deine Daten geräteübergreifend zu synchronisieren.',
+    'auth.synced':       'Synchronisiert',
+    'auth.syncing':      'Synchronisiere…',
+    'auth.syncError':    'Sync-Fehler',
   },
 
   en: {
@@ -1566,5 +1578,17 @@ export const messages: Record<Lang, Record<string, string>> = {
     'game.name.flappy':          'Flappy Bird',
     'game.name.sudoku':          'Sudoku',
     'game.name.tictactoe-solo':  'TicTacToe Solo',
+
+    // ── Auth ──────────────────────────────────────────────────────────────
+    'auth.signIn':       'Sign in',
+    'auth.signOut':      'Sign out',
+    'auth.emailLabel':   'Email address',
+    'auth.sendLink':     'Send link',
+    'auth.checkEmail':   'Check your inbox!',
+    'auth.signedInAs':   'Signed in as',
+    'auth.guestHint':    'Sign in to sync your data across devices.',
+    'auth.synced':       'Synced',
+    'auth.syncing':      'Syncing…',
+    'auth.syncError':    'Sync error',
   },
 };

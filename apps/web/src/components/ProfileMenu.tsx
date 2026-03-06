@@ -12,6 +12,8 @@ import { AvatarBubble } from '@/components/ui/AvatarBubble';
 import { ProfileCard } from '@/components/ui/ProfileCard';
 import { CosmeticsStudio } from '@/components/ui/CosmeticsStudio';
 import { getNameColorClass } from '@/lib/nameColors';
+import { useAuth } from '@/components/providers/AuthProvider';
+import { AuthModal } from '@/components/ui/AuthModal';
 
 // ── Theme helpers ──────────────────────────────────────────────────────────────
 
@@ -115,8 +117,10 @@ function IconTrash({ className }: { className?: string }) {
 export function ProfileMenu() {
   const { nickname, setNickname, avatarId, nameColor, avatarFrame, cosmetics, updateCosmetics } = useNickname();
   const { lang, setLang, t } = useI18n();
+  const { user, isSupabaseConfigured, isSyncing, signOut } = useAuth();
   const [open, setOpen] = useState(false);
   const [studioOpen, setStudioOpen] = useState(false);
+  const [authOpen, setAuthOpen] = useState(false);
 
   // Quick stats (loaded once when dropdown opens)
   const [quickStats, setQuickStats] = useState<QuickStats | null>(null);
@@ -270,6 +274,40 @@ export function ProfileMenu() {
                 <span className="text-xs text-zinc-200">{t('studio.customize')}</span>
               </button>
             </div>
+
+            {/* Auth section */}
+            {isSupabaseConfigured && (
+              <>
+                <div className="h-px bg-zinc-800 mx-1.5" />
+                <div className="px-1 py-0.5">
+                  {user ? (
+                    <div className="px-2.5 py-1.5 space-y-1">
+                      <div className="flex items-center gap-1.5">
+                        <span className="text-[10px] text-emerald-400">●</span>
+                        <span className="text-[10px] text-zinc-400 truncate">{t('auth.signedInAs')} {user.email}</span>
+                      </div>
+                      {isSyncing && (
+                        <p className="text-[10px] text-indigo-400">{t('auth.syncing')}</p>
+                      )}
+                      <button
+                        onClick={() => { signOut(); closeMenu(); }}
+                        className="text-[10px] text-zinc-500 hover:text-zinc-300 transition-colors"
+                      >
+                        {t('auth.signOut')}
+                      </button>
+                    </div>
+                  ) : (
+                    <button
+                      onClick={() => setAuthOpen(true)}
+                      className="flex items-center gap-2 px-2.5 py-1.5 rounded-lg hover:bg-zinc-800 transition-colors w-full text-left"
+                    >
+                      <span className="text-sm shrink-0">🔑</span>
+                      <span className="text-xs text-zinc-200">{t('auth.signIn')}</span>
+                    </button>
+                  )}
+                </div>
+              </>
+            )}
 
             <div className="h-px bg-zinc-800 mx-1.5" />
 
@@ -448,6 +486,8 @@ export function ProfileMenu() {
           onClose={() => setStudioOpen(false)}
         />
       )}
+
+      <AuthModal open={authOpen} onClose={() => setAuthOpen(false)} />
     </div>
   );
 }

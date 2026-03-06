@@ -10,6 +10,7 @@ import {
 } from '@/lib/nickname';
 import { DEFAULT_AVATAR_ID } from '@/lib/avatars';
 import { loadCosmetics, saveCosmetics, mergeCosmetics } from '@/lib/cosmetics';
+import { useCloudSync } from '@/hooks/useCloudSync';
 
 interface NicknameContextValue {
   nickname: string;
@@ -42,6 +43,7 @@ const NicknameContext = createContext<NicknameContextValue>({
 export function NicknameProvider({ children }: { children: React.ReactNode }) {
   const [nickname, setNicknameState] = useState('');
   const [cosmetics, setCosmeticsState] = useState<CosmeticsSelection>({ slots: {} });
+  const cloudSync = useCloudSync();
 
   useEffect(() => {
     let stored = getStoredNickname();
@@ -64,8 +66,18 @@ export function NicknameProvider({ children }: { children: React.ReactNode }) {
     setCosmeticsState((prev) => {
       const merged = mergeCosmetics(prev, patch);
       saveCosmetics(merged);
+      if (cloudSync.isActive) cloudSync.syncCosmetics(merged);
       return merged;
     });
+  }, [cloudSync]);
+
+  // Re-read cosmetics from localStorage after cloud sync completes
+  useEffect(() => {
+    function onSyncDone() {
+      setCosmeticsState(loadCosmetics());
+    }
+    window.addEventListener('webgames:cloud-sync-done', onSyncDone);
+    return () => window.removeEventListener('webgames:cloud-sync-done', onSyncDone);
   }, []);
 
   // Legacy setters that delegate to updateCosmetics

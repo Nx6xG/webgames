@@ -2,6 +2,7 @@ import type { Metadata } from 'next';
 import './globals.css';
 import { NicknameProvider } from '@/components/providers/NicknameProvider';
 import { LanguageProvider } from '@/components/providers/LanguageProvider';
+import { AuthProvider } from '@/components/providers/AuthProvider';
 import { PatchNotesFloatingButton } from '@/components/PatchNotesFloatingButton';
 import { AchievementToastProvider } from '@/components/ui/AchievementToasts';
 
@@ -19,9 +20,11 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
       </head>
       <body className="antialiased overflow-x-hidden">
         <LanguageProvider>
-          <AchievementToastProvider>
-            <NicknameProvider>{children}</NicknameProvider>
-          </AchievementToastProvider>
+          <AuthProvider>
+            <AchievementToastProvider>
+              <NicknameProvider>{children}</NicknameProvider>
+            </AchievementToastProvider>
+          </AuthProvider>
         </LanguageProvider>
         <PatchNotesFloatingButton />
       </body>

@@ -3,6 +3,8 @@
 import { useRef, useCallback } from 'react';
 import { trackAchievementEvent } from '@/lib/achievements';
 import { useAchievementToasts } from '@/components/ui/AchievementToasts';
+import { useCloudSync } from '@/hooks/useCloudSync';
+import { loadStats, loadUnlocked, loadUnlockedCosmetics } from '@/lib/achievements/store';
 
 /**
  * Hook that provides guarded achievement tracking for a single game session.
@@ -10,6 +12,7 @@ import { useAchievementToasts } from '@/components/ui/AchievementToasts';
  */
 export function useAchievements(gameId: string) {
   const toasts = useAchievementToasts();
+  const cloudSync = useCloudSync();
   const playedRef = useRef(false);
   const wonRef = useRef(false);
   const inviteRef = useRef(false);
@@ -17,8 +20,14 @@ export function useAchievements(gameId: string) {
   const fire = useCallback(
     (ids: string[]) => {
       if (ids.length > 0) toasts.push(ids);
+      // Sync stats + achievements + unlocked cosmetics to cloud (debounced)
+      if (cloudSync.isActive) {
+        cloudSync.syncStats(loadStats());
+        cloudSync.syncAchievements([...loadUnlocked()]);
+        cloudSync.syncUnlockedCosmetics(loadUnlockedCosmetics());
+      }
     },
-    [toasts],
+    [toasts, cloudSync],
   );
 
   const trackPlay = useCallback(() => {
