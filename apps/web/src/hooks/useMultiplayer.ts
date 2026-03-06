@@ -16,6 +16,7 @@ import type {
   ChatMessage,
   ChatScope,
   CosmeticsSelection,
+  OnlineUser,
 } from 'shared';
 import { loadCosmetics, saveCosmetics, mergeCosmetics } from '@/lib/cosmetics';
 
@@ -65,10 +66,14 @@ export interface MultiplayerState<TState extends AnyGameState = AnyGameState> {
   globalMessages: ChatMessage[];
   /** Non-null when the server rejected a chat action. Auto-clears after 4 s. */
   chatError: string | null;
+  /** Online users from presence system. */
+  onlineUsers: OnlineUser[];
+  /** Accumulated game state snapshots for replay (one per game_state event). */
+  stateHistory: TState[];
 }
 
 export interface MultiplayerActions {
-  createRoom: (options?: { visibility?: RoomVisibility; roomName?: string; rpsConfig?: { mode: string; bestOf?: number }; ldConfig?: { mode: string }; maxPlayers?: number }) => void;
+  createRoom: (options?: { visibility?: RoomVisibility; roomName?: string; rpsConfig?: { mode: string; bestOf?: number }; ldConfig?: { mode: string }; battleshipConfig?: { fleetPreset: string }; maxPlayers?: number }) => void;
   joinRoom: (code: string) => void;
   /** Join the per-gameId matchmaking queue. Server assigns a room automatically. */
   quickPlay: () => void;
@@ -86,6 +91,10 @@ export interface MultiplayerActions {
   setNameColor: (color: string | undefined) => void;
   /** Update this player's avatar frame. Stored locally and synced to server. */
   setAvatarFrame: (frame: string | undefined) => void;
+  /** Invite an online player into the current room (host only). */
+  sendRoomInvite: (toToken: string) => void;
+  /** Refresh the online users list from the server. */
+  fetchOnlineUsers: () => void;
 }
 
 function makeLobbyState<TState extends AnyGameState>(): MultiplayerState<TState> {
@@ -113,6 +122,8 @@ function makeLobbyState<TState extends AnyGameState>(): MultiplayerState<TState>
     roomMessages: [],
     globalMessages: [],
     chatError: null,
+    onlineUsers: [],
+    stateHistory: [],
   };
 }
 
@@ -192,6 +203,7 @@ export function useMultiplayer<TState extends AnyGameState = AnyGameState>(
       socket.emit('presence_update', { activity: { kind: 'game', gameId: gameIdRef.current } });
       socket.emit('get_stats', { gameId: gameIdRef.current });
       socket.emit('get_history');
+      socket.emit('get_online_users');
     });
 
     socket.on('disconnect', (reason) => {
@@ -239,6 +251,7 @@ export function useMultiplayer<TState extends AnyGameState = AnyGameState>(
           ? (state?.status !== 'ongoing' ? 'ended' : 'playing')
           : (state ? 'playing' : 'waiting'),
         error: null,
+        stateHistory: state ? [state as TState] : [],
       })),
     );
 
@@ -310,6 +323,7 @@ export function useMultiplayer<TState extends AnyGameState = AnyGameState>(
         gameState: state as TState,
         spectatorCount,
         phase: state.status !== 'ongoing' ? 'ended' : 'playing',
+        stateHistory: [...prev.stateHistory, state as TState],
       })),
     );
 
@@ -337,6 +351,7 @@ export function useMultiplayer<TState extends AnyGameState = AnyGameState>(
         myVotedRematch: false,
         rematchError: null,
         error: null,
+        stateHistory: [state as TState],
       })),
     );
 
@@ -409,6 +424,10 @@ export function useMultiplayer<TState extends AnyGameState = AnyGameState>(
       setTimeout(() => set((prev) => ({ ...prev, chatError: null })), 4000);
     });
 
+    socket.on('online_users', ({ users }) => {
+      set((prev) => ({ ...prev, onlineUsers: users }));
+    });
+
     // Live cosmetics / nickname updates from other players in the room.
     // RoomPlayerInfo doesn't carry playerToken, so we match by finding the
     // player whose old nickname/avatarId most closely matches. This is best-effort;
@@ -448,7 +467,7 @@ export function useMultiplayer<TState extends AnyGameState = AnyGameState>(
     };
   }, [wsUrl]);
 
-  const createRoom = useCallback((options?: { visibility?: RoomVisibility; roomName?: string; rpsConfig?: { mode: string; bestOf?: number }; ldConfig?: { mode: string }; maxPlayers?: number }) => {
+  const createRoom = useCallback((options?: { visibility?: RoomVisibility; roomName?: string; rpsConfig?: { mode: string; bestOf?: number }; ldConfig?: { mode: string }; battleshipConfig?: { fleetPreset: string }; maxPlayers?: number }) => {
     set((prev) => ({ ...prev, error: null }));
     socketRef.current?.emit('create_room', {
       playerToken: tokenRef.current,
@@ -458,6 +477,7 @@ export function useMultiplayer<TState extends AnyGameState = AnyGameState>(
       roomName: options?.roomName,
       rpsConfig: options?.rpsConfig,
       ldConfig: options?.ldConfig,
+      battleshipConfig: options?.battleshipConfig,
       maxPlayers: options?.maxPlayers,
     });
   }, []);
@@ -551,5 +571,14 @@ export function useMultiplayer<TState extends AnyGameState = AnyGameState>(
     emitCosmetics();
   }, [emitCosmetics]);
 
-  return { ...s, createRoom, joinRoom, quickPlay, leaveRoom, sendAction, requestRematch, clearError, sendChat, setNickname, setAvatarId, setNameColor, setAvatarFrame };
+  const sendRoomInvite = useCallback((toToken: string) => {
+    const code = roomCodeRef.current;
+    if (code) socketRef.current?.emit('room_invite', { toToken, roomCode: code });
+  }, []);
+
+  const fetchOnlineUsers = useCallback(() => {
+    socketRef.current?.emit('get_online_users');
+  }, []);
+
+  return { ...s, createRoom, joinRoom, quickPlay, leaveRoom, sendAction, requestRematch, clearError, sendChat, setNickname, setAvatarId, setNameColor, setAvatarFrame, sendRoomInvite, fetchOnlineUsers };
 }

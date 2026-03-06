@@ -65,6 +65,33 @@ const SINGLEPLAYER_GAMES = [
     tags:         ['singleplayer', 'arcade', 'classic'],
     bestScoreKey: 'webgames.flappy.highscores',
   },
+  {
+    id:           'pong',
+    titleKey:     'lobby.games.pong.title',
+    descKey:      'lobby.games.pong.desc',
+    emoji:        '🏓',
+    href:         '/games/pong',
+    tags:         ['singleplayer', 'arcade', 'classic'],
+    bestScoreKey: '',
+  },
+  {
+    id:           'breakout',
+    titleKey:     'lobby.games.breakout.title',
+    descKey:      'lobby.games.breakout.desc',
+    emoji:        '🧱',
+    href:         '/games/breakout',
+    tags:         ['singleplayer', 'arcade', 'classic'],
+    bestScoreKey: '',
+  },
+  {
+    id:           'minesweeper',
+    titleKey:     'lobby.games.minesweeper.title',
+    descKey:      'lobby.games.minesweeper.desc',
+    emoji:        '💣',
+    href:         '/games/minesweeper',
+    tags:         ['singleplayer', 'puzzle', 'classic'],
+    bestScoreKey: '',
+  },
 ] as const;
 import { GlobalChatWidget } from '@/components/chat/GlobalChatWidget';
 import { ProfileMenu } from '@/components/ProfileMenu';
@@ -72,6 +99,10 @@ import { OnlineNavChip } from '@/components/social/OnlineNavChip';
 import { useI18n } from '@/components/providers/LanguageProvider';
 import { GameDetailsModal } from '@/components/games/GameDetailsModal';
 import type { GameModalData } from '@/components/games/GameDetailsModal';
+import { DailyChallengesWidget } from '@/components/DailyChallengesWidget';
+import { GameOfTheDay } from '@/components/GameOfTheDay';
+import { RecentlyPlayed } from '@/components/RecentlyPlayed';
+import { ActiveRoomsWidget } from '@/components/ActiveRoomsWidget';
 
 /** Maps internal category IDs (used as CSS-class keys) to i18n message keys. */
 const CATEGORY_TAG_KEYS: Record<string, string> = {
@@ -115,6 +146,9 @@ const GAME_CONTROLS_KEY: Record<string, string> = {
   sudoku:          'modal.controls.sudoku',
   tetris:          'modal.controls.tetris',
   flappy:          'modal.controls.flappy',
+  pong:            'modal.controls.pong',
+  breakout:        'modal.controls.breakout',
+  minesweeper:     'modal.controls.minesweeper',
 };
 
 // ── Badge system ─────────────────────────────────────────────────────────────
@@ -217,7 +251,7 @@ function StatsOverlay({ data, t }: { data: CardOverlayData | null; t: (k: string
   const hasAny = data && (data.plays > 0 || data.bestScore !== null || data.bestTime !== null);
 
   return (
-    <div className="absolute inset-x-0 top-0 z-10 rounded-t-2xl border-b border-zinc-700/60 bg-zinc-950/90 backdrop-blur-sm px-3 py-2 opacity-0 -translate-y-1 group-hover:opacity-100 group-hover:translate-y-0 group-focus-within:opacity-100 group-focus-within:translate-y-0 transition-all duration-200 pointer-events-none">
+    <div className="absolute inset-x-0 top-0 rounded-t-2xl border-b border-zinc-700/60 bg-zinc-950/90 backdrop-blur-sm px-3 py-2 opacity-0 -translate-y-1 group-hover:opacity-100 group-hover:translate-y-0 group-focus-within:opacity-100 group-focus-within:translate-y-0 transition-all duration-200 pointer-events-none">
       <p className="text-[9px] text-zinc-500 uppercase tracking-wider font-semibold mb-1">
         {t('cards.progressTitle')}
       </p>
@@ -252,11 +286,11 @@ function StatsOverlay({ data, t }: { data: CardOverlayData | null; t: (k: string
 function CardBadge({ badge, t }: { badge: BadgeInfo | null; t: (k: string) => string }) {
   if (!badge) return null;
   return (
-    <div className="absolute top-3 right-3 z-20 group/badge">
+    <div className="absolute top-3 right-3 z-[2] group/badge">
       <span className={`text-[10px] px-2 py-0.5 rounded-full border backdrop-blur-sm font-medium ${badge.colors}`}>
         {badge.icon} {t(badge.labelKey)}
       </span>
-      <div className="pointer-events-none absolute bottom-full left-1/2 -translate-x-1/2 mb-2 whitespace-nowrap rounded-md bg-black/80 px-2 py-1 text-[10px] text-white opacity-0 transition group-hover/badge:opacity-100 backdrop-blur shadow-lg z-40">
+      <div className="pointer-events-none absolute bottom-full left-1/2 -translate-x-1/2 mb-2 whitespace-nowrap rounded-md bg-black/80 px-2 py-1 text-[10px] text-white opacity-0 transition group-hover/badge:opacity-100 backdrop-blur shadow-lg z-[3]">
         {t(badge.tooltipKey)}
       </div>
     </div>
@@ -321,7 +355,7 @@ function SingleplayerCard({
       </div>
       <Link
         href={game.href}
-        className="relative z-10 block w-full py-2 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-white text-sm font-semibold text-center transition-colors"
+        className="relative z-[1] block w-full py-2 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-white text-sm font-semibold text-center transition-colors"
         onClick={(e) => e.stopPropagation()}
       >
         {t('lobby.play')}
@@ -388,7 +422,7 @@ function GameCard({
           </span>
         ))}
       </div>
-      <div className="relative z-10 flex gap-2" onClick={(e) => e.stopPropagation()}>
+      <div className="relative z-[1] flex gap-2" onClick={(e) => e.stopPropagation()}>
         <Link
           href={`/games/${game.routeSlug}?quickplay=true`}
           className="flex-1 py-2 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-white text-sm font-semibold text-center transition-colors"
@@ -520,7 +554,7 @@ export default function HomePage() {
   return (
     <main className="min-h-screen bg-[var(--bg)] text-[var(--fg)]">
       {/* Header */}
-      <header className="border-b border-[var(--cardBorder)] bg-[var(--bg)]/80 backdrop-blur sticky top-0 z-10">
+      <header className="border-b border-[var(--cardBorder)] bg-[var(--bg)]/80 backdrop-blur-xl sticky top-0 z-40">
         <div className="max-w-5xl mx-auto px-6 py-4 flex items-center gap-3">
           <div className="w-8 h-8 rounded-lg bg-indigo-600 flex items-center justify-center font-black text-sm">
             W
@@ -555,6 +589,12 @@ export default function HomePage() {
         </p>
       </section>
 
+      {/* Recently played */}
+      <RecentlyPlayed />
+
+      {/* Active rooms */}
+      <ActiveRoomsWidget />
+
       {/* Filter toggle */}
       <div className="max-w-5xl mx-auto px-6 pb-8">
         <div className="flex gap-1 p-1 bg-zinc-800 rounded-lg w-fit">
@@ -571,6 +611,12 @@ export default function HomePage() {
           ))}
         </div>
       </div>
+
+      {/* Game of the Day */}
+      <GameOfTheDay />
+
+      {/* Daily challenges */}
+      <DailyChallengesWidget />
 
       {/* Multiplayer games grid */}
       {showMultiplayer && (

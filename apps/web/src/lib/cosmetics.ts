@@ -82,6 +82,13 @@ export function mergeCosmetics(current: CosmeticsSelection, patch: Partial<Cosme
 export type CosmeticSlot = 'frame' | 'head' | 'portal' | 'aura' | 'banner' | 'cardColor' | 'badge';
 export type CosmeticRarity = 'common' | 'epic' | 'rare' | 'legendary';
 
+export interface CosmeticAnchor {
+  top?: string;
+  left?: string;
+  scale?: number;
+  rotate?: string;
+}
+
 export interface CosmeticDef {
   id: string;
   slot: CosmeticSlot;
@@ -93,6 +100,8 @@ export interface CosmeticDef {
   unlockHintKey?: string;
   /** i18n key with a short description / purpose of this cosmetic */
   descriptionKey?: string;
+  /** Fine-tune head cosmetic positioning */
+  anchor?: CosmeticAnchor;
 }
 
 export const COSMETICS_REGISTRY: CosmeticDef[] = [
@@ -103,10 +112,10 @@ export const COSMETICS_REGISTRY: CosmeticDef[] = [
   { id: 'fire',   slot: 'frame', rarity: 'legendary', labelKey: 'frame.fire',   emoji: '🔥', requiredAchievement: 'battleship.win_3', unlockHintKey: 'frame.unlock.fire' },
 
   // ── Heads ───────────────────────────────────────────────────────────────────
-  { id: 'crown',      slot: 'head', rarity: 'rare',      labelKey: 'cosmetic.head.crown',      emoji: '👑', requiredAchievement: 'general.win_10',    unlockHintKey: 'cosmetic.unlock.crown' },
-  { id: 'cap',        slot: 'head', rarity: 'epic',   labelKey: 'cosmetic.head.cap',        emoji: '🧢', requiredAchievement: 'general.play_10',   unlockHintKey: 'cosmetic.unlock.cap' },
-  { id: 'wizard_hat', slot: 'head', rarity: 'legendary',  labelKey: 'cosmetic.head.wizard_hat', emoji: '🧙', requiredAchievement: 'sudoku.win_5',      unlockHintKey: 'cosmetic.unlock.wizard_hat' },
-  { id: 'top_hat',    slot: 'head', rarity: 'epic',   labelKey: 'cosmetic.head.top_hat',    emoji: '🎩', requiredAchievement: 'liarsbar.win_3',    unlockHintKey: 'cosmetic.unlock.top_hat' },
+  { id: 'crown',      slot: 'head', rarity: 'rare',      labelKey: 'cosmetic.head.crown',      emoji: '👑', requiredAchievement: 'general.win_10',    unlockHintKey: 'cosmetic.unlock.crown',      anchor: { top: '-30%', scale: 1.1 } },
+  { id: 'cap',        slot: 'head', rarity: 'epic',      labelKey: 'cosmetic.head.cap',        emoji: '🧢', requiredAchievement: 'general.play_10',   unlockHintKey: 'cosmetic.unlock.cap',        anchor: { top: '-22%', rotate: '-10deg' } },
+  { id: 'wizard_hat', slot: 'head', rarity: 'legendary', labelKey: 'cosmetic.head.wizard_hat', emoji: '🔮', requiredAchievement: 'sudoku.win_5',      unlockHintKey: 'cosmetic.unlock.wizard_hat', anchor: { top: '-32%', scale: 1.05 } },
+  { id: 'top_hat',    slot: 'head', rarity: 'epic',      labelKey: 'cosmetic.head.top_hat',    emoji: '🎩', requiredAchievement: 'liarsbar.win_3',    unlockHintKey: 'cosmetic.unlock.top_hat',    anchor: { top: '-34%', scale: 1.05 } },
 
   // ── Portals ─────────────────────────────────────────────────────────────────
   { id: 'void',   slot: 'portal', rarity: 'rare',      labelKey: 'cosmetic.portal.void',   emoji: '🕳️', requiredAchievement: 'general.first_win',      unlockHintKey: 'cosmetic.unlock.void' },
@@ -140,6 +149,9 @@ export const COSMETICS_REGISTRY: CosmeticDef[] = [
   { id: 'badge_liar',       slot: 'badge', rarity: 'epic',      labelKey: 'cosmetic.badge.liar',       emoji: '🃏', requiredAchievement: 'liarsbar.first_win',   unlockHintKey: 'cosmetic.unlock.badge_liar',       descriptionKey: 'cosmetic.badge.liar.desc' },
   { id: 'badge_veteran',    slot: 'badge', rarity: 'rare',      labelKey: 'cosmetic.badge.veteran',    emoji: '🏅', requiredAchievement: 'general.win_10',       unlockHintKey: 'cosmetic.unlock.badge_veteran',    descriptionKey: 'cosmetic.badge.veteran.desc' },
   { id: 'badge_snake',      slot: 'badge', rarity: 'common',    labelKey: 'cosmetic.badge.snake',      emoji: '🐍', requiredAchievement: 'snake.play_5',         unlockHintKey: 'cosmetic.unlock.badge_snake',      descriptionKey: 'cosmetic.badge.snake.desc' },
+  { id: 'badge_pong',       slot: 'badge', rarity: 'common',    labelKey: 'cosmetic.badge.pong',       emoji: '🏓', requiredAchievement: 'pong.first_win',        unlockHintKey: 'cosmetic.unlock.badge_pong',       descriptionKey: 'cosmetic.badge.pong.desc' },
+  { id: 'badge_breakout',     slot: 'badge', rarity: 'common',    labelKey: 'cosmetic.badge.breakout',     emoji: '🧱', requiredAchievement: 'breakout.first_win',     unlockHintKey: 'cosmetic.unlock.badge_breakout',     descriptionKey: 'cosmetic.badge.breakout.desc' },
+  { id: 'badge_minesweeper', slot: 'badge', rarity: 'common',    labelKey: 'cosmetic.badge.minesweeper', emoji: '💣', requiredAchievement: 'minesweeper.first_win', unlockHintKey: 'cosmetic.unlock.badge_minesweeper', descriptionKey: 'cosmetic.badge.minesweeper.desc' },
 ];
 
 const cosmeticMap = new Map(COSMETICS_REGISTRY.map((c) => [`${c.slot}:${c.id}`, c]));

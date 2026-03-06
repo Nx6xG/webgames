@@ -68,6 +68,8 @@ export interface OnlineUser {
   nameColor?: string;
   avatarFrame?: string;
   cosmetics?: CosmeticsSelection;
+  /** Supabase account id (present only for logged-in users). */
+  userId?: string;
 }
 
 // ─── Nickname / players ───────────────────────────────────────────────────────
@@ -347,10 +349,10 @@ export interface ClientToServerEvents {
    * Sent immediately after connecting. If the server has a live session for
    * this token the socket will receive room_rejoined; otherwise nothing happens.
    */
-  identify: (data: { playerToken: string; nickname: string; avatarId?: string; nameColor?: string; avatarFrame?: string; cosmetics?: CosmeticsSelection }) => void;
+  identify: (data: { playerToken: string; nickname: string; avatarId?: string; nameColor?: string; avatarFrame?: string; cosmetics?: CosmeticsSelection; userId?: string }) => void;
 
   /** playerToken is stored server-side so the seat can survive a refresh */
-  create_room: (data: { playerToken: string; gameId?: GameId; nickname: string; visibility?: RoomVisibility; roomName?: string; rpsConfig?: { mode: string; bestOf?: number }; ldConfig?: { mode: string }; maxPlayers?: number }) => void;
+  create_room: (data: { playerToken: string; gameId?: GameId; nickname: string; visibility?: RoomVisibility; roomName?: string; rpsConfig?: { mode: string; bestOf?: number }; ldConfig?: { mode: string }; battleshipConfig?: { fleetPreset: string }; maxPlayers?: number }) => void;
 
   /** If the room is full the socket joins as spectator instead */
   join_room: (data: { roomCode: string; playerToken: string; nickname: string }) => void;
@@ -396,6 +398,8 @@ export interface ClientToServerEvents {
 
   /** Create an invite for toToken to join a game room. Server replies with invite_sent or invite_error. */
   invite_create: (payload: { toToken: string; gameId: GameId }) => void;
+  /** Invite an online player into an existing room (host only). Reuses invite_received/invite_sent/invite_error. */
+  room_invite: (data: { toToken: string; roomCode: string }) => void;
   /** Notify server the invite was declined (optional; no server action required). */
   invite_decline: (payload: { id: string }) => void;
   /** Accept an incoming invite; server notifies the original sender. */

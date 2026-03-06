@@ -61,7 +61,7 @@ const nicknameMap = new Map<string, string>();
 // ── Presence (online users) ───────────────────────────────────────────────────
 
 /** playerToken → { nickname, avatarId, nameColor, sockets: Set of active socketIds } */
-const presence = new Map<string, { nickname: string; avatarId?: string; nameColor?: string; avatarFrame?: string; banner?: string; cardColor?: string; badges?: string[]; sockets: Set<string> }>();
+const presence = new Map<string, { nickname: string; avatarId?: string; nameColor?: string; avatarFrame?: string; banner?: string; cardColor?: string; badges?: string[]; userId?: string; sockets: Set<string> }>();
 
 /** socketId → current activity for that socket */
 const socketActivity = new Map<string, PresenceActivity>();
@@ -81,7 +81,7 @@ function bestActivity(sockets: Set<string>): PresenceActivity | undefined {
 
 function buildPresenceList() {
   return [...presence.entries()]
-    .map(([playerToken, { nickname, avatarId, nameColor, avatarFrame, banner, cardColor, badges, sockets }]) => ({
+    .map(([playerToken, { nickname, avatarId, nameColor, avatarFrame, banner, cardColor, badges, userId, sockets }]) => ({
       playerToken,
       nickname,
       connections: sockets.size,
@@ -90,6 +90,7 @@ function buildPresenceList() {
       nameColor,
       avatarFrame,
       cosmetics: buildCosmetics({ avatarId, nameColor, avatarFrame, banner, cardColor, badges }),
+      userId,
     }))
     .sort((a, b) => a.nickname.localeCompare(b.nickname, undefined, { sensitivity: 'base' }));
 }
@@ -392,7 +393,7 @@ io.on('connection', (socket) => {
   // ── identify ──────────────────────────────────────────────────────────────
   // Sent by the client immediately after connecting.
   // Restores the player's seat if their token matches a live session.
-  socket.on('identify', ({ playerToken, nickname, avatarId, nameColor, avatarFrame, cosmetics }) => {
+  socket.on('identify', ({ playerToken, nickname, avatarId, nameColor, avatarFrame, cosmetics, userId }) => {
     identifiedTokens.set(socket.id, playerToken);
     nicknameMap.set(socket.id, nickname);
     // Initialise profile from the stored nickname if no profile exists yet
@@ -419,8 +420,9 @@ io.on('connection', (socket) => {
       if (profile.banner !== undefined) presEntry.banner = profile.banner;
       if (profile.cardColor !== undefined) presEntry.cardColor = profile.cardColor;
       if (profile.badges !== undefined) presEntry.badges = profile.badges;
+      if (userId !== undefined) presEntry.userId = userId;
     } else {
-      presence.set(playerToken, { nickname, avatarId: profile.avatarId, nameColor: profile.nameColor, avatarFrame: profile.avatarFrame, banner: profile.banner, cardColor: profile.cardColor, badges: profile.badges, sockets: new Set([socket.id]) });
+      presence.set(playerToken, { nickname, avatarId: profile.avatarId, nameColor: profile.nameColor, avatarFrame: profile.avatarFrame, banner: profile.banner, cardColor: profile.cardColor, badges: profile.badges, userId, sockets: new Set([socket.id]) });
     }
     broadcastPresence();
 
@@ -484,7 +486,7 @@ io.on('connection', (socket) => {
   });
 
   // ── create_room ───────────────────────────────────────────────────────────
-  socket.on('create_room', ({ playerToken, gameId = 'tictactoe', nickname, visibility = 'private', roomName, rpsConfig, ldConfig, maxPlayers: requestedMax }) => {
+  socket.on('create_room', ({ playerToken, gameId = 'tictactoe', nickname, visibility = 'private', roomName, rpsConfig, ldConfig, battleshipConfig, maxPlayers: requestedMax }) => {
     identifiedTokens.set(socket.id, playerToken);
     nicknameMap.set(socket.id, nickname);
     if (!profiles.has(playerToken)) profiles.set(playerToken, { nickname });
@@ -515,7 +517,9 @@ io.on('connection', (socket) => {
       ? rpsConfig
       : gameId === 'liarsbar' && ldConfig
         ? ldConfig
-        : undefined;
+        : gameId === 'battleship' && battleshipConfig
+          ? battleshipConfig
+          : undefined;
     const cap = getGameCapacity(gameId);
     // Allow creator to choose maxPlayers within the game's valid range
     const effectiveMax = requestedMax
@@ -1262,6 +1266,70 @@ io.on('connection', (socket) => {
     }
     socket.emit('invite_sent', { id: invite.id, roomCode: room.code, gameId: validGameId });
     console.log(`[invite] ${fromName} → ${receiverEntry.nickname} (${validGameId}, room ${room.code})`);
+  });
+
+  // ── room_invite (invite into existing room — host only) ──────────────────
+  socket.on('room_invite', ({ toToken, roomCode }) => {
+    const fromToken = identifiedTokens.get(socket.id);
+    if (!fromToken) {
+      socket.emit('invite_error', { message: 'Nicht identifiziert.' });
+      return;
+    }
+
+    // Rate limit: share the same 2 s cooldown as invite_create
+    const lastAt = inviteRateLimit.get(fromToken) ?? 0;
+    if (Date.now() - lastAt < 2_000) {
+      socket.emit('invite_error', { message: 'Warte kurz bevor du erneut einlädst.' });
+      return;
+    }
+    inviteRateLimit.set(fromToken, Date.now());
+
+    if (toToken === fromToken) {
+      socket.emit('invite_error', { message: 'Du kannst dich nicht selbst einladen.' });
+      return;
+    }
+
+    const room = roomManager.getRoom(roomCode);
+    if (!room) {
+      socket.emit('invite_error', { message: 'Raum nicht gefunden.' });
+      return;
+    }
+
+    // Only the host (player 0) can send room invites
+    if (!room.players[0] || room.players[0].playerToken !== fromToken) {
+      socket.emit('invite_error', { message: 'Nur der Host kann einladen.' });
+      return;
+    }
+
+    if (room.players.length >= room.maxPlayers) {
+      socket.emit('invite_error', { message: 'Raum ist voll.' });
+      return;
+    }
+
+    const receiverEntry = presence.get(toToken);
+    if (!receiverEntry || receiverEntry.sockets.size === 0) {
+      socket.emit('invite_error', { message: 'Nutzer ist nicht mehr online.' });
+      return;
+    }
+
+    const fromName = nicknameMap.get(socket.id) ?? profiles.get(fromToken)?.nickname ?? 'Unknown';
+
+    const invite: InvitePayload = {
+      id: randomUUID(),
+      fromToken,
+      fromName,
+      toToken,
+      gameId: room.gameId,
+      roomCode: room.code,
+      createdAt: Date.now(),
+    };
+
+    // Deliver to all receiver sockets (multi-tab support)
+    for (const sid of receiverEntry.sockets) {
+      io.to(sid).emit('invite_received', invite);
+    }
+    socket.emit('invite_sent', { id: invite.id, roomCode: room.code, gameId: room.gameId });
+    console.log(`[room_invite] ${fromName} → ${receiverEntry.nickname} (${room.gameId}, room ${room.code})`);
   });
 
   // ── invite_decline (optional ack) ────────────────────────────────────────

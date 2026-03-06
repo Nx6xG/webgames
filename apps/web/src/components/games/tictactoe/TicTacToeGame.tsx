@@ -15,7 +15,10 @@ import { GameInfoModal } from '@/components/GameInfoModal';
 import { useI18n } from '@/components/providers/LanguageProvider';
 import { AvatarBubble } from '@/components/ui/AvatarBubble';
 import { getNameColorClass } from '@/lib/nameColors';
+import { RoomInviteButton } from '@/components/social/RoomInviteButton';
 import { useAchievements } from '@/hooks/useAchievements';
+import { SpectatorBanner } from '@/components/ui/SpectatorBanner';
+import { ReplayControls } from '@/components/ui/ReplayControls';
 
 export function TicTacToeGame({ wsUrl, gameId, initialRoomCode, quickPlay: isQuickPlay }: GameComponentProps) {
   const router = useRouter();
@@ -29,6 +32,8 @@ export function TicTacToeGame({ wsUrl, gameId, initialRoomCode, quickPlay: isQui
   const [showInfo, setShowInfo] = useState(false);
   const [chatOpen, setChatOpen] = useState(false);
   const [unread, setUnread] = useState(0);
+  const [replayState, setReplayState] = useState<TicTacToeState | null>(null);
+  const [replayMode, setReplayMode] = useState(false);
   const prevTotalRef = useRef<number | null>(null);
   const autoJoined = useRef(false);
 
@@ -192,20 +197,23 @@ export function TicTacToeGame({ wsUrl, gameId, initialRoomCode, quickPlay: isQui
         />
         <StatusBanner />
         <TicTacToeBoard
-          board={gs?.board ?? Array(9).fill(null)}
-          winnerCells={gs?.winnerCells}
-          disabled={boardDisabled}
+          board={(replayMode && replayState ? replayState : gs)?.board ?? Array(9).fill(null)}
+          winnerCells={replayMode ? (replayState?.winnerCells ?? undefined) : gs?.winnerCells}
+          disabled={boardDisabled || replayMode}
           onCellClick={handleCellClick}
         />
-        {mp.isSpectator && (
-          <div className="flex items-center gap-1.5 text-xs text-zinc-500 bg-zinc-800/60 border border-zinc-700 rounded-full px-3 py-1">
-            <span className="w-1.5 h-1.5 rounded-full bg-zinc-500" />
-            {t('game.status.spectating')}
-          </div>
-        )}
+        {mp.isSpectator && <SpectatorBanner spectatorCount={mp.spectatorCount} />}
+
+        {/* Replay */}
+        <ReplayControls<TicTacToeState>
+          history={mp.stateHistory as TicTacToeState[]}
+          gameEnded={mp.phase === 'ended'}
+          onStep={(state) => setReplayState(state)}
+          onToggle={(active) => { setReplayMode(active); if (!active) setReplayState(null); }}
+        />
 
         {/* Rematch */}
-        {!mp.isSpectator && gs && gs.status !== 'ongoing' && mp.playerCount === 2 && (
+        {!mp.isSpectator && gs && gs.status !== 'ongoing' && mp.playerCount === 2 && !replayMode && (
           <div className="flex flex-col items-center gap-1.5">
             <button
               onClick={mp.requestRematch}
@@ -338,6 +346,15 @@ export function TicTacToeGame({ wsUrl, gameId, initialRoomCode, quickPlay: isQui
                 <><svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" /></svg>{t('game.room.copyInvite')}</>
               )}
             </button>
+            <RoomInviteButton
+              playerIndex={mp.playerIndex}
+              playerCount={mp.playerCount}
+              maxPlayers={mp.roomMaxPlayers}
+              onlineUsers={mp.onlineUsers}
+              onInvite={mp.sendRoomInvite}
+              onRefreshUsers={mp.fetchOnlineUsers}
+              playerNicknames={mp.players.map(p => p.nickname)}
+            />
             {mp.players.length > 0 && (
               <div className="space-y-1 pt-2 border-t border-zinc-800">
                 {([0, 1] as const).map((idx) => {

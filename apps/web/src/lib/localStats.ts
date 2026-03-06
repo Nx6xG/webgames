@@ -60,7 +60,7 @@ export interface LocalProfile {
 // ── All known game IDs (display order) ────────────────────────────────────────
 
 export const MULTIPLAYER_GAME_IDS = ['tictactoe', 'connect4', 'rps', 'chess', 'battleship', 'liarsbar'] as const;
-export const SINGLEPLAYER_GAME_IDS = ['2048', 'snake', 'tetris', 'flappy', 'sudoku', 'tictactoe-solo'] as const;
+export const SINGLEPLAYER_GAME_IDS = ['2048', 'snake', 'tetris', 'flappy', 'sudoku', 'tictactoe-solo', 'pong', 'breakout', 'minesweeper'] as const;
 export const ALL_GAME_IDS = [...MULTIPLAYER_GAME_IDS, ...SINGLEPLAYER_GAME_IDS] as const;
 
 export const GAME_EMOJI: Record<string, string> = {
@@ -76,6 +76,9 @@ export const GAME_EMOJI: Record<string, string> = {
   flappy: '🐦',
   sudoku: '#️⃣',
   'tictactoe-solo': '✖️',
+  pong: '🏓',
+  breakout: '🧱',
+  minesweeper: '💣',
 };
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
@@ -174,6 +177,18 @@ function loadSudokuData(): { bestTime: number | null } {
   return { bestTime: times.length > 0 ? Math.min(...times) : null };
 }
 
+// ── Minesweeper ──────────────────────────────────────────────────────────────
+
+interface MsStats { bestTimeEasy: number | null; bestTimeMedium: number | null; bestTimeHard: number | null }
+
+function loadMinesweeperData(): { bestTime: number | null } {
+  const stats = parseJSON<MsStats>(safeGet('webgames.minesweeper.stats'));
+  if (!stats) return { bestTime: null };
+  const times = [stats.bestTimeEasy, stats.bestTimeMedium, stats.bestTimeHard]
+    .filter((t): t is number => t !== null && t > 0);
+  return { bestTime: times.length > 0 ? Math.min(...times) : null };
+}
+
 // ── Public API ────────────────────────────────────────────────────────────────
 
 /** Lightweight summary for the dropdown header (no per-game breakdown). */
@@ -220,6 +235,7 @@ export function loadLocalProfile(): LocalProfile {
       bestTile = d.bestTile;
     } else if (gid === 'flappy') bestScore = loadFlappyData().bestScore;
     else if (gid === 'sudoku') bestTime = loadSudokuData().bestTime;
+    else if (gid === 'minesweeper') bestTime = loadMinesweeperData().bestTime;
 
     return { gameId: gid, plays, wins, winRate, bestScore, bestTime, bestTile, bestLines };
   });
@@ -276,6 +292,8 @@ export function loadLeaderboardData(): GameLeaderboardData[] {
       topRuns = d.topRuns;
     } else if (gid === 'sudoku') {
       bestTime = loadSudokuData().bestTime;
+    } else if (gid === 'minesweeper') {
+      bestTime = loadMinesweeperData().bestTime;
     }
 
     return { gameId: gid, plays, wins, winRate, bestScore, bestTime, bestTile, bestLines, topRuns };

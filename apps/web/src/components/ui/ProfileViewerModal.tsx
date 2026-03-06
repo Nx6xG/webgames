@@ -1,7 +1,8 @@
 'use client';
 
-import { useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
+import Link from 'next/link';
 import type { ProfileData } from '@/lib/profileData';
 import { GAME_EMOJI } from '@/lib/profileData';
 import { AvatarBubble } from '@/components/ui/AvatarBubble';
@@ -9,16 +10,36 @@ import { getCosmeticDef } from '@/lib/cosmetics';
 import { BadgeIcon } from '@/components/ui/BadgeIcon';
 import { getNameColorClass } from '@/lib/nameColors';
 import { useI18n } from '@/components/providers/LanguageProvider';
+import { isFriend, addFriend, removeFriend } from '@/lib/friends';
 
 export interface ProfileViewerModalProps {
   profile: ProfileData;
   onClose: () => void;
+  /** Show a loading spinner overlay while cloud stats are being fetched. */
+  loading?: boolean;
+  /** Supabase account id — when present, renders a "View Profile" link. */
+  userId?: string;
 }
 
-export function ProfileViewerModal({ profile, onClose }: ProfileViewerModalProps) {
+export function ProfileViewerModal({ profile, onClose, loading, userId }: ProfileViewerModalProps) {
   const { t } = useI18n();
   const [mounted, setMounted] = useState(false);
   const backdropRef = useRef<HTMLDivElement>(null);
+  const [friendStatus, setFriendStatus] = useState(false);
+
+  useEffect(() => {
+    if (!profile.isMe) setFriendStatus(isFriend(profile.id));
+  }, [profile.id, profile.isMe]);
+
+  const toggleFriend = useCallback(() => {
+    if (friendStatus) {
+      removeFriend(profile.id);
+      setFriendStatus(false);
+    } else {
+      addFriend(profile.id, profile.nickname);
+      setFriendStatus(true);
+    }
+  }, [friendStatus, profile.id, profile.nickname]);
 
   useEffect(() => { setMounted(true); }, []);
 
@@ -94,8 +115,33 @@ export function ProfileViewerModal({ profile, onClose }: ProfileViewerModalProps
             </div>
           )}
 
+          {/* Friend toggle */}
+          {!profile.isMe && (
+            <button
+              onClick={toggleFriend}
+              className={`mt-3 w-full py-2 rounded-lg text-xs font-semibold transition-colors border ${
+                friendStatus
+                  ? 'border-rose-800/50 bg-rose-950/30 text-rose-400 hover:bg-rose-950/50'
+                  : 'border-indigo-700/50 bg-indigo-950/30 text-indigo-400 hover:bg-indigo-950/50'
+              }`}
+            >
+              {friendStatus ? t('friends.remove') : t('friends.add')}
+            </button>
+          )}
+
+          {/* Loading overlay */}
+          {loading && (
+            <div className="mt-4 flex items-center justify-center gap-2 px-3 py-6 rounded-lg bg-zinc-800/30 border border-zinc-700/30">
+              <svg className="w-4 h-4 animate-spin text-zinc-400" viewBox="0 0 24 24" fill="none">
+                <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v4a4 4 0 00-4 4H4z" />
+              </svg>
+              <span className="text-xs text-zinc-400">{t('profileViewer.loading')}</span>
+            </div>
+          )}
+
           {/* Stats */}
-          {stats ? (
+          {!loading && stats ? (
             <div className="mt-4 space-y-3">
               <div className="grid grid-cols-3 gap-2">
                 <MiniStat label={t('profilePage.gamesPlayed')} value={stats.playsTotal} />
@@ -128,11 +174,25 @@ export function ProfileViewerModal({ profile, onClose }: ProfileViewerModalProps
                 </div>
               )}
             </div>
-          ) : (
+          ) : !loading ? (
             <div className="mt-4 px-3 py-4 rounded-lg bg-zinc-800/30 border border-zinc-700/30 text-center">
               <p className="text-xs text-zinc-500">{t('profileViewer.noStats')}</p>
               <p className="text-[10px] text-zinc-600 mt-1">{t('profileViewer.noStatsHint')}</p>
             </div>
+          ) : null}
+
+          {/* View Profile link */}
+          {userId && (
+            <Link
+              href={`/profile/${userId}`}
+              onClick={onClose}
+              className="mt-3 flex items-center justify-center gap-1.5 w-full py-2 rounded-lg border border-zinc-700 text-xs font-semibold text-zinc-300 hover:text-zinc-100 hover:bg-zinc-800/50 transition-colors"
+            >
+              {t('profileViewer.viewProfile')}
+              <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M13.5 6H5.25A2.25 2.25 0 003 8.25v10.5A2.25 2.25 0 005.25 21h10.5A2.25 2.25 0 0018 18.75V10.5m-10.5 6L21 3m0 0h-5.25M21 3v5.25" />
+              </svg>
+            </Link>
           )}
         </div>
       </div>

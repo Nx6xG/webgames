@@ -10,7 +10,7 @@ import type {
   ShotRecord,
   BsSlot,
 } from 'shared';
-import { SHIP_DEFS, BOARD_SIZE } from 'shared';
+import { FLEET_PRESETS, BOARD_SIZE } from 'shared';
 
 const DEV = process.env.NODE_ENV !== 'production';
 
@@ -44,8 +44,16 @@ function emptyPlayer(): BsPlayerState {
 
 export const battleshipEngine: GameEngine<BattleshipState, BattleshipAction> = {
 
-  initialState([p0, p1]: string[], startingPlayerIndex: number = 0): BattleshipState {
+  initialState([p0, p1]: string[], startingPlayerIndex: number = 0, config?: unknown): BattleshipState {
     const first = startingPlayerIndex === 0 ? p0 : p1;
+
+    // Resolve fleet preset: use config if provided, otherwise random
+    const cfg = config as { fleetPreset?: string } | undefined;
+    const requestedPreset = cfg?.fleetPreset ?? 'random';
+    const preset = requestedPreset === 'random'
+      ? FLEET_PRESETS[Math.floor(Math.random() * FLEET_PRESETS.length)]
+      : FLEET_PRESETS.find((p) => p.id === requestedPreset) ?? FLEET_PRESETS[0];
+
     return {
       phase:       'setup',
       playerIds:   [p0, p1],
@@ -55,6 +63,8 @@ export const battleshipEngine: GameEngine<BattleshipState, BattleshipAction> = {
       winner:      null,
       lastShot:    null,
       status:      'ongoing',
+      shipDefs:    [...preset.ships],
+      fleetId:     preset.id,
     };
   },
 
@@ -63,6 +73,7 @@ export const battleshipEngine: GameEngine<BattleshipState, BattleshipAction> = {
 
     const pIdx = ctx.playerIndex as 0 | 1;
     const slot: BsSlot = pIdx === 0 ? 'A' : 'B';
+    const shipDefs = state.shipDefs;
 
     switch (action.type) {
 
@@ -86,7 +97,7 @@ export const battleshipEngine: GameEngine<BattleshipState, BattleshipAction> = {
           throw new Error('INVALID_ACTION: You already marked as ready');
         }
 
-        const def = SHIP_DEFS.find((d) => d.id === action.shipId);
+        const def = shipDefs.find((d) => d.id === action.shipId);
         if (!def) {
           if (DEV) console.log('[BS] PLACE_SHIP rejected: unknown shipId', action.shipId);
           throw new Error('INVALID_ACTION: Unknown ship id');
@@ -130,7 +141,7 @@ export const battleshipEngine: GameEngine<BattleshipState, BattleshipAction> = {
       case 'BS_READY': {
         if (state.phase !== 'setup')   throw new Error('INVALID_ACTION: Ready is only allowed during setup');
         if (state.players[pIdx].ready) throw new Error('INVALID_ACTION: Already ready');
-        if (state.players[pIdx].ships.length < SHIP_DEFS.length) {
+        if (state.players[pIdx].ships.length < shipDefs.length) {
           throw new Error('INVALID_ACTION: You must place all ships before marking ready');
         }
 

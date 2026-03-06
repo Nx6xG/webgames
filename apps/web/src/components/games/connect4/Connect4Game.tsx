@@ -14,7 +14,10 @@ import { GameInfoModal } from '@/components/GameInfoModal';
 import { useI18n } from '@/components/providers/LanguageProvider';
 import { AvatarBubble } from '@/components/ui/AvatarBubble';
 import { getNameColorClass } from '@/lib/nameColors';
+import { RoomInviteButton } from '@/components/social/RoomInviteButton';
 import { useAchievements } from '@/hooks/useAchievements';
+import { SpectatorBanner } from '@/components/ui/SpectatorBanner';
+import { ReplayControls } from '@/components/ui/ReplayControls';
 
 const ROWS = 6;
 const COLS = 7;
@@ -39,6 +42,8 @@ export function Connect4Game({ wsUrl, gameId, initialRoomCode, quickPlay: isQuic
   const [showInfo, setShowInfo] = useState(false);
   const [chatOpen, setChatOpen] = useState(false);
   const [unread, setUnread] = useState(0);
+  const [replayState, setReplayState] = useState<Connect4State | null>(null);
+  const [replayMode, setReplayMode] = useState(false);
   const prevTotalRef = useRef<number | null>(null);
   const prevBoardRef = useRef<Connect4Cell[][] | null>(null);
   const autoJoined = useRef(false);
@@ -107,7 +112,7 @@ export function Connect4Game({ wsUrl, gameId, initialRoomCode, quickPlay: isQuic
     gs.currentPlayer === gs.players[mp.playerIndex!]?.id;
 
   const boardDisabled =
-    mp.isSpectator || mp.phase !== 'playing' || !mp.roomReady || !isMyTurn || gs?.status !== 'ongoing' || mp.matchCountdown !== null;
+    replayMode || mp.isSpectator || mp.phase !== 'playing' || !mp.roomReady || !isMyTurn || gs?.status !== 'ongoing' || mp.matchCountdown !== null;
 
   // Detect newly placed piece to trigger fall animation (local + remote moves)
   useEffect(() => {
@@ -143,7 +148,11 @@ export function Connect4Game({ wsUrl, gameId, initialRoomCode, quickPlay: isQuic
     return null; // column full
   }, [hoveredCol, gs?.board, boardDisabled]);
 
-  const board = gs?.board ?? Array.from({ length: ROWS }, () => Array<0>(COLS).fill(0));
+  const displayGs = replayMode && replayState ? replayState : gs;
+  const board = displayGs?.board ?? Array.from({ length: ROWS }, () => Array<0>(COLS).fill(0));
+  const displayWinSet = replayMode && replayState
+    ? new Set<string>(replayState.winnerCells?.map(([r, c]: [number, number]) => `${r},${c}`) ?? [])
+    : winSet;
 
   function handleDrop(col: number) {
     if (boardDisabled) return;
@@ -281,7 +290,7 @@ export function Connect4Game({ wsUrl, gameId, initialRoomCode, quickPlay: isQuic
               {Array.from({ length: ROWS }, (_, row) =>
                 Array.from({ length: COLS }, (_, col) => {
                   const cell = board[row]?.[col] ?? 0;
-                  const isWin = winSet.has(`${row},${col}`);
+                  const isWin = displayWinSet.has(`${row},${col}`);
                   const isPreview = !cell && row === previewRow && col === hoveredCol && myPiece;
 
                   let bg = '#09050f'; // empty cell
@@ -345,8 +354,18 @@ export function Connect4Game({ wsUrl, gameId, initialRoomCode, quickPlay: isQuic
           </div>
         </div>
 
+        {mp.isSpectator && <SpectatorBanner spectatorCount={mp.spectatorCount} />}
+
+        {/* Replay */}
+        <ReplayControls<Connect4State>
+          history={mp.stateHistory as Connect4State[]}
+          gameEnded={mp.phase === 'ended'}
+          onStep={(state) => setReplayState(state)}
+          onToggle={(active) => { setReplayMode(active); if (!active) setReplayState(null); }}
+        />
+
         {/* Rematch */}
-        {!mp.isSpectator && gs && gs.status !== 'ongoing' && mp.playerCount === 2 && (
+        {!mp.isSpectator && gs && gs.status !== 'ongoing' && mp.playerCount === 2 && !replayMode && (
           <div className="flex flex-col items-center gap-1.5">
             <button
               onClick={mp.requestRematch}
@@ -475,6 +494,15 @@ export function Connect4Game({ wsUrl, gameId, initialRoomCode, quickPlay: isQuic
                 <><svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" /></svg>{t('game.room.copyInvite')}</>
               )}
             </button>
+            <RoomInviteButton
+              playerIndex={mp.playerIndex}
+              playerCount={mp.playerCount}
+              maxPlayers={mp.roomMaxPlayers}
+              onlineUsers={mp.onlineUsers}
+              onInvite={mp.sendRoomInvite}
+              onRefreshUsers={mp.fetchOnlineUsers}
+              playerNicknames={mp.players.map(p => p.nickname)}
+            />
             {mp.players.length > 0 && (
               <div className="space-y-1 pt-2 border-t border-zinc-800">
                 {([0, 1] as const).map((idx) => {

@@ -41,10 +41,11 @@ export type {
   ChessResignAction,
   ChessAction,
 } from './games/chess';
-import { SHIP_DEFS as _shipDefs, BOARD_SIZE as _boardSize } from './games/battleship';
+import { SHIP_DEFS as _shipDefs, BOARD_SIZE as _boardSize, FLEET_PRESETS as _fleetPresets } from './games/battleship';
 /** Exported as const so CJS output uses direct `exports.X = value` (cjs-module-lexer-friendly). */
 export const SHIP_DEFS = _shipDefs;
 export const BOARD_SIZE = _boardSize;
+export const FLEET_PRESETS = _fleetPresets;
 export type {
   BattleshipState,
   BattleshipAction,
@@ -56,6 +57,7 @@ export type {
   BattleshipShip,
   ShipId,
   ShipDef,
+  FleetPreset,
   Coord,
   Orientation,
   ShotResult,

@@ -3,8 +3,8 @@
 import { useState, useEffect, useMemo, useRef, type CSSProperties } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
-import type { BattleshipState, BattleshipShip, Coord, Orientation, ShipId, BsSlot, ShotRecord } from 'shared';
-import { SHIP_DEFS, BOARD_SIZE } from 'shared';
+import type { BattleshipState, BattleshipShip, Coord, Orientation, ShipId, BsSlot, ShotRecord, ShipDef, FleetPreset } from 'shared';
+import { BOARD_SIZE, FLEET_PRESETS } from 'shared';
 import { useMultiplayer } from '@/hooks/useMultiplayer';
 import type { GameComponentProps } from '@/lib/gameRegistry';
 import { CountdownOverlay } from '@/components/CountdownOverlay';
@@ -15,21 +15,23 @@ import { GameInfoModal } from '@/components/GameInfoModal';
 import { useI18n } from '@/components/providers/LanguageProvider';
 import { AvatarBubble } from '@/components/ui/AvatarBubble';
 import { getNameColorClass } from '@/lib/nameColors';
+import { RoomInviteButton } from '@/components/social/RoomInviteButton';
 import { useAchievements } from '@/hooks/useAchievements';
 
 // ── Cell display types ────────────────────────────────────────────────────────
 
 type CellView =
-  | 'empty'         // dark, nothing there
-  | 'ship'          // own board: ship cell, not hit
-  | 'hit'           // own board: enemy hit this ship cell
-  | 'sunk'          // own board: entire ship is sunk (all cells)
-  | 'miss-rx'       // own board: enemy shot here, missed
-  | 'preview-ok'    // setup: valid hover preview
-  | 'preview-bad'   // setup: invalid hover preview
-  | 'shot-hit'      // opp board: I hit here
-  | 'shot-sunk'     // opp board: I hit here and ship is sunk
-  | 'shot-miss';    // opp board: I missed here
+  | 'empty'          // dark, nothing there
+  | 'ship'           // own board: ship cell, not hit
+  | 'hit'            // own board: enemy hit this ship cell
+  | 'sunk'           // own board: entire ship is sunk (all cells)
+  | 'miss-rx'        // own board: enemy shot here, missed
+  | 'preview-ok'     // setup: valid hover preview
+  | 'preview-bad'    // setup: invalid hover preview
+  | 'shot-hit'       // opp board: I hit here
+  | 'shot-sunk'      // opp board: I hit here and ship is sunk
+  | 'shot-miss'      // opp board: I missed here
+  | 'ship-revealed'; // opp board: post-game reveal of unhit enemy ship cell
 
 // ── Pure helpers (mirrored from engine for client-side computation) ──────────
 
@@ -97,6 +99,9 @@ function buildOwnCells(player: BattleshipState['players'][0], oppShots: ShotReco
  *  - sunk ship cells (revealed by server after sinking) for a full outline
  * The cell-based check is the primary path for sunk ships so the whole ship
  * body lights up as 'shot-sunk' — not just the individual shot markers.
+ *
+ * After the game finishes, the server reveals cells for ALL opponent ships
+ * (including unsunk ones). Unhit cells on those ships show as 'ship-revealed'.
  */
 function buildOppCells(
   myShots: BattleshipState['shotsFired'][0],
@@ -105,11 +110,14 @@ function buildOppCells(
   return Array.from({ length: BOARD_SIZE * BOARD_SIZE }, (_, idx): CellView => {
     const coord: Coord = { x: idx % BOARD_SIZE, y: Math.floor(idx / BOARD_SIZE) };
 
-    // 1. Sunk-ship reveal: if cells are present (server sends them only after sinking)
-    //    show the full outline in 'shot-sunk' color.
+    // 1. Ship-cell reveal: if cells are present (server sends them after sinking,
+    //    or for ALL ships after the game finishes).
     for (const ship of oppShips) {
-      if (ship.sunk && ship.cells && ship.cells.some((c) => coordEq(c, coord))) {
-        return 'shot-sunk';
+      if (ship.cells && ship.cells.some((c) => coordEq(c, coord))) {
+        if (ship.sunk) return 'shot-sunk';
+        // Unsunk ship with cells → post-game reveal. Check if this cell was hit.
+        const wasHit = myShots.some((s) => coordEq(s.at, coord) && s.result === 'hit');
+        return wasHit ? 'shot-hit' : 'ship-revealed';
       }
     }
 
@@ -127,17 +135,18 @@ function buildOppCells(
 
 function cellBg(view: CellView): string {
   switch (view) {
-    case 'ship':        return '#4338ca'; // indigo-700
-    case 'hit':         return '#e11d48'; // rose-600
-    case 'sunk':        return '#9f1239'; // rose-900
-    case 'miss-rx':     return '#27272a'; // zinc-800
-    case 'preview-ok':  return '#6366f1'; // indigo-500
-    case 'preview-bad': return '#f43f5e'; // rose-400
-    case 'shot-hit':    return '#e11d48'; // rose-600
-    case 'shot-sunk':   return '#9f1239'; // rose-900
-    case 'shot-miss':   return '#3f3f46'; // zinc-700
+    case 'ship':          return '#4338ca'; // indigo-700
+    case 'hit':           return '#e11d48'; // rose-600
+    case 'sunk':          return '#9f1239'; // rose-900
+    case 'miss-rx':       return '#27272a'; // zinc-800
+    case 'preview-ok':    return '#6366f1'; // indigo-500
+    case 'preview-bad':   return '#f43f5e'; // rose-400
+    case 'shot-hit':      return '#e11d48'; // rose-600
+    case 'shot-sunk':     return '#9f1239'; // rose-900
+    case 'shot-miss':     return '#3f3f46'; // zinc-700
+    case 'ship-revealed': return '#1e3a5f'; // steel-blue — distinct from hits, clearly a ship
     case 'empty':
-    default:            return '#18181b'; // zinc-900
+    default:              return '#18181b'; // zinc-900
   }
 }
 
@@ -149,6 +158,9 @@ function cellTexture(view: CellView): string | undefined {
     case 'preview-ok':
       // Light diagonal hatching → metal deck
       return 'repeating-linear-gradient(45deg, rgba(255,255,255,0.07) 0px, rgba(255,255,255,0.07) 2px, transparent 2px, transparent 9px)';
+    case 'ship-revealed':
+      // Softer hatching → ghost hull (revealed post-game)
+      return 'repeating-linear-gradient(45deg, rgba(255,255,255,0.10) 0px, rgba(255,255,255,0.10) 2px, transparent 2px, transparent 9px)';
     case 'sunk':
     case 'shot-sunk':
       // Darker hatching → wrecked hull
@@ -285,11 +297,17 @@ function shipSegmentBg(segment: ShipSegmentInfo['segment'], dir: 'H' | 'V', sunk
 // ── Ship silhouette icons (fleet panel) ────────────────────────────────────────
 
 /** Small profile-view ship SVG for the fleet status panel. */
+/** Resolve a possibly-suffixed ship id (e.g. 'destroyer2') to a base icon key. */
+function baseShipKey(id: string): string {
+  return id.replace(/\d+$/, '');
+}
+
 function ShipIconSvg({ id, sunk }: { id: ShipId; sunk: boolean }) {
   const hull   = sunk ? '#4c0519' : '#4338ca'; // rose-950 | indigo-700
   const accent = sunk ? '#9f1239' : '#818cf8'; // rose-800 | indigo-400
+  const key    = baseShipKey(id);
 
-  switch (id) {
+  switch (key) {
     case 'carrier':
       return (
         <svg width="20" height="10" viewBox="0 0 20 10" aria-hidden="true" style={{ display: 'block' }}>
@@ -331,8 +349,22 @@ function ShipIconSvg({ id, sunk }: { id: ShipId; sunk: boolean }) {
           <rect x="1.5" y="3.5" width="4" height="2" rx="0.5" fill={hull} opacity="0.85"/>
         </svg>
       );
+    case 'patrol':
+      // Patrol boat — tiny single-cell vessel
+      return (
+        <svg width="6" height="10" viewBox="0 0 6 10" aria-hidden="true" style={{ display: 'block' }}>
+          <rect x="0.5" y="6" width="5" height="2.5" rx="1" fill={hull}/>
+          <rect x="2" y="4" width="2" height="2" rx="0.5" fill={hull} opacity="0.85"/>
+        </svg>
+      );
     default:
-      return null;
+      // Generic fallback — simple hull shape
+      return (
+        <svg width="10" height="10" viewBox="0 0 10 10" aria-hidden="true" style={{ display: 'block' }}>
+          <rect x="1" y="5.5" width="8" height="3" rx="1" fill={hull}/>
+          <rect x="2" y="3.5" width="5" height="2" rx="0.5" fill={hull} opacity="0.85"/>
+        </svg>
+      );
   }
 }
 
@@ -455,6 +487,14 @@ function BsGrid({ cells, onCell, onHover, disabled, hoverCoord, cellSize = 28, l
                     </svg>
                   </div>
                 )}
+                {/* Revealed ship marker — post-game unhit ship cell */}
+                {view === 'ship-revealed' && (
+                  <div style={{ position: 'absolute', inset: '20%', pointerEvents: 'none' }}>
+                    <svg viewBox="0 0 10 10" style={{ width: '100%', height: '100%' }} aria-hidden="true">
+                      <rect x="2" y="2" width="6" height="6" rx="1" fill="rgba(147,197,253,0.55)" />
+                    </svg>
+                  </div>
+                )}
                 {/* Miss marker */}
                 {(view === 'shot-miss' || view === 'miss-rx') && (
                   <div
@@ -478,6 +518,7 @@ function BsGrid({ cells, onCell, onHover, disabled, hoverCoord, cellSize = 28, l
 // ── ShipRoster (setup sidebar) ────────────────────────────────────────────────
 
 interface ShipRosterProps {
+  shipDefs:      ShipDef[];
   placedIds:     Set<ShipId>;
   activeShipId:  ShipId | null;
   onSelect:      (id: ShipId) => void;
@@ -492,8 +533,8 @@ interface ShipRosterProps {
   t:             (k: string) => string;
 }
 
-function ShipRoster({ placedIds, activeShipId, onSelect, orientation, onRotate, onReset, onReady, canReady, isReady, oppReady, disabled, t }: ShipRosterProps) {
-  const allPlaced = placedIds.size >= SHIP_DEFS.length;
+function ShipRoster({ shipDefs, placedIds, activeShipId, onSelect, orientation, onRotate, onReset, onReady, canReady, isReady, oppReady, disabled, t }: ShipRosterProps) {
+  const allPlaced = placedIds.size >= shipDefs.length;
 
   return (
     <div className="flex flex-col gap-2 min-w-[180px]">
@@ -501,7 +542,7 @@ function ShipRoster({ placedIds, activeShipId, onSelect, orientation, onRotate, 
         {t('battleship.setup.title')}
       </p>
 
-      {SHIP_DEFS.map((def) => {
+      {shipDefs.map((def) => {
         const placed   = placedIds.has(def.id);
         const isActive = activeShipId === def.id && !isReady;
 
@@ -534,7 +575,7 @@ function ShipRoster({ placedIds, activeShipId, onSelect, orientation, onRotate, 
                 />
               ))}
             </div>
-            <span className="flex-1 truncate">{t(`battleship.ship.${def.id}`)}</span>
+            <span className="flex-1 truncate">{t(`battleship.ship.${baseShipKey(def.id)}`)}</span>
             {placed && (
               <svg className="w-3.5 h-3.5 text-emerald-400 shrink-0" viewBox="0 0 20 20" fill="currentColor">
                 <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
@@ -614,6 +655,7 @@ export function BattleshipGame({ wsUrl, gameId, initialRoomCode, quickPlay: isQu
   const [copied,          setCopied]           = useState(false);
   const [roomVisibility,  setRoomVisibility]   = useState<'private' | 'public'>('private');
   const [roomName,        setRoomName]         = useState('');
+  const [fleetPreset,     setFleetPreset]      = useState<string>('random');
   const [showInfo,        setShowInfo]         = useState(false);
   const [chatOpen,        setChatOpen]         = useState(false);
   const [unread,          setUnread]           = useState(0);
@@ -639,12 +681,12 @@ export function BattleshipGame({ wsUrl, gameId, initialRoomCode, quickPlay: isQu
   const [fxPos, setFxPos] = useState<{ cx: number; cy: number; size: number } | null>(null);
   // End-overlay latch — set once per finished match, cleared on rematch
   const lastFinishKeyRef = useRef<string>('');
-  const [endOverlay, setEndOverlay] = useState<{ iWon: boolean } | null>(null);
+  const [endOverlay, setEndOverlay] = useState<{ iWon: boolean; dismissed: boolean } | null>(null);
 
   // Setup phase state (client-only)
   const [orientation,   setOrientation]  = useState<Orientation>('H');
   const [hoverCoord,    setHoverCoord]   = useState<Coord | null>(null);
-  const [activeShipId,  setActiveShipId] = useState<ShipId>('carrier');
+  const [activeShipId,  setActiveShipId] = useState<ShipId>('');
 
   const autoJoined      = useRef(false);
   const prevTotalRef    = useRef<number | null>(null);
@@ -702,24 +744,25 @@ export function BattleshipGame({ wsUrl, gameId, initialRoomCode, quickPlay: isQu
   const gs = mp.gameState;
 
   const ownShipsLen = gs?.players[myIdx ?? 0]?.ships.length ?? 0;
+  const shipDefs: ShipDef[] = gs?.shipDefs ?? [];
 
   useEffect(() => {
     if (!gs || myIdx === null || gs.phase !== 'setup') return;
-    const placedIds = new Set(gs.players[myIdx].ships.map((s) => s.id));
+    const placed = new Set(gs.players[myIdx].ships.map((s) => s.id));
     setActiveShipId((prev) => {
-      if (!placedIds.has(prev)) return prev; // not yet placed, keep current
-      const next = SHIP_DEFS.find((d) => !placedIds.has(d.id));
+      if (prev && !placed.has(prev)) return prev; // not yet placed, keep current
+      const next = gs.shipDefs.find((d) => !placed.has(d.id));
       return next?.id ?? prev;
     });
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [ownShipsLen, myIdx]);
 
-  // Reset activeShipId on rematch (gs goes null then back to a fresh state)
+  // Reset activeShipId on rematch or initial setup (pick first ship from preset)
   useEffect(() => {
-    if (gs?.phase === 'setup' && ownShipsLen === 0) {
-      setActiveShipId('carrier');
+    if (gs?.phase === 'setup' && ownShipsLen === 0 && gs.shipDefs.length > 0) {
+      setActiveShipId(gs.shipDefs[0].id);
     }
-  }, [gs?.phase, ownShipsLen]);
+  }, [gs?.phase, ownShipsLen, gs?.shipDefs]);
 
   // Mirror server action errors to the inline placement banner during setup
   useEffect(() => {
@@ -755,12 +798,12 @@ export function BattleshipGame({ wsUrl, gameId, initialRoomCode, quickPlay: isQu
 
   const isMyReady  = myIdx !== null ? (gs?.players[myIdx]?.ready ?? false) : false;
   const isOppReady = oppIdx !== null ? (gs?.players[oppIdx]?.ready ?? false) : false;
-  const canReady   = !isMyReady && placedIds.size >= SHIP_DEFS.length && !mp.isSpectator;
+  const canReady   = !isMyReady && placedIds.size >= shipDefs.length && !mp.isSpectator;
 
   // Preview cells for setup hover
   const previewCells = useMemo((): Coord[] => {
     if (!hoverCoord || isMyReady || mp.isSpectator || !gs || gs.phase !== 'setup') return [];
-    const def = SHIP_DEFS.find((d) => d.id === activeShipId);
+    const def = shipDefs.find((d) => d.id === activeShipId);
     if (!def) return [];
     return shipCellsFromOrigin(hoverCoord, orientation, def.length);
   }, [hoverCoord, activeShipId, orientation, isMyReady, mp.isSpectator, gs?.phase]); // eslint-disable-line
@@ -803,7 +846,7 @@ export function BattleshipGame({ wsUrl, gameId, initialRoomCode, quickPlay: isQu
     let text: string;
     let kind: 'hit' | 'miss' | 'sunk';
     if (lastShot.sunkShipId) {
-      text = `${t('battleship.shot.sunk')} ${t(`battleship.ship.${lastShot.sunkShipId}`)}`;
+      text = `${t('battleship.shot.sunk')} ${t(`battleship.ship.${baseShipKey(lastShot.sunkShipId)}`)}`;
       kind = 'sunk';
     } else if (lastShot.result === 'hit') {
       text = t('battleship.shot.hit');
@@ -879,7 +922,7 @@ export function BattleshipGame({ wsUrl, gameId, initialRoomCode, quickPlay: isQu
     }
     if (finishKey === lastFinishKeyRef.current) return; // repeated push, skip
     lastFinishKeyRef.current = finishKey;
-    setEndOverlay({ iWon: gs?.winner === mySlot });
+    setEndOverlay({ iWon: gs?.winner === mySlot, dismissed: false });
   }, [finishKey]); // eslint-disable-line
 
   // Board cell arrays
@@ -960,7 +1003,7 @@ export function BattleshipGame({ wsUrl, gameId, initialRoomCode, quickPlay: isQu
 
   function handleReset() {
     mp.sendAction({ type: 'BS_RESET_PLACEMENT' });
-    setActiveShipId('carrier');
+    setActiveShipId(shipDefs[0]?.id ?? '');
   }
 
   function copyInvite() {
@@ -1010,11 +1053,11 @@ export function BattleshipGame({ wsUrl, gameId, initialRoomCode, quickPlay: isQu
           {t('battleship.setup.waitOpponent')}
         </div>
       );
-      const def = SHIP_DEFS.find((d) => d.id === activeShipId);
+      const def = shipDefs.find((d) => d.id === activeShipId);
       if (def) return (
         <p className="text-sm text-zinc-300 text-center">
           {t('battleship.setup.placing')}{' '}
-          <span className="font-semibold text-indigo-400">{t(`battleship.ship.${def.id}`)}</span>
+          <span className="font-semibold text-indigo-400">{t(`battleship.ship.${baseShipKey(def.id)}`)}</span>
           <span className="text-zinc-600"> ({def.length})</span>
         </p>
       );
@@ -1057,7 +1100,7 @@ export function BattleshipGame({ wsUrl, gameId, initialRoomCode, quickPlay: isQu
 
     let msg: string;
     if (lastShot.sunkShipId) {
-      msg = `${t('battleship.shot.sunk')} ${t(`battleship.ship.${lastShot.sunkShipId}`)}`;
+      msg = `${t('battleship.shot.sunk')} ${t(`battleship.ship.${baseShipKey(lastShot.sunkShipId)}`)}`;
     } else if (lastShot.result === 'hit') {
       msg = t('battleship.shot.hit');
     } else {
@@ -1095,7 +1138,7 @@ export function BattleshipGame({ wsUrl, gameId, initialRoomCode, quickPlay: isQu
         <div className="flex-1 rounded-xl border border-zinc-800 bg-zinc-900/60 px-3 py-2.5 min-w-0">
           <p className="text-[10px] text-zinc-500 font-semibold uppercase tracking-wider mb-2.5 truncate">{title}</p>
           <div className="flex flex-col gap-2">
-            {SHIP_DEFS.map((def) => {
+            {shipDefs.map((def) => {
               const ship = ships.find((s) => s.id === def.id);
               const sunk = ship?.sunk ?? false;
               return (
@@ -1109,7 +1152,7 @@ export function BattleshipGame({ wsUrl, gameId, initialRoomCode, quickPlay: isQu
                   </span>
                   {/* Ship name */}
                   <span className={`flex-1 truncate text-[11px] ${sunk ? 'line-through text-zinc-600' : 'text-zinc-300'}`}>
-                    {t(`battleship.ship.${def.id}`)}
+                    {t(`battleship.ship.${baseShipKey(def.id)}`)}
                   </span>
                   {/* Health squares */}
                   <div className="flex gap-0.5 shrink-0">
@@ -1342,8 +1385,8 @@ export function BattleshipGame({ wsUrl, gameId, initialRoomCode, quickPlay: isQu
           </div>
         )}
 
-        {/* End-game overlay — latched into endOverlay state so it mounts once and never re-animates */}
-        {endOverlay && (
+        {/* End-game overlay — latched into endOverlay state; dismissible to reveal boards */}
+        {endOverlay && !endOverlay.dismissed && (
           <div style={{
             position: 'absolute', inset: 0, zIndex: 30,
             backgroundColor: 'rgba(0,0,0,0.50)',
@@ -1382,6 +1425,12 @@ export function BattleshipGame({ wsUrl, gameId, initialRoomCode, quickPlay: isQu
               <p className="text-zinc-400 text-sm mb-6">
                 {endOverlay.iWon ? t('battleship.end.victorySubtitle') : t('battleship.end.defeatSubtitle')}
               </p>
+              <button
+                onClick={() => setEndOverlay((prev) => prev ? { ...prev, dismissed: true } : prev)}
+                className="w-full px-5 py-2 mb-3 rounded-lg bg-zinc-800 hover:bg-zinc-700 border border-zinc-600 text-zinc-200 font-medium text-sm transition-colors"
+              >
+                {t('battleship.end.showBoards')}
+              </button>
               {mp.playerCount === 2 && (
                 <div className="flex flex-col items-center gap-2 mb-3">
                   <button
@@ -1417,6 +1466,13 @@ export function BattleshipGame({ wsUrl, gameId, initialRoomCode, quickPlay: isQu
 
         {/* ── Setup phase ──────────────────────────────────────────────────── */}
         {gs?.phase === 'setup' && !mp.isSpectator && myIdx !== null && (
+          <div className="flex flex-col gap-3 items-center w-full">
+            {gs.fleetId && (
+              <div className="flex items-center gap-1.5 text-xs text-zinc-400 bg-zinc-800/60 border border-zinc-700/50 rounded-full px-3 py-1">
+                <span className="text-zinc-500">{t('battleship.fleet.label')}</span>
+                <span className="font-semibold text-zinc-200">{t(`battleship.fleet.${gs.fleetId}`)}</span>
+              </div>
+            )}
           <div className="flex flex-col sm:flex-row gap-6 items-start justify-center w-full">
             <div className="flex flex-col items-center gap-2 rounded-xl border border-zinc-800 bg-zinc-950/40 px-4 py-3">
               <BsGrid
@@ -1435,6 +1491,7 @@ export function BattleshipGame({ wsUrl, gameId, initialRoomCode, quickPlay: isQu
               )}
             </div>
             <ShipRoster
+              shipDefs={shipDefs}
               placedIds={placedIds}
               activeShipId={isMyReady ? null : activeShipId}
               onSelect={setActiveShipId}
@@ -1448,6 +1505,7 @@ export function BattleshipGame({ wsUrl, gameId, initialRoomCode, quickPlay: isQu
               disabled={mp.matchCountdown !== null}
               t={t}
             />
+          </div>
           </div>
         )}
 
@@ -1649,8 +1707,27 @@ export function BattleshipGame({ wsUrl, gameId, initialRoomCode, quickPlay: isQu
                 className="bg-zinc-800 border border-zinc-700 rounded-lg px-3 py-2 text-sm text-zinc-100 placeholder-zinc-500 focus:outline-none focus:border-indigo-500"
               />
             )}
+            {/* Fleet preset selector */}
+            <div className="flex flex-col gap-1.5">
+              <p className="text-[11px] text-zinc-500 font-semibold uppercase tracking-wider">{t('battleship.lobby.fleetPreset')}</p>
+              <div className="grid grid-cols-3 gap-1">
+                {[{ id: 'random', shipCount: 0 }, ...FLEET_PRESETS].map((p) => (
+                  <button
+                    key={p.id}
+                    onClick={() => setFleetPreset(p.id)}
+                    className={`py-1.5 px-1 text-[11px] rounded-md font-medium transition-colors border ${
+                      fleetPreset === p.id
+                        ? 'border-indigo-500 bg-indigo-900/40 text-indigo-300'
+                        : 'border-zinc-700 bg-transparent text-zinc-500 hover:border-zinc-500 hover:text-zinc-300'
+                    }`}
+                  >
+                    {t(`battleship.fleet.${p.id}`)}
+                  </button>
+                ))}
+              </div>
+            </div>
             <button
-              onClick={() => mp.createRoom({ visibility: roomVisibility, roomName: roomName.trim() || undefined })}
+              onClick={() => mp.createRoom({ visibility: roomVisibility, roomName: roomName.trim() || undefined, battleshipConfig: { fleetPreset } })}
               disabled={mp.connection !== 'connected'}
               className="w-full py-2.5 rounded-lg bg-indigo-600 hover:bg-indigo-500 disabled:opacity-40 disabled:cursor-not-allowed text-white font-semibold text-sm transition-colors"
             >
@@ -1694,6 +1771,15 @@ export function BattleshipGame({ wsUrl, gameId, initialRoomCode, quickPlay: isQu
                 <><svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" /></svg>{t('game.room.copyInvite')}</>
               )}
             </button>
+            <RoomInviteButton
+              playerIndex={mp.playerIndex}
+              playerCount={mp.playerCount}
+              maxPlayers={mp.roomMaxPlayers}
+              onlineUsers={mp.onlineUsers}
+              onInvite={mp.sendRoomInvite}
+              onRefreshUsers={mp.fetchOnlineUsers}
+              playerNicknames={mp.players.map(p => p.nickname)}
+            />
             {mp.players.length > 0 && (
               <div className="space-y-1 pt-2 border-t border-zinc-800">
                 {([0, 1] as const).map((idx) => {

@@ -4,6 +4,9 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { createInitialState, changeDirection, step, GRID_SIZE, TICK_MS } from './engine';
 import type { Direction, GameState, SnakeHighscoreEntry } from './types';
 import { useAchievements } from '@/hooks/useAchievements';
+import { useI18n } from '@/components/providers/LanguageProvider';
+import { HighscoreTable } from '@/components/ui/HighscoreTable';
+import { useSwipe } from '@/hooks/useSwipe';
 
 // ── Best-score persistence ─────────────────────────────────────────────────────
 
@@ -107,6 +110,7 @@ function FoodVisual() {
 // ── Component ──────────────────────────────────────────────────────────────────
 
 export function SnakeGame() {
+  const { t } = useI18n();
   const ach = useAchievements('snake');
   const [state, setState]           = useState<GameState>(() => createInitialState(0));
   const [phase, setPhase]           = useState<Phase>('countdown');
@@ -209,6 +213,14 @@ export function SnakeGame() {
     return () => window.removeEventListener('keydown', onKeyDown);
   }, []);
 
+  // ── Swipe (mobile) ─────────────────────────────────────────────────────────
+  const swipeHandlers = useSwipe({
+    onSwipe: useCallback((dir: Direction) => {
+      if (phaseRef.current === 'over') return;
+      setState(prev => changeDirection(prev, dir));
+    }, []),
+  });
+
   // ── Restart ───────────────────────────────────────────────────────────────────
   const handleRestart = useCallback(() => {
     setState(prev => createInitialState(prev.best));
@@ -219,7 +231,7 @@ export function SnakeGame() {
 
   // ── Clear highscores ──────────────────────────────────────────────────────────
   const handleClearHighscores = useCallback(() => {
-    if (!confirm('Clear all highscores?')) return;
+    if (!confirm(t('game.clearConfirm'))) return;
     deleteHighscores();
     setHighscores([]);
     setLastRun(null);
@@ -240,14 +252,14 @@ export function SnakeGame() {
 
       {/* ── Header ───────────────────────────────────────────────────── */}
       <div className="w-full max-w-[420px] flex items-center gap-3">
-        <span className="text-4xl font-black text-zinc-100 tracking-tight mr-auto">Snake</span>
-        <ScoreBox label="SCORE" value={state.score} />
-        <ScoreBox label="BEST"  value={state.best} />
+        <span className="text-4xl font-black text-zinc-100 tracking-tight mr-auto">{t('game.name.snake')}</span>
+        <ScoreBox label={t('game.score')} value={state.score} />
+        <ScoreBox label={t('game.best')}  value={state.best} />
         <button
           onClick={handleRestart}
           className="px-4 py-2 rounded-lg bg-zinc-700 hover:bg-zinc-600 text-zinc-100 text-sm font-semibold transition-colors shrink-0"
         >
-          New
+          {t('game.new')}
         </button>
       </div>
 
@@ -257,7 +269,7 @@ export function SnakeGame() {
         uniform in both axes, so total height == total width at any container width.
         The 1px gap shows as bg-zinc-800 lines against bg-zinc-900/70 cells.
       */}
-      <div className="relative w-full max-w-[420px]">
+      <div className="relative w-full max-w-[420px] touch-none" {...swipeHandlers}>
         <div
           className="p-2 rounded-xl bg-zinc-800 border border-zinc-700/60 shadow-lg shadow-black/30"
           style={{
@@ -296,7 +308,7 @@ export function SnakeGame() {
                 cdNum === 0 ? 'text-5xl text-emerald-400' : 'text-7xl text-zinc-100'
               }`}
             >
-              {cdNum === 0 ? 'GO' : cdNum}
+              {cdNum === 0 ? t('game.go') : cdNum}
             </span>
           </div>
         )}
@@ -304,13 +316,13 @@ export function SnakeGame() {
         {/* Game-over overlay */}
         {phase === 'over' && (
           <div className="absolute inset-0 rounded-xl bg-zinc-950/85 flex flex-col items-center justify-center gap-3 backdrop-blur-[2px] z-10">
-            <p className="text-2xl font-black text-zinc-100">Game Over</p>
-            <p className="text-sm text-zinc-400">Score: {state.score}</p>
+            <p className="text-2xl font-black text-zinc-100">{t('game.over')}</p>
+            <p className="text-sm text-zinc-400">{t('game.score')}: {state.score}</p>
             <button
               onClick={handleRestart}
               className="mt-1 px-6 py-2 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white text-sm font-semibold transition-colors"
             >
-              Play Again
+              {t('game.playAgain')}
             </button>
           </div>
         )}
@@ -318,7 +330,7 @@ export function SnakeGame() {
 
       {/* ── Hint ─────────────────────────────────────────────────────── */}
       <p className="text-xs text-zinc-600 text-center max-w-[320px]">
-        Arrow keys or WASD to move · Eat food to grow · Avoid walls and yourself
+        {t('snake.controls')}
       </p>
 
       {/* ── Highscores ───────────────────────────────────────────────── */}
@@ -347,109 +359,3 @@ function ScoreBox({ label, value }: { label: string; value: number }) {
   );
 }
 
-function HighscoreTable({
-  entries,
-  lastRun,
-  onClear,
-}: {
-  entries: SnakeHighscoreEntry[];
-  lastRun: LastRun | null;
-  onClear: () => void;
-}) {
-  const best = entries[0]?.score ?? 0;
-
-  return (
-    <div className="w-full max-w-[420px]">
-
-      {/* Section header */}
-      <div className="flex items-center justify-between mb-3">
-        <div className="flex items-baseline gap-3">
-          <span className="text-xs font-semibold uppercase tracking-widest text-zinc-500">
-            High Scores
-          </span>
-          {best > 0 && (
-            <span className="text-sm font-black text-zinc-100 tabular-nums">
-              Best:&nbsp;{best.toLocaleString()}
-            </span>
-          )}
-        </div>
-        {entries.length > 0 && (
-          <button
-            onClick={onClear}
-            className="text-xs text-zinc-600 hover:text-rose-400 transition-colors"
-          >
-            Clear Highscores
-          </button>
-        )}
-      </div>
-
-      {/* Last run summary */}
-      {lastRun && (
-        <p className="text-xs text-zinc-500 mb-3">
-          Last run: Score&nbsp;{lastRun.score}&nbsp;·&nbsp;
-          Moves&nbsp;{lastRun.moves.toLocaleString()}&nbsp;·&nbsp;
-          Duration&nbsp;{lastRun.durationSec}s
-        </p>
-      )}
-
-      {entries.length === 0 ? (
-        <p className="text-sm text-zinc-600 text-center py-6 rounded-xl border border-zinc-800/60 bg-zinc-900/30">
-          No scores yet — finish a game to appear here.
-        </p>
-      ) : (
-        <div className="rounded-xl border border-zinc-800 overflow-hidden">
-          <table className="w-full text-sm">
-            <thead>
-              <tr className="bg-zinc-900 text-zinc-500 text-xs uppercase tracking-widest border-b border-zinc-800">
-                <th className="py-2 px-3 text-left font-semibold w-8">#</th>
-                <th className="py-2 px-3 text-right font-semibold">Score</th>
-                <th className="py-2 px-3 text-right font-semibold">Moves</th>
-                <th className="py-2 px-3 text-right font-semibold">Date</th>
-              </tr>
-            </thead>
-            <tbody>
-              {entries.slice(0, 10).map((entry, i) => (
-                <tr
-                  key={entry.id}
-                  className={`border-t border-zinc-800/50 ${
-                    i === 0 ? 'bg-amber-950/25' : 'bg-zinc-900/30'
-                  }`}
-                >
-                  <td className="py-2.5 px-3">
-                    <span className={`font-bold tabular-nums ${
-                      i === 0 ? 'text-amber-400' : i === 1 ? 'text-zinc-400' : 'text-zinc-600'
-                    }`}>
-                      {i + 1}
-                    </span>
-                  </td>
-                  <td className="py-2.5 px-3 text-right font-black tabular-nums text-zinc-100">
-                    {entry.score.toLocaleString()}
-                  </td>
-                  <td className="py-2.5 px-3 text-right tabular-nums text-zinc-400">
-                    {entry.moves.toLocaleString()}
-                  </td>
-                  <td className="py-2.5 px-3 text-right text-zinc-500 text-xs whitespace-nowrap">
-                    {formatDate(entry.date)}
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      )}
-
-    </div>
-  );
-}
-
-function formatDate(ts: number): string {
-  try {
-    return new Date(ts).toLocaleDateString(undefined, {
-      month: 'short',
-      day:   'numeric',
-      year:  'numeric',
-    });
-  } catch {
-    return '—';
-  }
-}

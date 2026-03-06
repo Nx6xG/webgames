@@ -7,6 +7,8 @@ import type { Board, Difficulty, GamePhase } from './types';
 import type { SudokuStats } from './stats';
 import { useAchievements } from '@/hooks/useAchievements';
 import { useI18n } from '@/components/providers/LanguageProvider';
+import { createSeededRng } from '@/lib/seededRandom';
+import { getTodayStr } from '@/lib/dailyChallenges/definitions';
 
 const MAX_LIVES = 3;
 
@@ -278,11 +280,15 @@ export function SudokuGame() {
 
   // ── Game actions ──────────────────────────────────────────────────────────────
 
-  function startGame(diff: Difficulty) {
+  const [isDaily, setIsDaily] = useState(false);
+
+  function startGame(diff: Difficulty, seed?: string) {
     setPhase('generating');
+    setIsDaily(!!seed);
     // Defer heavy generation to let the 'generating' render happen first
     setTimeout(() => {
-      const { puzzle: p, solution: s } = generateSudoku(diff);
+      const rng = seed ? createSeededRng(seed) : undefined;
+      const { puzzle: p, solution: s } = generateSudoku(diff, rng);
       const pre = p.map(row => row.map(v => v !== 0));
       setDifficulty(diff);
       setOrigPuzzle(p.map(row => [...row]));
@@ -301,6 +307,10 @@ export function SudokuGame() {
   }
 
   function handleStart() { startGame(formDiff); }
+
+  function handleDailyPuzzle() {
+    startGame('medium', `sudoku_daily_${getTodayStr()}`);
+  }
 
   function handleRestart() {
     savedRef.current = false;
@@ -412,6 +422,14 @@ export function SudokuGame() {
               Start Game
             </button>
           </div>
+
+          {/* Daily puzzle */}
+          <button
+            onClick={handleDailyPuzzle}
+            className="w-full py-3 rounded-xl border border-amber-800/50 bg-amber-950/30 hover:bg-amber-950/50 text-amber-300 text-sm font-semibold transition-colors flex items-center justify-center gap-2"
+          >
+            <span>📅</span> {t('daily.puzzle')} <span className="text-xs text-amber-500/70">({t('daily.puzzleHint')})</span>
+          </button>
 
           {/* Stats panel */}
           <StatsPanel stats={stats} onReset={handleResetStats} />

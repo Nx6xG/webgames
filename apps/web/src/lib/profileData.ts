@@ -10,6 +10,8 @@ import type { CosmeticsSelection } from 'shared';
 import { loadLocalProfile, GAME_EMOJI } from '@/lib/localStats';
 import type { LocalProfile } from '@/lib/localStats';
 import { loadCosmetics } from '@/lib/cosmetics';
+import { getPublicProfileByUserId } from '@/lib/cloudQueries';
+import { ACHIEVEMENTS } from '@/lib/achievements/definitions';
 
 // ── Types ────────────────────────────────────────────────────────────────────
 
@@ -73,6 +75,37 @@ export function resolveOtherProfile(
     stats: null,
     isMe: false,
   };
+}
+
+/**
+ * Build a ProfileData for another user using their Supabase cloud profile.
+ * Falls back to resolveOtherProfile() if the cloud fetch fails.
+ */
+export async function resolveCloudProfile(
+  userId: string,
+  nickname: string,
+  cosmetics: CosmeticsSelection | undefined,
+): Promise<ProfileData> {
+  try {
+    const cloud = await getPublicProfileByUserId(userId);
+    if (!cloud) return resolveOtherProfile(userId, nickname, cosmetics);
+    return {
+      id: userId,
+      nickname: cloud.nickname,
+      cosmetics: cloud.cosmetics ?? cosmetics ?? { slots: {} },
+      stats: {
+        playsTotal: cloud.totalPlayed,
+        winsTotal: cloud.totalWins,
+        winRate: cloud.totalWinrate,
+        achievementsUnlocked: cloud.achievementsUnlockedCount,
+        achievementsTotal: ACHIEVEMENTS.length,
+        favoriteGameId: cloud.favoriteGame,
+      },
+      isMe: false,
+    };
+  } catch {
+    return resolveOtherProfile(userId, nickname, cosmetics);
+  }
 }
 
 export { GAME_EMOJI };

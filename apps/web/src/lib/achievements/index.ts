@@ -1,4 +1,4 @@
-export { trackAchievementEvent } from './engine';
+export { trackAchievementEvent, consumeCompletedDaily } from './engine';
 export type { AchievementEvent } from './engine';
 export { ACHIEVEMENTS, CATEGORY_ORDER } from './definitions';
 export type { AchievementId, AchievementDefinition, AchievementStats, AchievementProgress, AchievementCategory } from './definitions';

@@ -2,7 +2,8 @@
 
 export const BOARD_SIZE = 10;
 
-export type ShipId = 'carrier' | 'battleship' | 'cruiser' | 'submarine' | 'destroyer';
+/** Ship IDs are now dynamic strings (fleet presets define them). */
+export type ShipId = string;
 export type Orientation = 'H' | 'V';
 export type ShotResult  = 'hit' | 'miss';
 export type BsPhase     = 'setup' | 'playing' | 'finished';
@@ -16,7 +17,17 @@ export interface ShipDef {
   length: number;
 }
 
-/** Classic 5-ship set.  Order matters — placement order follows this array. */
+// ── Fleet presets ─────────────────────────────────────────────────────────────
+
+export interface FleetPreset {
+  /** Unique key for this preset (used in i18n: battleship.fleet.preset.<id>) */
+  id: string;
+  /** English display name */
+  name: string;
+  ships: readonly ShipDef[];
+}
+
+/** Classic 5-ship set — kept as the default export for backwards compatibility. */
 export const SHIP_DEFS: readonly ShipDef[] = [
   { id: 'carrier',    name: 'Carrier',    length: 5 },
   { id: 'battleship', name: 'Battleship', length: 4 },
@@ -24,6 +35,61 @@ export const SHIP_DEFS: readonly ShipDef[] = [
   { id: 'submarine',  name: 'Submarine',  length: 3 },
   { id: 'destroyer',  name: 'Destroyer',  length: 2 },
 ] as const;
+
+export const FLEET_PRESETS: readonly FleetPreset[] = [
+  {
+    id: 'classic',
+    name: 'Classic',
+    ships: SHIP_DEFS,
+  },
+  {
+    id: 'compact',
+    name: 'Compact',
+    ships: [
+      { id: 'battleship', name: 'Battleship', length: 4 },
+      { id: 'cruiser',    name: 'Cruiser',    length: 3 },
+      { id: 'submarine',  name: 'Submarine',  length: 3 },
+      { id: 'destroyer1', name: 'Destroyer',  length: 2 },
+      { id: 'destroyer2', name: 'Destroyer',  length: 2 },
+      { id: 'patrol',     name: 'Patrol Boat',length: 1 },
+    ],
+  },
+  {
+    id: 'wide',
+    name: 'Wide',
+    ships: [
+      { id: 'carrier',    name: 'Carrier',    length: 5 },
+      { id: 'cruiser1',   name: 'Cruiser',    length: 3 },
+      { id: 'cruiser2',   name: 'Cruiser',    length: 3 },
+      { id: 'destroyer1', name: 'Destroyer',  length: 2 },
+      { id: 'destroyer2', name: 'Destroyer',  length: 2 },
+    ],
+  },
+  {
+    id: 'small',
+    name: 'Small Fleet',
+    ships: [
+      { id: 'cruiser1',   name: 'Cruiser',    length: 3 },
+      { id: 'cruiser2',   name: 'Cruiser',    length: 3 },
+      { id: 'destroyer1', name: 'Destroyer',  length: 2 },
+      { id: 'destroyer2', name: 'Destroyer',  length: 2 },
+      { id: 'destroyer3', name: 'Destroyer',  length: 2 },
+      { id: 'patrol1',    name: 'Patrol Boat',length: 1 },
+      { id: 'patrol2',    name: 'Patrol Boat',length: 1 },
+    ],
+  },
+  {
+    id: 'heavy',
+    name: 'Heavy',
+    ships: [
+      { id: 'carrier',    name: 'Carrier',    length: 5 },
+      { id: 'battleship1',name: 'Battleship', length: 4 },
+      { id: 'battleship2',name: 'Battleship', length: 4 },
+      { id: 'cruiser',    name: 'Cruiser',    length: 3 },
+      { id: 'destroyer',  name: 'Destroyer',  length: 2 },
+    ],
+  },
+];
 
 // ── Coordinate ───────────────────────────────────────────────────────────────
 
@@ -88,6 +154,10 @@ export interface BattleshipState {
   lastShot:    (ShotRecord & { by: BsSlot }) | null;
   /** Mirrors phase for GameEngine.getStatus() compatibility */
   status:      'ongoing' | 'win';
+  /** Ship definitions for this match (randomly chosen fleet preset). */
+  shipDefs:    ShipDef[];
+  /** Fleet preset id for display purposes. */
+  fleetId:     string;
 }
 
 // ── Actions ───────────────────────────────────────────────────────────────────

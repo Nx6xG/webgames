@@ -9,8 +9,9 @@ import { useClickOutside, useEscape } from '@/hooks/useClickOutside';
 import { OnlineUsersDrawer } from './OnlineUsersDrawer';
 import { InviteDialog } from './InviteDialog';
 import { ProfileViewerModal } from '@/components/ui/ProfileViewerModal';
-import { resolveOtherProfile, resolveMyProfile } from '@/lib/profileData';
+import { resolveOtherProfile, resolveMyProfile, resolveCloudProfile } from '@/lib/profileData';
 import { useNickname } from '@/components/providers/NicknameProvider';
+import { useAuth } from '@/components/providers/AuthProvider';
 import type { ProfileData } from '@/lib/profileData';
 import type { InvitePayload, GameId, OnlineUser } from 'shared';
 
@@ -26,12 +27,13 @@ const GAME_TITLE_KEYS: Record<string, string> = {
 };
 
 export function OnlineNavChip({ wsUrl = '' }: { wsUrl?: string }) {
+  const { user } = useAuth();
   const {
     users, connected,
     incomingInvites, sentInvite, inviteError,
     acceptedInvite,
     sendInvite, acceptInvite, dismissInvite, dismissSentInvite, dismissAcceptedInvite,
-  } = useOnlineUsers(wsUrl);
+  } = useOnlineUsers(wsUrl, user?.id);
 
   const { t } = useI18n();
   const router = useRouter();
@@ -41,6 +43,8 @@ export function OnlineNavChip({ wsUrl = '' }: { wsUrl?: string }) {
   const [myToken, setMyToken]         = useState('');
   const [inviteTarget, setInviteTarget] = useState<{ token: string; nickname: string } | null>(null);
   const [viewedProfile, setViewedProfile] = useState<ProfileData | null>(null);
+  const [profileLoading, setProfileLoading] = useState(false);
+  const [profileUserId, setProfileUserId] = useState<string | undefined>(undefined);
 
   // Refs covering every "inside" element: the chip trigger + the drawer panel.
   // useClickOutside fires when pointerdown lands outside ALL of them.
@@ -105,12 +109,23 @@ export function OnlineNavChip({ wsUrl = '' }: { wsUrl?: string }) {
     router.push(`/games/${gameId}?room=${roomCode}`);
   }
 
-  function handleViewProfile(user: OnlineUser) {
-    const isMe = user.playerToken === myToken;
-    const pd = isMe
-      ? resolveMyProfile(myNickname, myToken)
-      : resolveOtherProfile(user.playerToken, user.nickname, user.cosmetics);
-    setViewedProfile(pd);
+  function handleViewProfile(onlineUser: OnlineUser) {
+    const isMe = onlineUser.playerToken === myToken;
+    if (isMe) {
+      setViewedProfile(resolveMyProfile(myNickname, myToken));
+      setProfileUserId(user?.id);
+      setProfileLoading(false);
+      return;
+    }
+    // Show immediate fallback, then attempt cloud fetch if userId is present
+    setViewedProfile(resolveOtherProfile(onlineUser.playerToken, onlineUser.nickname, onlineUser.cosmetics));
+    setProfileUserId(onlineUser.userId);
+    if (onlineUser.userId) {
+      setProfileLoading(true);
+      resolveCloudProfile(onlineUser.userId, onlineUser.nickname, onlineUser.cosmetics)
+        .then((cloud) => setViewedProfile(cloud))
+        .finally(() => setProfileLoading(false));
+    }
   }
 
   const hasNotifications = incomingInvites.length > 0 || !!sentInvite || !!inviteError || !!acceptedInvite;
@@ -280,7 +295,9 @@ export function OnlineNavChip({ wsUrl = '' }: { wsUrl?: string }) {
       {viewedProfile && (
         <ProfileViewerModal
           profile={viewedProfile}
-          onClose={() => setViewedProfile(null)}
+          onClose={() => { setViewedProfile(null); setProfileUserId(undefined); setProfileLoading(false); }}
+          loading={profileLoading}
+          userId={profileUserId}
         />
       )}
     </>

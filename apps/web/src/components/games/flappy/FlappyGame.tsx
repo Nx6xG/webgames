@@ -378,7 +378,7 @@ export function FlappyGame() {
           </span>
           <span className="text-zinc-600">|</span>
           <span className="text-zinc-400 text-xs">
-            Best: <span className="font-bold text-zinc-200 tabular-nums">{best}</span>
+            {t('game.best')}: <span className="font-bold text-zinc-200 tabular-nums">{best}</span>
           </span>
         </div>
       </div>
@@ -490,15 +490,15 @@ export function FlappyGame() {
             {/* Start */}
             {phase === 'idle' && (
               <div className="absolute inset-0 flex flex-col items-center justify-center bg-black/50 backdrop-blur-[2px] z-20">
-                <div className="text-3xl font-black text-amber-400 mb-2 drop-shadow-lg">Flappy Bird</div>
+                <div className="text-3xl font-black text-amber-400 mb-2 drop-shadow-lg">{t('game.name.flappy')}</div>
                 <p className="text-sm text-zinc-300 mb-6">{t('lobby.games.flappy.desc')}</p>
                 <button
                   onClick={(e) => { e.stopPropagation(); flap(); }}
                   className="px-6 py-3 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white font-bold text-sm transition-all active:scale-95 shadow-lg shadow-indigo-900/40"
                 >
-                  Space / Click
+                  {t('flappy.startButton')}
                 </button>
-                <p className="text-[11px] text-zinc-500 mt-4">P = Pause &middot; R = Restart</p>
+                <p className="text-[11px] text-zinc-500 mt-4">{t('flappy.idleHint')}</p>
               </div>
             )}
 
@@ -514,12 +514,12 @@ export function FlappyGame() {
             {/* Paused */}
             {phase === 'paused' && (
               <div className="absolute inset-0 flex flex-col items-center justify-center bg-black/50 backdrop-blur-[2px] z-20">
-                <div className="text-2xl font-black text-zinc-100 mb-4">{t('game.paused') || 'Pausiert'}</div>
+                <div className="text-2xl font-black text-zinc-100 mb-4">{t('game.paused')}</div>
                 <button
                   onClick={(e) => { e.stopPropagation(); togglePause(); }}
                   className="px-6 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white font-bold text-sm transition-all active:scale-95"
                 >
-                  {t('game.resume') || 'Weiter'}
+                  {t('game.resume')}
                 </button>
               </div>
             )}
@@ -527,20 +527,20 @@ export function FlappyGame() {
             {/* Game Over */}
             {phase === 'over' && (
               <div className="absolute inset-0 flex flex-col items-center justify-center bg-black/60 backdrop-blur-[2px] z-20">
-                <div className="text-2xl font-black text-rose-400 mb-1">Game Over</div>
+                <div className="text-2xl font-black text-rose-400 mb-1">{t('game.over')}</div>
                 <div className="text-4xl font-black text-zinc-100 mb-1 tabular-nums">{score}</div>
                 {score >= best && score > 0 && (
-                  <span className="text-xs font-bold text-amber-400 mb-3">New Best!</span>
+                  <span className="text-xs font-bold text-amber-400 mb-3">{t('game.newBest')}</span>
                 )}
                 <div className="text-xs text-zinc-400 mb-5">
-                  Best: <span className="text-zinc-200 font-bold tabular-nums">{best}</span>
+                  {t('game.best')}: <span className="text-zinc-200 font-bold tabular-nums">{best}</span>
                 </div>
                 <div className="flex gap-3">
                   <button
                     onClick={(e) => { e.stopPropagation(); restart(); }}
                     className="px-5 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white font-bold text-sm transition-all active:scale-95"
                   >
-                    {t('game.restart') || 'Nochmal'}
+                    {t('game.restart')}
                   </button>
                 </div>
               </div>
@@ -556,7 +556,7 @@ export function FlappyGame() {
           onPointerDown={(e) => { e.preventDefault(); flap(); }}
           className="flex-1 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white font-bold text-sm active:scale-[0.97] transition-all"
         >
-          Flap
+          {t('flappy.flap')}
         </button>
         <button
           onPointerDown={(e) => { e.preventDefault(); togglePause(); }}
@@ -574,9 +574,9 @@ export function FlappyGame() {
 
       {/* Controls legend (desktop) */}
       <div className="shrink-0 hidden sm:flex items-center gap-4 text-[11px] text-zinc-600">
-        <span>Space/↑/Click = Flap</span>
-        <span>P = Pause</span>
-        <span>R = Restart</span>
+        <span>{t('flappy.controls.flap')}</span>
+        <span>{t('flappy.controls.pause')}</span>
+        <span>{t('flappy.controls.restart')}</span>
       </div>
     </div>
   );

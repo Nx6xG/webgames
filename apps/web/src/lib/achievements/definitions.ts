@@ -63,6 +63,9 @@ export const CATEGORY_ORDER = [
   'snake',
   'tetris',
   'flappy',
+  'pong',
+  'breakout',
+  'minesweeper',
 ] as const;
 
 export type AchievementCategory = (typeof CATEGORY_ORDER)[number];
@@ -391,5 +394,98 @@ export const ACHIEVEMENTS: AchievementDefinition[] = [
     tags: ['flappy'],
     condition: plays('flappy', 5),
     getProgress: playsProgress('flappy', 5),
+  },
+
+  // ── Pong ──────────────────────────────────────────────────────────────────
+  {
+    id: 'pong.first_win',
+    icon: '🏓',
+    nameKey: 'achievements.pong.first_win.name',
+    descKey: 'achievements.pong.first_win.desc',
+    tags: ['pong'],
+    cosmeticReward: { slot: 'badge', id: 'badge_pong' },
+    condition: wins('pong', 1),
+    getProgress: winsProgress('pong', 1),
+  },
+  {
+    id: 'pong.play_5',
+    icon: '🏓',
+    nameKey: 'achievements.pong.play_5.name',
+    descKey: 'achievements.pong.play_5.desc',
+    tags: ['pong'],
+    condition: plays('pong', 5),
+    getProgress: playsProgress('pong', 5),
+  },
+  {
+    id: 'pong.win_5',
+    icon: '🔥',
+    nameKey: 'achievements.pong.win_5.name',
+    descKey: 'achievements.pong.win_5.desc',
+    tags: ['pong'],
+    hidden: true,
+    condition: wins('pong', 5),
+    getProgress: winsProgress('pong', 5),
+  },
+
+  // ── Breakout ──────────────────────────────────────────────────────────────
+  {
+    id: 'breakout.first_win',
+    icon: '🧱',
+    nameKey: 'achievements.breakout.first_win.name',
+    descKey: 'achievements.breakout.first_win.desc',
+    tags: ['breakout'],
+    cosmeticReward: { slot: 'badge', id: 'badge_breakout' },
+    condition: wins('breakout', 1),
+    getProgress: winsProgress('breakout', 1),
+  },
+  {
+    id: 'breakout.play_5',
+    icon: '🧱',
+    nameKey: 'achievements.breakout.play_5.name',
+    descKey: 'achievements.breakout.play_5.desc',
+    tags: ['breakout'],
+    condition: plays('breakout', 5),
+    getProgress: playsProgress('breakout', 5),
+  },
+  {
+    id: 'breakout.win_5',
+    icon: '🔥',
+    nameKey: 'achievements.breakout.win_5.name',
+    descKey: 'achievements.breakout.win_5.desc',
+    tags: ['breakout'],
+    hidden: true,
+    condition: wins('breakout', 5),
+    getProgress: winsProgress('breakout', 5),
+  },
+
+  // ── Minesweeper ─────────────────────────────────────────────────────────────
+  {
+    id: 'minesweeper.first_win',
+    icon: '💣',
+    nameKey: 'achievements.minesweeper.first_win.name',
+    descKey: 'achievements.minesweeper.first_win.desc',
+    tags: ['minesweeper'],
+    cosmeticReward: { slot: 'badge', id: 'badge_minesweeper' },
+    condition: wins('minesweeper', 1),
+    getProgress: winsProgress('minesweeper', 1),
+  },
+  {
+    id: 'minesweeper.play_5',
+    icon: '💣',
+    nameKey: 'achievements.minesweeper.play_5.name',
+    descKey: 'achievements.minesweeper.play_5.desc',
+    tags: ['minesweeper'],
+    condition: plays('minesweeper', 5),
+    getProgress: playsProgress('minesweeper', 5),
+  },
+  {
+    id: 'minesweeper.win_5',
+    icon: '🔥',
+    nameKey: 'achievements.minesweeper.win_5.name',
+    descKey: 'achievements.minesweeper.win_5.desc',
+    tags: ['minesweeper'],
+    hidden: true,
+    condition: wins('minesweeper', 5),
+    getProgress: winsProgress('minesweeper', 5),
   },
 ];

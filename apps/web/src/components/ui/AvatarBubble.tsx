@@ -22,20 +22,22 @@ export interface AvatarBubbleProps {
   cosmetics?: CosmeticsSelection;
 }
 
-/** Mapping of head cosmetic IDs to their display emoji */
-const HEAD_EMOJIS: Record<string, string> = {
-  crown: '👑',
-  cap: '🧢',
-  wizard_hat: '🧙',
-  top_hat: '🎩',
+/** Head cosmetic font size per avatar size */
+const HEAD_TEXT_SIZE: Record<string, string> = {
+  sm: 'text-[10px]',
+  md: 'text-sm',
+  lg: 'text-lg',
 };
 
-/** Head emoji positions by avatar size */
-const HEAD_POSITION: Record<string, string> = {
-  sm: 'text-[8px] -top-1 -right-0.5',
-  md: 'text-[10px] -top-1.5 -right-1',
-  lg: 'text-xs -top-2 -right-1',
+/** Scale multiplier per avatar size (compounds with per-item anchor.scale) */
+const HEAD_SIZE_SCALE: Record<string, number> = {
+  sm: 0.75,
+  md: 0.9,
+  lg: 1.0,
 };
+
+/** Default top offset — sits just above the frame's upper rim */
+const HEAD_DEFAULT_TOP = '-28%';
 
 /**
  * Two-layer animated SVG flame effect.
@@ -225,12 +227,29 @@ export function AvatarBubble({ avatarId, avatarFrame, nickname, size = 'md', cla
         content
       )}
 
-      {/* Layer 5: Head cosmetic (emoji overlay on top-right) */}
-      {resolvedHead && HEAD_EMOJIS[resolvedHead] && (
-        <span className={`absolute z-20 leading-none pointer-events-none select-none ${HEAD_POSITION[size] || HEAD_POSITION.md}`}>
-          {HEAD_EMOJIS[resolvedHead]}
-        </span>
-      )}
+      {/* Layer 5: Head cosmetic (anchored to top edge of frame) */}
+      {resolvedHead && (() => {
+        const def = getCosmeticDef(resolvedHead, 'head');
+        if (!def) return null;
+        const anchor = def.anchor;
+        const sizeScale = HEAD_SIZE_SCALE[size] ?? 0.9;
+        const itemScale = anchor?.scale ?? 1;
+        const totalScale = sizeScale * itemScale;
+        const top = anchor?.top ?? HEAD_DEFAULT_TOP;
+        const left = anchor?.left ?? '50%';
+        const rotate = anchor?.rotate;
+        const transforms = ['translateX(-50%)'];
+        if (totalScale !== 1) transforms.push(`scale(${totalScale})`);
+        if (rotate) transforms.push(`rotate(${rotate})`);
+        return (
+          <span
+            className={`absolute z-20 leading-none pointer-events-none select-none ${HEAD_TEXT_SIZE[size] ?? HEAD_TEXT_SIZE.md}`}
+            style={{ top, left, transform: transforms.join(' ') }}
+          >
+            {def.emoji}
+          </span>
+        );
+      })()}
     </span>
   );
 }

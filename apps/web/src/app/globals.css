@@ -144,6 +144,13 @@ body {
     snake-food-pulse  2s   280ms ease-in-out infinite;
 }
 
+/* ── Minesweeper cell reveal pop ─────────────────────────────────────────── */
+@keyframes ms-pop {
+  0%   { opacity: 0; transform: scale(0.6); }
+  60%  { opacity: 1; transform: scale(1.05); }
+  100% { opacity: 1; transform: scale(1);    }
+}
+
 /* ── Avatar frame animations ─────────────────────────────────────────────── */
 
 /* All animated frames use a ::before pseudo-element for the visual ring/glow

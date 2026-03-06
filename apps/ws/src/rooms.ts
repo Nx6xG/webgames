@@ -7,8 +7,8 @@ const CODE_LENGTH = 6;
 export const PLAYER_RECONNECT_MS = 30_000;
 /** How long an empty room is kept alive after the last player's eviction timer starts (ms) */
 export const ROOM_IDLE_CLEANUP_MS = 60_000;
-/** How long an empty *public* room stays visible in the lobby before being auto-cleaned (ms) */
-export const PUBLIC_ROOM_EMPTY_CLEANUP_MS = 120_000;
+/** @deprecated Public rooms are now deleted immediately when empty. Kept for reference only. */
+// export const PUBLIC_ROOM_EMPTY_CLEANUP_MS = 120_000;
 
 // ─── Data structures ──────────────────────────────────────────────────────────
 
@@ -33,7 +33,7 @@ export interface Room {
   visibility: RoomVisibility;
   roomName?: string;
   /** Game-specific config stored at room creation (currently only used by RPS). */
-  gameConfig?: { mode?: string; bestOf?: number };
+  gameConfig?: Record<string, unknown>;
   /** Minimum players needed to start the game (default 2). */
   minPlayers: number;
   /** Maximum players the room accepts (default 2). */
@@ -92,7 +92,7 @@ class RoomManager {
     nickname = 'Player 1',
     visibility: RoomVisibility = 'private',
     roomName?: string,
-    gameConfig?: { mode?: string; bestOf?: number },
+    gameConfig?: Record<string, unknown>,
     minPlayers = 2,
     maxPlayers = 2,
   ): Room {
@@ -230,6 +230,37 @@ class RoomManager {
   }
 
   /**
+   * Defensive helper: if the room exists, is public, and has 0 players, delete it immediately.
+   * Returns true if the room was deleted.
+   */
+  cleanupRoomIfEmpty(code: string): boolean {
+    const room = this.rooms.get(code);
+    if (!room) return false;
+    if (room.visibility !== 'public' || room.players.length > 0) return false;
+
+    this.cancelRoomCleanup(code);
+    this.rooms.delete(code);
+
+    // Kick spectators from tracking maps
+    for (const sid of room.spectators) {
+      this.socketRoom.delete(sid);
+      this.spectatorSockets.delete(sid);
+    }
+    room.spectators.clear();
+
+    // Clear any remaining token sessions for this room
+    for (const [tok, sess] of this.tokenSessions) {
+      if (sess.roomCode === code) {
+        if (sess.evictTimer !== null) clearTimeout(sess.evictTimer);
+        this.tokenSessions.delete(tok);
+      }
+    }
+
+    this.cleanupCb?.(room);
+    return true;
+  }
+
+  /**
    * Record a rematch vote from the player identified by socketId.
    * Returns { votes, ready } on success, null if socket is not a player in any room.
    * Ready when all connected players have voted.
@@ -293,7 +324,9 @@ class RoomManager {
     }
 
     if (room.players.length === 0) {
-      const delay = room.visibility === 'public' ? PUBLIC_ROOM_EMPTY_CLEANUP_MS : ROOM_IDLE_CLEANUP_MS;
+      // Public rooms: delete immediately (no ghost rooms in lobby list)
+      // Private rooms: keep alive for reconnect grace period
+      const delay = room.visibility === 'public' ? 0 : ROOM_IDLE_CLEANUP_MS;
       this.scheduleRoomCleanup(room, delay);
     }
 
@@ -308,15 +341,12 @@ class RoomManager {
     const { playerIndex } = session;
     this.tokenSessions.delete(token);
 
-    // Private rooms are fast-cleaned once all sessions expire.
-    // Public rooms are intentionally kept alive (as 0/N) until their scheduled cleanup
-    // timer fires so they remain visible in the lobby for the full grace period.
+    // Fast-clean: delete the room immediately once all sessions expire and no one is connected.
+    // Applies to both public and private rooms — empty public rooms must never linger.
     const roomHasSession = [...this.tokenSessions.values()].some((s) => s.roomCode === room.code);
     if (!roomHasSession && room.players.length === 0 && room.spectators.size === 0) {
-      if (room.visibility !== 'public') {
-        this.rooms.delete(room.code);
-        this.cancelRoomCleanup(room.code);
-      }
+      this.rooms.delete(room.code);
+      this.cancelRoomCleanup(room.code);
     }
 
     this.evictCb?.(room, playerIndex);

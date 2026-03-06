@@ -18,7 +18,7 @@ export interface AcceptedInvite {
   expiresAt: number;
 }
 
-export function useOnlineUsers(wsUrl: string) {
+export function useOnlineUsers(wsUrl: string, userId?: string) {
   const socketRef = useRef<GameSocket | null>(null);
   const [users, setUsers]                         = useState<OnlineUser[]>([]);
   const [connected, setConnected]                 = useState(false);
@@ -45,7 +45,7 @@ export function useOnlineUsers(wsUrl: string) {
 
     socket.on('connect', () => {
       setConnected(true);
-      socket.emit('identify', { playerToken: token, nickname: nick });
+      socket.emit('identify', { playerToken: token, nickname: nick, userId });
       socket.emit('presence_update', { activity: { kind: 'home' } });
       socket.emit('get_online_users');
     });
@@ -77,7 +77,7 @@ export function useOnlineUsers(wsUrl: string) {
       socket.disconnect();
       socketRef.current = null;
     };
-  }, [wsUrl]); // eslint-disable-line
+  }, [wsUrl, userId]); // eslint-disable-line
 
   const sendInvite = useCallback((toToken: string, gameId: GameId) => {
     socketRef.current?.emit('invite_create', { toToken, gameId });

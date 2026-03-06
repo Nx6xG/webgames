@@ -60,6 +60,16 @@ function projectOpponentShip(ship: BattleshipShip): BattleshipShip {
   return rest as BattleshipShip;
 }
 
+/**
+ * Project one opponent ship for a **player** viewer when the game is **finished**:
+ * All ships (sunk or not) → keep cells (full reveal), strip hits.
+ */
+function revealOpponentShip(ship: BattleshipShip): BattleshipShip {
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  const { hits: _h, ...rest } = ship;
+  return rest as BattleshipShip;
+}
+
 function stripPlayer(player: BsPlayerState): BsPlayerState {
   return { ...player, ships: player.ships.map(stripShip) };
 }
@@ -96,7 +106,14 @@ export function projectGameState(
   // Battleship is always 2-player, so playerIndex is always 0 or 1 here.
   const oppIdx: 0 | 1 = (ctx.playerIndex === 0 ? 1 : 0);
   const newPlayers: [BsPlayerState, BsPlayerState] = [bs.players[0], bs.players[1]];
-  newPlayers[oppIdx] = projectOpponentPlayer(bs.players[oppIdx]);
+
+  // After the game ends, reveal ALL opponent ship positions so both players
+  // can see where the remaining ships were.
+  if (bs.phase === 'finished') {
+    newPlayers[oppIdx] = { ...bs.players[oppIdx], ships: bs.players[oppIdx].ships.map(revealOpponentShip) };
+  } else {
+    newPlayers[oppIdx] = projectOpponentPlayer(bs.players[oppIdx]);
+  }
 
   return { ...bs, players: newPlayers };
 }

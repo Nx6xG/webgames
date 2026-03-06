@@ -9,6 +9,9 @@ import {
 } from './engine';
 import type { Direction, GameState, HighscoreEntry, Tile } from './types';
 import { useAchievements } from '@/hooks/useAchievements';
+import { useI18n } from '@/components/providers/LanguageProvider';
+import { HighscoreTable } from '@/components/ui/HighscoreTable';
+import { useSwipe } from '@/hooks/useSwipe';
 
 // ── Best-score persistence ────────────────────────────────────────────────────
 
@@ -114,6 +117,7 @@ function TileView({ tile }: { tile: Tile }) {
 // ── Component ─────────────────────────────────────────────────────────────────
 
 export function Game2048() {
+  const { t } = useI18n();
   const ach = useAchievements('2048');
 
   // Initialise with best=0 to avoid SSR/hydration mismatch;
@@ -196,26 +200,29 @@ export function Game2048() {
     return () => window.removeEventListener('keydown', onKeyDown);
   }, [handleMove]);
 
+  // ── Swipe (mobile) ──────────────────────────────────────────────────────────
+  const swipeHandlers = useSwipe({ onSwipe: handleMove });
+
   return (
     <div className="flex flex-col items-center gap-5 py-6 px-4">
 
       {/* ── Header row ───────────────────────────────────────────────── */}
       <div className="w-full max-w-[420px] flex items-center gap-3">
-        <span className="text-4xl font-black text-zinc-100 tracking-tight mr-auto">2048</span>
+        <span className="text-4xl font-black text-zinc-100 tracking-tight mr-auto">{t('game.name.2048')}</span>
 
-        <ScoreBox label="SCORE" value={state.score} />
-        <ScoreBox label="BEST"  value={state.best} />
+        <ScoreBox label={t('game.score')} value={state.score} />
+        <ScoreBox label={t('game.best')}  value={state.best} />
 
         <button
           onClick={handleNewGame}
           className="px-4 py-2 rounded-lg bg-zinc-700 hover:bg-zinc-600 text-zinc-100 text-sm font-semibold transition-colors shrink-0"
         >
-          New
+          {t('game.new')}
         </button>
       </div>
 
       {/* ── Board ────────────────────────────────────────────────────── */}
-      <div className="relative w-full max-w-[420px]">
+      <div className="relative w-full max-w-[420px] touch-none" {...swipeHandlers}>
 
         {/* Background: static empty cell grid */}
         <div className="grid grid-cols-4 gap-2 p-3 rounded-xl bg-zinc-800/50 border border-zinc-700/60">
@@ -234,13 +241,13 @@ export function Game2048() {
         {/* Game over overlay */}
         {state.status === 'over' && (
           <Overlay>
-            <p className="text-2xl font-black text-zinc-100">Game Over</p>
-            <p className="text-sm text-zinc-400">Score: {state.score.toLocaleString()}</p>
+            <p className="text-2xl font-black text-zinc-100">{t('game.over')}</p>
+            <p className="text-sm text-zinc-400">{t('game.score')}: {state.score.toLocaleString()}</p>
             <button
               onClick={handleNewGame}
               className="mt-1 px-6 py-2 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-white text-sm font-semibold transition-colors"
             >
-              New Game
+              {t('game.newGame')}
             </button>
           </Overlay>
         )}
@@ -248,19 +255,19 @@ export function Game2048() {
         {/* Win overlay */}
         {state.status === 'won' && (
           <Overlay tint="indigo">
-            <p className="text-2xl font-black text-indigo-200">You reached 2048!</p>
+            <p className="text-2xl font-black text-indigo-200">{t('game.reached2048')}</p>
             <div className="flex gap-3 mt-1">
               <button
                 onClick={() => setState(engineKeepPlaying)}
                 className="px-4 py-2 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-white text-sm font-semibold transition-colors"
               >
-                Keep playing
+                {t('game.keepPlaying')}
               </button>
               <button
                 onClick={handleNewGame}
                 className="px-4 py-2 rounded-lg border border-indigo-700 text-indigo-300 hover:text-indigo-100 text-sm font-semibold transition-colors"
               >
-                New Game
+                {t('game.newGame')}
               </button>
             </div>
           </Overlay>
@@ -269,7 +276,7 @@ export function Game2048() {
 
       {/* ── Hint ─────────────────────────────────────────────────────── */}
       <p className="text-xs text-zinc-600 text-center max-w-[320px]">
-        Arrow keys or WASD to move · Merge matching tiles to reach&nbsp;2048
+        {t('2048.controls')}
       </p>
 
       {/* ── Highscores ───────────────────────────────────────────────── */}
@@ -314,99 +321,3 @@ function Overlay({
   );
 }
 
-function HighscoreTable({
-  entries,
-  onClear,
-}: {
-  entries: HighscoreEntry[];
-  onClear: () => void;
-}) {
-  const best = entries[0]?.score ?? 0;
-
-  return (
-    <div className="w-full max-w-[420px]">
-
-      {/* Section header */}
-      <div className="flex items-center justify-between mb-3">
-        <div className="flex items-baseline gap-3">
-          <span className="text-xs font-semibold uppercase tracking-widest text-zinc-500">
-            High Scores
-          </span>
-          {best > 0 && (
-            <span className="text-sm font-black text-zinc-100 tabular-nums">
-              Best:&nbsp;{best.toLocaleString()}
-            </span>
-          )}
-        </div>
-        {entries.length > 0 && (
-          <button
-            onClick={onClear}
-            className="text-xs text-zinc-600 hover:text-rose-400 transition-colors"
-          >
-            Clear Highscores
-          </button>
-        )}
-      </div>
-
-      {entries.length === 0 ? (
-        <p className="text-sm text-zinc-600 text-center py-6 rounded-xl border border-zinc-800/60 bg-zinc-900/30">
-          No scores yet — finish a game to appear here.
-        </p>
-      ) : (
-        <div className="rounded-xl border border-zinc-800 overflow-hidden">
-          <table className="w-full text-sm">
-            <thead>
-              <tr className="bg-zinc-900 text-zinc-500 text-xs uppercase tracking-widest border-b border-zinc-800">
-                <th className="py-2 px-3 text-left font-semibold w-8">#</th>
-                <th className="py-2 px-3 text-right font-semibold">Score</th>
-                <th className="py-2 px-3 text-right font-semibold">Moves</th>
-                <th className="py-2 px-3 text-right font-semibold">Date</th>
-              </tr>
-            </thead>
-            <tbody>
-              {entries.map((entry, i) => (
-                <tr
-                  key={entry.id}
-                  className={`border-t border-zinc-800/50 ${
-                    i === 0 ? 'bg-amber-950/25' : 'bg-zinc-900/30'
-                  }`}
-                >
-                  <td className="py-2.5 px-3">
-                    <span className={`font-bold tabular-nums ${
-                      i === 0 ? 'text-amber-400' : i === 1 ? 'text-zinc-400' : 'text-zinc-600'
-                    }`}>
-                      {i + 1}
-                    </span>
-                  </td>
-                  <td className="py-2.5 px-3 text-right font-black tabular-nums text-zinc-100">
-                    {entry.score.toLocaleString()}
-                  </td>
-                  <td className="py-2.5 px-3 text-right tabular-nums text-zinc-400">
-                    {entry.moves.toLocaleString()}
-                  </td>
-                  <td className="py-2.5 px-3 text-right text-zinc-500 text-xs whitespace-nowrap">
-                    {formatDate(entry.date)}
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      )}
-
-    </div>
-  );
-}
-
-function formatDate(dateStr: string): string {
-  try {
-    // Append time to avoid UTC midnight shifting the day in some locales
-    return new Date(dateStr + 'T12:00:00').toLocaleDateString(undefined, {
-      month: 'short',
-      day:   'numeric',
-      year:  'numeric',
-    });
-  } catch {
-    return dateStr;
-  }
-}
