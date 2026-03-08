@@ -62,6 +62,23 @@ body {
   box-sizing: border-box;
 }
 
+/* ── Thin scrollbar utility ─────────────────────────────────────────────── */
+
+.scrollbar-thin {
+  scrollbar-width: thin;
+  scrollbar-color: #3f3f46 transparent;
+}
+.scrollbar-thin::-webkit-scrollbar {
+  width: 4px;
+}
+.scrollbar-thin::-webkit-scrollbar-track {
+  background: transparent;
+}
+.scrollbar-thin::-webkit-scrollbar-thumb {
+  background: #3f3f46;
+  border-radius: 9999px;
+}
+
 /* ── Connect Four animations ───────────────────────────────────────────────── */
 
 @keyframes c4drop {
@@ -157,10 +174,10 @@ body {
    so the inner content (emoji) stays sharp and unblurred. The wrapper must be
    position: relative and overflow: visible. */
 
-/* ── Bronze: subtle warm glow ── */
+/* ── Bronze: forged metallic gradient ring ── */
 @keyframes wg-bronze-glow {
-  0%, 100% { opacity: 0.55; }
-  50%      { opacity: 0.85; }
+  0%, 100% { opacity: 0.6; box-shadow: 0 0 6px 1px rgba(180, 83, 9, 0.3); }
+  50%      { opacity: 1;   box-shadow: 0 0 10px 2px rgba(205, 133, 63, 0.4), 0 0 20px 4px rgba(180, 83, 9, 0.15); }
 }
 
 .wg-frame-bronze {
@@ -171,16 +188,25 @@ body {
   position: absolute;
   inset: -2px;
   border-radius: 9999px;
-  border: 2px solid #b45309;
-  box-shadow: 0 0 6px 1px rgba(180, 83, 9, 0.35);
+  border: 2px solid transparent;
+  background: linear-gradient(135deg, #8b4513, #cd853f 30%, #daa520 50%, #cd853f 70%, #8b4513) border-box;
+  -webkit-mask: linear-gradient(#fff 0 0) padding-box, linear-gradient(#fff 0 0);
+  -webkit-mask-composite: xor;
+  mask: linear-gradient(#fff 0 0) padding-box, linear-gradient(#fff 0 0);
+  mask-composite: exclude;
   animation: wg-bronze-glow 3s ease-in-out infinite;
   pointer-events: none;
 }
 
-/* ── Silver: slow pulse glow ── */
+/* ── Silver: reflective metallic shimmer ── */
 @keyframes wg-silver-pulse {
-  0%, 100% { box-shadow: 0 0 4px 1px rgba(209, 213, 219, 0.2); opacity: 0.7; }
-  50%      { box-shadow: 0 0 10px 3px rgba(209, 213, 219, 0.45); opacity: 1; }
+  0%, 100% { box-shadow: 0 0 6px 1px rgba(209, 213, 219, 0.25); opacity: 0.7; }
+  50%      { box-shadow: 0 0 12px 3px rgba(229, 231, 235, 0.5), 0 0 20px 5px rgba(209, 213, 219, 0.15); opacity: 1; }
+}
+
+@keyframes wg-silver-shimmer {
+  0%   { background-position: -200% 0; }
+  100% { background-position: 200% 0; }
 }
 
 .wg-frame-silver {
@@ -191,8 +217,25 @@ body {
   position: absolute;
   inset: -2px;
   border-radius: 9999px;
-  border: 2px solid #d1d5db;
+  border: 2px solid transparent;
+  background: linear-gradient(135deg, #9ca3af, #e5e7eb 30%, #f9fafb 50%, #e5e7eb 70%, #9ca3af) border-box;
+  -webkit-mask: linear-gradient(#fff 0 0) padding-box, linear-gradient(#fff 0 0);
+  -webkit-mask-composite: xor;
+  mask: linear-gradient(#fff 0 0) padding-box, linear-gradient(#fff 0 0);
+  mask-composite: exclude;
   animation: wg-silver-pulse 2.5s ease-in-out infinite;
+  pointer-events: none;
+}
+.wg-frame-silver::after {
+  content: '';
+  position: absolute;
+  inset: -2px;
+  border-radius: 9999px;
+  background: linear-gradient(110deg, transparent 30%, rgba(255, 255, 255, 0.4) 48%, rgba(255, 255, 255, 0.6) 50%, rgba(255, 255, 255, 0.4) 52%, transparent 70%);
+  background-size: 200% 100%;
+  animation: wg-silver-shimmer 4s ease-in-out infinite;
+  -webkit-mask: radial-gradient(circle, transparent calc(100% - 4px), black calc(100% - 4px));
+  mask: radial-gradient(circle, transparent calc(100% - 4px), black calc(100% - 4px));
   pointer-events: none;
 }
 
@@ -210,9 +253,20 @@ body {
   position: absolute;
   inset: -2px;
   border-radius: 9999px;
-  border: 2px solid #facc15;
-  box-shadow: 0 0 8px 1px rgba(250, 204, 21, 0.3);
-  /* Shimmer highlight via conic/linear gradient */
+  border: 2px solid transparent;
+  background: linear-gradient(135deg, #b8860b, #ffd700 25%, #fff8dc 50%, #ffd700 75%, #b8860b) border-box;
+  -webkit-mask: linear-gradient(#fff 0 0) padding-box, linear-gradient(#fff 0 0);
+  -webkit-mask-composite: xor;
+  mask: linear-gradient(#fff 0 0) padding-box, linear-gradient(#fff 0 0);
+  mask-composite: exclude;
+  box-shadow: 0 0 10px 2px rgba(250, 204, 21, 0.35), 0 0 20px 4px rgba(250, 204, 21, 0.12);
+  pointer-events: none;
+}
+.wg-frame-gold::after {
+  content: '';
+  position: absolute;
+  inset: -2px;
+  border-radius: 9999px;
   background: linear-gradient(
     110deg,
     transparent 20%,
@@ -223,30 +277,34 @@ body {
   );
   background-size: 200% 100%;
   animation: wg-gold-shimmer 3s ease-in-out infinite;
-  /* Use mask to only show the shimmer on the ring border */
   -webkit-mask: radial-gradient(circle, transparent calc(100% - 4px), black calc(100% - 4px));
   mask: radial-gradient(circle, transparent calc(100% - 4px), black calc(100% - 4px));
   pointer-events: none;
 }
 
-/* ── Fire: animated flame effect ── */
+/* ── Fire: animated inferno frame with ember glow ── */
 @keyframes wg-fire-flicker {
-  0%, 100% { opacity: 0.75; box-shadow: 0 0 8px 2px rgba(255, 120, 0, 0.5), 0 0 16px 4px rgba(255, 60, 0, 0.25); }
-  25%      { opacity: 1;    box-shadow: 0 0 10px 3px rgba(255, 140, 0, 0.6), 0 0 20px 6px rgba(255, 80, 0, 0.3); }
-  50%      { opacity: 0.85; box-shadow: 0 0 12px 3px rgba(255, 100, 0, 0.55), 0 0 24px 6px rgba(255, 40, 0, 0.35); }
-  75%      { opacity: 0.95; box-shadow: 0 0 9px 2px rgba(255, 160, 0, 0.55), 0 0 18px 5px rgba(255, 60, 0, 0.28); }
+  0%, 100% { box-shadow: 0 0 8px 2px rgba(255, 120, 0, 0.5), 0 0 16px 4px rgba(255, 60, 0, 0.25), 0 0 32px 8px rgba(255, 40, 0, 0.1); }
+  25%      { box-shadow: 0 0 12px 3px rgba(255, 140, 0, 0.65), 0 0 24px 6px rgba(255, 80, 0, 0.35), 0 0 40px 10px rgba(255, 40, 0, 0.12); }
+  50%      { box-shadow: 0 0 14px 4px rgba(255, 100, 0, 0.6), 0 0 28px 8px rgba(255, 40, 0, 0.4), 0 0 48px 12px rgba(255, 20, 0, 0.1); }
+  75%      { box-shadow: 0 0 10px 3px rgba(255, 160, 0, 0.55), 0 0 20px 5px rgba(255, 60, 0, 0.3), 0 0 36px 8px rgba(255, 40, 0, 0.1); }
 }
 
 .wg-frame-fire {
   position: relative;
 }
-/* Base ring + flicker glow */
+/* Inferno ring with gradient border */
 .wg-frame-fire::before {
   content: '';
   position: absolute;
   inset: -2px;
   border-radius: 9999px;
-  border: 2px solid #f97316;
+  border: 2px solid transparent;
+  background: linear-gradient(135deg, #dc2626, #f97316, #fbbf24, #f97316, #dc2626) border-box;
+  -webkit-mask: linear-gradient(#fff 0 0) padding-box, linear-gradient(#fff 0 0);
+  -webkit-mask-composite: xor;
+  mask: linear-gradient(#fff 0 0) padding-box, linear-gradient(#fff 0 0);
+  mask-composite: exclude;
   animation: wg-fire-flicker 1.5s ease-in-out infinite;
   pointer-events: none;
 }
@@ -266,86 +324,228 @@ body {
   transform-origin: center center;
 }
 
-/* ── Portal: rotating conic gradient behind avatar ── */
-@keyframes wg-portal-spin {
-  from { transform: rotate(0deg); }
-  to   { transform: rotate(360deg); }
+/* ── Avatar Background (portal redesigned) — fills behind avatar content ── */
+
+/* Void: dark energy vortex */
+@keyframes wg-bg-void-pulse {
+  0%, 100% { opacity: 0.7; }
+  50%      { opacity: 1; }
 }
 
+.wg-bg-void {
+  position: absolute;
+  inset: 0;
+  border-radius: 9999px;
+  background: radial-gradient(circle at 30% 30%, rgba(88, 28, 135, 0.6), rgba(15, 3, 30, 0.95) 70%);
+  animation: wg-bg-void-pulse 3s ease-in-out infinite;
+  pointer-events: none;
+  z-index: 0;
+}
+
+/* Nebula: cosmic starfield */
+@keyframes wg-bg-nebula-drift {
+  0%   { background-position: 0% 0%; }
+  50%  { background-position: 100% 100%; }
+  100% { background-position: 0% 0%; }
+}
+
+.wg-bg-nebula {
+  position: absolute;
+  inset: 0;
+  border-radius: 9999px;
+  background:
+    radial-gradient(circle at 25% 25%, rgba(236, 72, 153, 0.5) 0%, transparent 50%),
+    radial-gradient(circle at 75% 75%, rgba(139, 92, 246, 0.5) 0%, transparent 50%),
+    radial-gradient(circle at 50% 50%, rgba(59, 130, 246, 0.3) 0%, transparent 60%),
+    linear-gradient(135deg, #0f0520, #1a0a2e 40%, #0c1445 70%, #0a0a20);
+  background-size: 200% 200%;
+  animation: wg-bg-nebula-drift 8s ease-in-out infinite;
+  pointer-events: none;
+  z-index: 0;
+}
+
+/* Legacy wg-portal-* aliases — redirect to background style */
 .wg-portal-void {
   position: absolute;
-  inset: -4px;
+  inset: 0;
   border-radius: 9999px;
-  background: conic-gradient(
-    from 0deg,
-    rgba(88, 28, 135, 0.6),
-    rgba(67, 56, 202, 0.4),
-    rgba(88, 28, 135, 0.1),
-    rgba(67, 56, 202, 0.4),
-    rgba(88, 28, 135, 0.6)
-  );
-  animation: wg-portal-spin 4s linear infinite;
+  background: radial-gradient(circle at 30% 30%, rgba(88, 28, 135, 0.6), rgba(15, 3, 30, 0.95) 70%);
+  animation: wg-bg-void-pulse 3s ease-in-out infinite;
   pointer-events: none;
-  /* Mask out the center so only the ring shows */
-  -webkit-mask: radial-gradient(circle, transparent 60%, black 62%);
-  mask: radial-gradient(circle, transparent 60%, black 62%);
+  z-index: 0;
 }
 
 .wg-portal-nebula {
   position: absolute;
-  inset: -5px;
+  inset: 0;
   border-radius: 9999px;
-  background: conic-gradient(
-    from 0deg,
-    rgba(236, 72, 153, 0.5),
-    rgba(139, 92, 246, 0.5),
-    rgba(59, 130, 246, 0.4),
-    rgba(236, 72, 153, 0.3),
-    rgba(139, 92, 246, 0.5),
-    rgba(236, 72, 153, 0.5)
-  );
-  animation: wg-portal-spin 6s linear infinite;
+  background:
+    radial-gradient(circle at 25% 25%, rgba(236, 72, 153, 0.5) 0%, transparent 50%),
+    radial-gradient(circle at 75% 75%, rgba(139, 92, 246, 0.5) 0%, transparent 50%),
+    radial-gradient(circle at 50% 50%, rgba(59, 130, 246, 0.3) 0%, transparent 60%),
+    linear-gradient(135deg, #0f0520, #1a0a2e 40%, #0c1445 70%, #0a0a20);
+  background-size: 200% 200%;
+  animation: wg-bg-nebula-drift 8s ease-in-out infinite;
   pointer-events: none;
-  -webkit-mask: radial-gradient(circle, transparent 55%, black 58%);
-  mask: radial-gradient(circle, transparent 55%, black 58%);
+  z-index: 0;
 }
 
 /* ── Aura: ambient glow around avatar ── */
 @keyframes wg-aura-pulse {
-  0%, 100% { opacity: 0.4; }
-  50%      { opacity: 0.75; }
+  0%, 100% { opacity: 0.5; transform: scale(1); }
+  50%      { opacity: 0.9; transform: scale(1.05); }
 }
 
-@keyframes wg-aura-electric {
-  0%, 100% { opacity: 0.5; box-shadow: 0 0 6px 2px rgba(59, 130, 246, 0.4); }
-  25%      { opacity: 0.9; box-shadow: 0 0 10px 4px rgba(99, 102, 241, 0.6); }
-  50%      { opacity: 0.6; box-shadow: 0 0 14px 5px rgba(59, 130, 246, 0.5); }
-  75%      { opacity: 0.85; box-shadow: 0 0 8px 3px rgba(139, 92, 246, 0.55); }
+/* SoftGlow: warm golden energy ring */
+@keyframes wg-aura-soft-pulse {
+  0%, 100% { opacity: 0.5; }
+  50%      { opacity: 0.85; }
 }
 
 .wg-aura-softGlow {
   position: absolute;
-  inset: -3px;
+  inset: -6px;
   border-radius: 9999px;
-  box-shadow: 0 0 8px 3px rgba(250, 204, 21, 0.25);
-  animation: wg-aura-pulse 3s ease-in-out infinite;
+  background: radial-gradient(circle, transparent 55%, rgba(250, 204, 21, 0.25) 70%, rgba(250, 204, 21, 0.4) 80%, transparent 100%);
+  box-shadow: 0 0 12px 4px rgba(250, 204, 21, 0.3), 0 0 24px 8px rgba(250, 204, 21, 0.12);
+  animation: wg-aura-soft-pulse 3s ease-in-out infinite;
   pointer-events: none;
+}
+
+/* Electric: pulsing blue energy with lightning-like bursts */
+@keyframes wg-aura-electric {
+  0%, 100% { opacity: 0.6; box-shadow: 0 0 10px 4px rgba(59, 130, 246, 0.5), 0 0 24px 8px rgba(59, 130, 246, 0.15); transform: scale(1); }
+  25%      { opacity: 1;   box-shadow: 0 0 16px 6px rgba(99, 102, 241, 0.7), 0 0 32px 10px rgba(99, 102, 241, 0.25); transform: scale(1.04); }
+  50%      { opacity: 0.7; box-shadow: 0 0 20px 8px rgba(59, 130, 246, 0.6), 0 0 40px 14px rgba(59, 130, 246, 0.18); transform: scale(1.02); }
+  75%      { opacity: 0.95; box-shadow: 0 0 14px 5px rgba(139, 92, 246, 0.65), 0 0 28px 9px rgba(139, 92, 246, 0.2); transform: scale(1.03); }
 }
 
 .wg-aura-electric {
   position: absolute;
-  inset: -3px;
+  inset: -6px;
   border-radius: 9999px;
+  background: radial-gradient(circle, transparent 50%, rgba(59, 130, 246, 0.15) 65%, rgba(99, 102, 241, 0.3) 78%, transparent 100%);
   animation: wg-aura-electric 1.8s ease-in-out infinite;
   pointer-events: none;
 }
 
+/* Shadow: dark mist / void aura */
+@keyframes wg-aura-shadow-pulse {
+  0%, 100% { opacity: 0.6; transform: scale(1); }
+  50%      { opacity: 1;   transform: scale(1.06); }
+}
+
 .wg-aura-shadow {
   position: absolute;
-  inset: -4px;
+  inset: -8px;
   border-radius: 9999px;
-  box-shadow: 0 0 10px 4px rgba(0, 0, 0, 0.7), 0 0 20px 8px rgba(30, 0, 50, 0.4);
-  animation: wg-aura-pulse 2.5s ease-in-out infinite;
+  background: radial-gradient(circle, transparent 45%, rgba(20, 0, 40, 0.5) 60%, rgba(0, 0, 0, 0.7) 75%, transparent 100%);
+  box-shadow: 0 0 16px 6px rgba(0, 0, 0, 0.8), 0 0 32px 12px rgba(30, 0, 50, 0.4), 0 0 48px 20px rgba(0, 0, 0, 0.15);
+  animation: wg-aura-shadow-pulse 2.5s ease-in-out infinite;
+  pointer-events: none;
+}
+
+/* ── Diamond: prismatic light refraction ── */
+@keyframes wg-diamond-shift {
+  0%   { box-shadow: 0 0 10px 2px rgba(103, 232, 249, 0.5), 0 0 24px 6px rgba(103, 232, 249, 0.15), 0 0 40px 10px rgba(103, 232, 249, 0.06); }
+  25%  { box-shadow: 0 0 12px 3px rgba(167, 139, 250, 0.5), 0 0 28px 7px rgba(167, 139, 250, 0.18), 0 0 44px 12px rgba(167, 139, 250, 0.06); }
+  50%  { box-shadow: 0 0 10px 2px rgba(240, 171, 252, 0.5), 0 0 24px 6px rgba(240, 171, 252, 0.15), 0 0 40px 10px rgba(240, 171, 252, 0.06); }
+  75%  { box-shadow: 0 0 12px 3px rgba(94, 234, 212, 0.5), 0 0 28px 7px rgba(94, 234, 212, 0.18), 0 0 44px 12px rgba(94, 234, 212, 0.06); }
+  100% { box-shadow: 0 0 10px 2px rgba(103, 232, 249, 0.5), 0 0 24px 6px rgba(103, 232, 249, 0.15), 0 0 40px 10px rgba(103, 232, 249, 0.06); }
+}
+
+@keyframes wg-diamond-rotate {
+  from { --wg-diamond-angle: 0deg; }
+  to   { --wg-diamond-angle: 360deg; }
+}
+
+@keyframes wg-diamond-shimmer {
+  0%   { background-position: -200% 0; }
+  100% { background-position: 200% 0; }
+}
+
+.wg-frame-diamond {
+  position: relative;
+}
+.wg-frame-diamond::before {
+  content: '';
+  position: absolute;
+  inset: -2px;
+  border-radius: 9999px;
+  border: 2px solid transparent;
+  background: conic-gradient(from 0deg, #67e8f9, #a78bfa, #f0abfc, #5eead4, #67e8f9) border-box;
+  -webkit-mask: linear-gradient(#fff 0 0) padding-box, linear-gradient(#fff 0 0);
+  -webkit-mask-composite: xor;
+  mask: linear-gradient(#fff 0 0) padding-box, linear-gradient(#fff 0 0);
+  mask-composite: exclude;
+  animation: wg-diamond-shift 4s ease-in-out infinite;
+  pointer-events: none;
+}
+.wg-frame-diamond::after {
+  content: '';
+  position: absolute;
+  inset: -2px;
+  border-radius: 9999px;
+  background: linear-gradient(110deg, transparent 25%, rgba(255, 255, 255, 0.5) 47%, rgba(255, 255, 255, 0.7) 50%, rgba(255, 255, 255, 0.5) 53%, transparent 75%);
+  background-size: 200% 100%;
+  animation: wg-diamond-shimmer 2.5s ease-in-out infinite;
+  -webkit-mask: radial-gradient(circle, transparent calc(100% - 4px), black calc(100% - 4px));
+  mask: radial-gradient(circle, transparent calc(100% - 4px), black calc(100% - 4px));
+  pointer-events: none;
+}
+
+/* ── Obsidian: dark glass with shadow void glow ── */
+@keyframes wg-obsidian-glow {
+  0%, 100% { box-shadow: 0 0 8px 2px rgba(107, 33, 168, 0.35), 0 0 20px 6px rgba(30, 10, 60, 0.4), inset 0 0 6px 2px rgba(107, 33, 168, 0.1); }
+  50%      { box-shadow: 0 0 14px 4px rgba(139, 92, 246, 0.5), 0 0 28px 8px rgba(60, 20, 100, 0.3), inset 0 0 8px 3px rgba(139, 92, 246, 0.15); }
+}
+
+.wg-frame-obsidian {
+  position: relative;
+}
+.wg-frame-obsidian::before {
+  content: '';
+  position: absolute;
+  inset: -2px;
+  border-radius: 9999px;
+  border: 2px solid transparent;
+  background: linear-gradient(135deg, #1a0533, #581c87 30%, #7c3aed 50%, #581c87 70%, #1a0533) border-box;
+  -webkit-mask: linear-gradient(#fff 0 0) padding-box, linear-gradient(#fff 0 0);
+  -webkit-mask-composite: xor;
+  mask: linear-gradient(#fff 0 0) padding-box, linear-gradient(#fff 0 0);
+  mask-composite: exclude;
+  animation: wg-obsidian-glow 3s ease-in-out infinite;
+  pointer-events: none;
+}
+
+/* ── Frost aura: icy crystal energy ring ── */
+@keyframes wg-aura-frost {
+  0%, 100% { opacity: 0.5;  box-shadow: 0 0 12px 5px rgba(147, 197, 253, 0.4), 0 0 24px 10px rgba(186, 230, 253, 0.15); transform: scale(1); }
+  50%      { opacity: 0.9;  box-shadow: 0 0 20px 8px rgba(147, 197, 253, 0.6), 0 0 36px 14px rgba(186, 230, 253, 0.3), 0 0 48px 18px rgba(103, 232, 249, 0.1); transform: scale(1.04); }
+}
+
+.wg-aura-frost {
+  position: absolute;
+  inset: -6px;
+  border-radius: 9999px;
+  background: radial-gradient(circle, transparent 50%, rgba(147, 197, 253, 0.2) 65%, rgba(186, 230, 253, 0.35) 80%, transparent 100%);
+  animation: wg-aura-frost 2.8s ease-in-out infinite;
+  pointer-events: none;
+}
+
+/* ── Crimson aura: blood energy pulse ── */
+@keyframes wg-aura-crimson {
+  0%, 100% { opacity: 0.55; box-shadow: 0 0 12px 4px rgba(220, 38, 38, 0.45), 0 0 28px 10px rgba(185, 28, 28, 0.18); transform: scale(1); }
+  33%      { opacity: 0.95; box-shadow: 0 0 18px 6px rgba(239, 68, 68, 0.6), 0 0 36px 12px rgba(185, 28, 28, 0.3), 0 0 48px 16px rgba(127, 29, 29, 0.12); transform: scale(1.05); }
+  66%      { opacity: 0.7;  box-shadow: 0 0 14px 5px rgba(248, 113, 113, 0.5), 0 0 28px 9px rgba(220, 38, 38, 0.22); transform: scale(1.02); }
+}
+
+.wg-aura-crimson {
+  position: absolute;
+  inset: -6px;
+  border-radius: 9999px;
+  background: radial-gradient(circle, transparent 50%, rgba(220, 38, 38, 0.15) 65%, rgba(185, 28, 28, 0.3) 80%, transparent 100%);
+  animation: wg-aura-crimson 2.2s ease-in-out infinite;
   pointer-events: none;
 }
 
@@ -361,28 +561,127 @@ body {
 
 /* ── Profile card banners ────────────────────────────────────────────────── */
 
-.wg-banner-default  { background: linear-gradient(135deg, #27272a, #18181b); }
-.wg-banner-sunset   { background: linear-gradient(135deg, #f97316, #ec4899 50%, #8b5cf6); }
-.wg-banner-ocean    { background: linear-gradient(135deg, #06b6d4, #3b82f6 50%, #1e3a5f); }
-.wg-banner-forest   { background: linear-gradient(135deg, #059669, #065f46 50%, #1a2e1a); }
-.wg-banner-aurora   { background: linear-gradient(135deg, #22d3ee, #a78bfa 50%, #f472b6); }
-.wg-banner-lava     { background: linear-gradient(135deg, #ef4444, #f97316 50%, #fbbf24); }
-.wg-banner-neon     { background: linear-gradient(135deg, #7c3aed, #ec4899 50%, #06b6d4); }
+.wg-banner-default  { background: linear-gradient(135deg, #1c1c20 0%, #27272a 40%, #1f1f23 100%); }
+.wg-banner-sunset   { background: linear-gradient(135deg, #c2410c 0%, #f97316 20%, #f472b6 50%, #a855f7 80%, #7c3aed 100%); }
+.wg-banner-ocean    { background: linear-gradient(135deg, #0c4a6e 0%, #0369a1 25%, #0ea5e9 50%, #3b82f6 75%, #1e40af 100%); }
+.wg-banner-forest   { background: linear-gradient(135deg, #052e16 0%, #065f46 30%, #059669 55%, #34d399 80%, #065f46 100%); }
+.wg-banner-aurora   { background: linear-gradient(135deg, #06b6d4 0%, #22d3ee 20%, #a78bfa 45%, #e879f9 65%, #f472b6 85%, #fb7185 100%); }
+.wg-banner-lava     { background: linear-gradient(135deg, #7f1d1d 0%, #dc2626 25%, #f97316 50%, #fbbf24 75%, #f97316 100%); }
+.wg-banner-neon     { background: linear-gradient(135deg, #4c1d95 0%, #7c3aed 20%, #ec4899 45%, #f43f5e 60%, #06b6d4 80%, #4c1d95 100%); }
+.wg-banner-midnight { background: linear-gradient(135deg, #020617 0%, #0f172a 25%, #1e1b4b 50%, #312e81 70%, #0f172a 100%); }
+.wg-banner-ember    { background: linear-gradient(135deg, #1c0a00 0%, #451a03 20%, #9a3412 40%, #dc2626 60%, #f97316 80%, #fbbf24 100%); }
+
+/* Animated banners for legendary/rare — slow gradient shift */
+@keyframes wg-banner-shift {
+  0%   { background-position: 0% 50%; }
+  50%  { background-position: 100% 50%; }
+  100% { background-position: 0% 50%; }
+}
+
+.wg-banner-aurora  { background-size: 200% 200%; animation: wg-banner-shift 8s ease-in-out infinite; }
+.wg-banner-neon    { background-size: 200% 200%; animation: wg-banner-shift 6s ease-in-out infinite; }
+.wg-banner-ember   { background-size: 200% 200%; animation: wg-banner-shift 5s ease-in-out infinite; }
+.wg-banner-lava    { background-size: 200% 200%; animation: wg-banner-shift 7s ease-in-out infinite; }
+
+/* ── Thicker frames on xl avatar (w-16 h-16) ────────────────────────────── */
+
+.w-16.wg-frame-bronze::before,
+.w-16.wg-frame-silver::before,
+.w-16.wg-frame-gold::before,
+.w-16.wg-frame-fire::before,
+.w-16.wg-frame-diamond::before,
+.w-16.wg-frame-obsidian::before {
+  inset: -3px;
+  border-width: 3px;
+}
+.w-16.wg-frame-silver::after,
+.w-16.wg-frame-gold::after,
+.w-16.wg-frame-diamond::after {
+  inset: -3px;
+  -webkit-mask: radial-gradient(circle, transparent calc(100% - 6px), black calc(100% - 6px));
+  mask: radial-gradient(circle, transparent calc(100% - 6px), black calc(100% - 6px));
+}
+
+/* Auras extend further on xl */
+.w-16 > .wg-aura-softGlow,
+.w-16 > .wg-aura-electric,
+.w-16 > .wg-aura-frost,
+.w-16 > .wg-aura-crimson { inset: -8px; }
+.w-16 > .wg-aura-shadow { inset: -10px; }
+
+/* Banner noise texture overlay — subtle grain for visual depth */
+.wg-banner-noise {
+  background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='0.06'/%3E%3C/svg%3E");
+  background-size: 128px 128px;
+  pointer-events: none;
+  mix-blend-mode: overlay;
+}
 
 /* ── Profile card body colors ───────────────────────────────────────────── */
 
-.wg-card-default  { background: #0f1117; }
-.wg-card-purple   { background: linear-gradient(180deg, #1b1328, #0f1117); }
-.wg-card-blue     { background: linear-gradient(180deg, #13223a, #0f1117); }
-.wg-card-red      { background: linear-gradient(180deg, #2a1212, #0f1117); }
-.wg-card-gold     { background: linear-gradient(180deg, #2b220d, #0f1117); }
+.wg-card-default  { --wg-card-bg: #0f1117; background: #0f1117; }
+.wg-card-purple   { --wg-card-bg: #0f1117; background: linear-gradient(180deg, #1b1328, #0f1117); }
+.wg-card-blue     { --wg-card-bg: #0f1117; background: linear-gradient(180deg, #13223a, #0f1117); }
+.wg-card-red      { --wg-card-bg: #0f1117; background: linear-gradient(180deg, #2a1212, #0f1117); }
+.wg-card-gold     { --wg-card-bg: #0f1117; background: linear-gradient(180deg, #2b220d, #0f1117); }
+
+/* ── Profile card border effects (frame-based) ─────────────────────────── */
+
+@keyframes wg-card-border-pulse {
+  0%, 100% { opacity: 0.5; }
+  50%      { opacity: 1; }
+}
+
+.wg-card-border-bronze {
+  border: 1px solid rgba(205, 133, 63, 0.5);
+  box-shadow: 0 0 12px -3px rgba(180, 83, 9, 0.2), inset 0 0 8px -4px rgba(205, 133, 63, 0.06);
+}
+.wg-card-border-silver {
+  border: 1px solid rgba(229, 231, 235, 0.35);
+  box-shadow: 0 0 12px -3px rgba(209, 213, 219, 0.15), inset 0 0 8px -4px rgba(229, 231, 235, 0.04);
+}
+.wg-card-border-gold {
+  border: 1px solid rgba(255, 215, 0, 0.4);
+  box-shadow: 0 0 16px -3px rgba(250, 204, 21, 0.18), 0 0 32px -6px rgba(255, 215, 0, 0.06);
+}
+.wg-card-border-fire {
+  border: 1px solid rgba(249, 115, 22, 0.45);
+  box-shadow: 0 0 20px -3px rgba(249, 115, 22, 0.25), 0 0 40px -8px rgba(255, 60, 0, 0.08);
+  animation: wg-card-border-pulse 3s ease-in-out infinite;
+}
+.wg-card-border-diamond {
+  border: 1px solid rgba(103, 232, 249, 0.4);
+  box-shadow: 0 0 20px -3px rgba(103, 232, 249, 0.25), 0 0 40px -8px rgba(167, 139, 250, 0.1);
+  animation: wg-card-border-pulse 4s ease-in-out infinite;
+}
+.wg-card-border-obsidian {
+  border: 1px solid rgba(139, 92, 246, 0.4);
+  box-shadow: 0 0 20px -3px rgba(107, 33, 168, 0.25), 0 0 40px -8px rgba(60, 20, 100, 0.1), inset 0 0 16px -8px rgba(107, 33, 168, 0.06);
+  animation: wg-card-border-pulse 3s ease-in-out infinite;
+}
+
+/* ── Legendary title glow ──────────────────────────────────────────────── */
+@keyframes wg-title-shimmer {
+  0%   { text-shadow: 0 0 4px rgba(251, 191, 36, 0.3); }
+  50%  { text-shadow: 0 0 8px rgba(251, 191, 36, 0.5), 0 0 16px rgba(251, 191, 36, 0.15); }
+  100% { text-shadow: 0 0 4px rgba(251, 191, 36, 0.3); }
+}
+
+.wg-title-legendary {
+  animation: wg-title-shimmer 3s ease-in-out infinite;
+}
 
 /* ── Reduced motion: disable all frame animations ── */
 @media (prefers-reduced-motion: reduce) {
   .wg-frame-bronze::before,
   .wg-frame-silver::before,
+  .wg-frame-silver::after,
   .wg-frame-gold::before,
-  .wg-frame-fire::before {
+  .wg-frame-gold::after,
+  .wg-frame-fire::before,
+  .wg-frame-diamond::before,
+  .wg-frame-diamond::after,
+  .wg-frame-obsidian::before {
     animation: none;
   }
   /* Hide the SVG flame overlay; static ring from staticClass remains */
@@ -392,13 +691,32 @@ body {
   .wg-flame-tongue {
     animation: none;
   }
+  .wg-bg-void,
+  .wg-bg-nebula,
   .wg-portal-void,
   .wg-portal-nebula {
     animation: none;
   }
   .wg-aura-softGlow,
   .wg-aura-electric,
-  .wg-aura-shadow {
+  .wg-aura-shadow,
+  .wg-aura-frost,
+  .wg-aura-crimson {
+    animation: none;
+    transform: none;
+  }
+  .wg-card-border-fire,
+  .wg-card-border-diamond,
+  .wg-card-border-obsidian {
+    animation: none;
+  }
+  .wg-title-legendary {
+    animation: none;
+  }
+  .wg-banner-aurora,
+  .wg-banner-neon,
+  .wg-banner-ember,
+  .wg-banner-lava {
     animation: none;
   }
 }

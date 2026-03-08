@@ -3,7 +3,9 @@ export type AvatarFrame =
   | 'bronze'
   | 'silver'
   | 'gold'
-  | 'fire';
+  | 'fire'
+  | 'diamond'
+  | 'obsidian';
 
 export interface FrameDef {
   id: AvatarFrame;
@@ -63,6 +65,24 @@ export const FRAME_DEFS: FrameDef[] = [
     unlockHintKey: 'frame.unlock.fire',
     emoji: '🔥',
     requiredAchievement: 'battleship.win_3',
+  },
+  {
+    id: 'diamond',
+    staticClass: 'ring-2 ring-cyan-300 shadow-[0_0_12px_rgba(103,232,249,0.5)]',
+    animClass: 'wg-frame-diamond',
+    labelKey: 'frame.diamond',
+    unlockHintKey: 'frame.unlock.diamond',
+    emoji: '💎',
+    requiredAchievement: 'pong.win_5',
+  },
+  {
+    id: 'obsidian',
+    staticClass: 'ring-2 ring-purple-800 shadow-[0_0_10px_rgba(107,33,168,0.5)]',
+    animClass: 'wg-frame-obsidian',
+    labelKey: 'frame.obsidian',
+    unlockHintKey: 'frame.unlock.obsidian',
+    emoji: '🖤',
+    requiredAchievement: 'liarsbar.play_5',
   },
 ];
 

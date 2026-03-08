@@ -100,7 +100,7 @@ export function unlockFrame(frame: string): boolean {
 export type UnlockedCosmeticsMap = Record<CosmeticSlot, string[]>;
 
 function defaultCosmeticsMap(): UnlockedCosmeticsMap {
-  return { frame: [], head: [], portal: [], aura: [], banner: [], cardColor: [], badge: [] };
+  return { frame: [], head: [], portal: [], aura: [], banner: [], cardColor: [], badge: [], title: [] };
 }
 
 function migrateFramesToCosmetics(): UnlockedCosmeticsMap {

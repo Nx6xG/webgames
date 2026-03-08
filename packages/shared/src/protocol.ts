@@ -25,6 +25,7 @@ export interface CosmeticsSlots {
   aura?: string;    // e.g. 'softGlow', 'electric'
   banner?: string;  // e.g. 'sunset', 'aurora' — profile card background gradient
   cardColor?: string; // e.g. 'card-purple' — profile card body background
+  title?: string;   // e.g. 'champion', 'strategist' — text below nickname
 }
 
 export interface CosmeticsSelection {
@@ -167,13 +168,50 @@ export interface LeaderboardEntry {
   isYou?: boolean;
 }
 
+// ─── Party ──────────────────────────────────────────────────────────────────
+
+/** Info about a party member (derived from presence). */
+export interface PartyMember {
+  token: string;
+  nickname: string;
+  avatarId?: string;
+  cosmetics?: CosmeticsSelection;
+}
+
+/** Full party state broadcast to all members. */
+export interface PartyState {
+  id: string;
+  hostToken: string;
+  members: PartyMember[];
+  /** Room the party is currently playing in (if any). */
+  currentRoomCode?: string;
+  /** Game the party is currently playing (if any). */
+  currentGameId?: GameId;
+}
+
+/** Invitation to join a party. */
+export interface PartyInvitePayload {
+  partyId: string;
+  fromToken: string;
+  fromName: string;
+  createdAt: number;
+}
+
+export type PartyErrorCode =
+  | 'NOT_IN_PARTY'
+  | 'NOT_HOST'
+  | 'ALREADY_IN_PARTY'
+  | 'PARTY_NOT_FOUND'
+  | 'PARTY_FULL';
+
 // ─── Error codes ─────────────────────────────────────────────────────────────
 
 export type RoomErrorCode =
   | 'ROOM_NOT_FOUND'
   | 'ROOM_FULL'
   | 'ALREADY_IN_ROOM'
-  | 'RATE_LIMITED';
+  | 'RATE_LIMITED'
+  | 'ROOM_CLOSED';
 
 export type ActionErrorCode =
   | 'ROOM_NOT_FOUND'
@@ -334,6 +372,18 @@ export interface ServerToClientEvents {
   invite_error: (payload: { message: string }) => void;
   /** Delivered to the invite sender when the receiver accepts. */
   invite_accepted: (payload: { id: string; gameId: GameId; roomCode: string; byName: string }) => void;
+
+  // ── Party events ──────────────────────────────────────────────────────
+  /** Full party state broadcast to all party members on every change. */
+  party_updated: (data: { party: PartyState }) => void;
+  /** Sent to a party member's sockets when the party is disbanded. */
+  party_disbanded: () => void;
+  /** Sent to receivers when invited to a party. */
+  party_invite_received: (payload: PartyInvitePayload) => void;
+  /** Host launched a game — all members should navigate. */
+  party_game_starting: (data: { gameId: GameId; roomCode: string }) => void;
+  /** Error in a party operation. */
+  party_error: (data: { code: PartyErrorCode; message: string }) => void;
   /**
    * Emitted to all sockets in a room when the set of connected game sockets changes.
    * `ready` is true when both player 0 and player 1 have an active game-page socket.
@@ -404,4 +454,18 @@ export interface ClientToServerEvents {
   invite_decline: (payload: { id: string }) => void;
   /** Accept an incoming invite; server notifies the original sender. */
   invite_accept: (payload: { id: string; fromToken: string; gameId: GameId; roomCode: string }) => void;
+
+  // ── Party events ──────────────────────────────────────────────────────
+  /** Create a new party (caller becomes host). */
+  party_create: () => void;
+  /** Invite a player to the party (host only). */
+  party_invite: (data: { toToken: string }) => void;
+  /** Accept a party invitation. */
+  party_join: (data: { partyId: string }) => void;
+  /** Leave the current party. If host leaves, party is disbanded. */
+  party_leave: () => void;
+  /** Kick a member from the party (host only). */
+  party_kick: (data: { token: string }) => void;
+  /** Host launches a game for the whole party. Creates room + notifies all. */
+  party_launch: (data: { gameId: GameId }) => void;
 }

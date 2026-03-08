@@ -1,4 +1,4 @@
-import { createServer } from 'node:http';
+import { createServer, type IncomingMessage, type ServerResponse } from 'node:http';
 import { randomUUID } from 'node:crypto';
 import { Server } from 'socket.io';
 import type { ServerToClientEvents, ClientToServerEvents } from 'shared';
@@ -11,11 +11,13 @@ import { recordMatchResult, recordDraw, updateNickname, getEntries } from './lea
 import type { RoomPlayerInfo, OpenRoomInfo, PublicRoomListItem, GameId, Match, ActionErrorCode, ChatMessage, LeaderboardMode, AnyGameState, InvitePayload, PresenceActivity, CosmeticsSelection } from 'shared';
 import type { Room } from './rooms.js';
 import { projectGameState } from './stateProjection.js';
+import { PartyManager } from './parties.js';
 import { getGameCapacity } from './gameCapacity.js';
 import { InMemoryStorage } from './storage/inMemory.js';
 import type { Storage } from './storage/types.js';
 
 const storage: Storage = new InMemoryStorage();
+const partyManager = new PartyManager();
 
 // ── Cosmetics helpers ─────────────────────────────────────────────────────────
 
@@ -277,7 +279,72 @@ function canChat(token: string): boolean {
 const PORT = Number(process.env.PORT ?? 3001);
 const WS_CORS_ORIGIN = process.env.WS_CORS_ORIGIN ?? process.env.WEB_ORIGIN ?? 'http://localhost:3000';
 
-const httpServer = createServer((_req, res) => {
+const ADMIN_API_SECRET = process.env.ADMIN_API_SECRET ?? '';
+
+function verifyAdminSecret(req: IncomingMessage): boolean {
+  const auth = req.headers.authorization;
+  return !!ADMIN_API_SECRET && auth === `Bearer ${ADMIN_API_SECRET}`;
+}
+
+function readBody(req: IncomingMessage): Promise<string> {
+  return new Promise((resolve) => {
+    let body = '';
+    req.on('data', (chunk: Buffer) => { body += chunk.toString(); });
+    req.on('end', () => resolve(body));
+  });
+}
+
+function jsonResponse(res: ServerResponse, status: number, data: unknown) {
+  res.writeHead(status, { 'Content-Type': 'application/json' });
+  res.end(JSON.stringify(data));
+}
+
+const httpServer = createServer(async (req: IncomingMessage, res: ServerResponse) => {
+  const url = req.url ?? '/';
+
+  // ── Admin: list all rooms ──
+  if (url === '/admin/rooms' && req.method === 'GET') {
+    if (!verifyAdminSecret(req)) return jsonResponse(res, 401, { error: 'Unauthorized' });
+    const rooms = roomManager.getAllRooms().map((r) => ({
+      code: r.code,
+      gameId: r.gameId,
+      visibility: r.visibility,
+      roomName: r.roomName,
+      players: r.players.map((p) => ({ index: p.index, nickname: p.nickname, playerToken: p.playerToken })),
+      spectators: r.spectators.size,
+      createdAt: r.createdAt,
+      hasState: r.state !== null,
+    }));
+    return jsonResponse(res, 200, { rooms });
+  }
+
+  // ── Admin: force-close a room ──
+  if (url === '/admin/rooms/close' && req.method === 'POST') {
+    if (!verifyAdminSecret(req)) return jsonResponse(res, 401, { error: 'Unauthorized' });
+    const body = await readBody(req);
+    let roomCode: string;
+    try {
+      roomCode = JSON.parse(body).roomCode;
+    } catch {
+      return jsonResponse(res, 400, { error: 'Invalid JSON' });
+    }
+    if (!roomCode) return jsonResponse(res, 400, { error: 'Missing roomCode' });
+
+    // Kick all sockets from the Socket.IO room before deleting
+    const room = roomManager.getRoom(roomCode);
+    if (room) {
+      io.in(roomCode).socketsLeave(roomCode);
+      io.to(roomCode).emit('room_error', { code: 'ROOM_CLOSED', message: 'Room closed by admin' });
+    }
+
+    const deleted = roomManager.forceCloseRoom(roomCode);
+    if (!deleted) return jsonResponse(res, 404, { error: 'Room not found' });
+
+    broadcastOpenRooms();
+    return jsonResponse(res, 200, { ok: true });
+  }
+
+  // ── Default health check ──
   res.writeHead(200);
   res.end('ok');
 });
@@ -425,6 +492,13 @@ io.on('connection', (socket) => {
       presence.set(playerToken, { nickname, avatarId: profile.avatarId, nameColor: profile.nameColor, avatarFrame: profile.avatarFrame, banner: profile.banner, cardColor: profile.cardColor, badges: profile.badges, userId, sockets: new Set([socket.id]) });
     }
     broadcastPresence();
+
+    // Push current party state to reconnecting sockets
+    const existingParty = partyManager.getByToken(playerToken);
+    if (existingParty) {
+      const partyState = partyManager.toState(existingParty, resolvePartyMember);
+      socket.emit('party_updated', { party: partyState });
+    }
 
     const result = roomManager.claimSession(playerToken, socket.id, nickname);
     if (!result) return; // no live session → client stays in lobby
@@ -1346,6 +1420,210 @@ io.on('connection', (socket) => {
       io.to(sid).emit('invite_accepted', { id, gameId, roomCode, byName });
     }
     console.log(`[invite] ${byName} accepted → ${senderEntry.nickname} (${gameId}, room ${roomCode})`);
+  });
+
+  // ── Party events ─────────────────────────────────────────────────────────
+
+  /** Resolve nickname/cosmetics from presence for party member list. */
+  function resolvePartyMember(token: string) {
+    const p = presence.get(token);
+    if (!p) return undefined;
+    return {
+      nickname: p.nickname,
+      avatarId: p.avatarId,
+      cosmetics: buildCosmetics(p),
+    };
+  }
+
+  /** Broadcast party_updated to all member sockets. */
+  function broadcastParty(party: ReturnType<typeof partyManager.getById>) {
+    if (!party) return;
+    const state = partyManager.toState(party, resolvePartyMember);
+    for (const memberToken of party.members) {
+      const entry = presence.get(memberToken);
+      if (!entry) continue;
+      for (const sid of entry.sockets) {
+        io.to(sid).emit('party_updated', { party: state });
+      }
+    }
+  }
+
+  socket.on('party_create', () => {
+    const token = identifiedTokens.get(socket.id);
+    if (!token) return;
+    const party = partyManager.create(token);
+    if (!party) {
+      socket.emit('party_error', { code: 'ALREADY_IN_PARTY', message: 'You are already in a party.' });
+      return;
+    }
+    broadcastParty(party);
+    console.log(`[party] ${presence.get(token)?.nickname} created party ${party.id}`);
+  });
+
+  socket.on('party_invite', ({ toToken }) => {
+    const token = identifiedTokens.get(socket.id);
+    if (!token) return;
+    const party = partyManager.getByToken(token);
+    if (!party) {
+      socket.emit('party_error', { code: 'NOT_IN_PARTY', message: 'You are not in a party.' });
+      return;
+    }
+    if (party.hostToken !== token) {
+      socket.emit('party_error', { code: 'NOT_HOST', message: 'Only the host can invite.' });
+      return;
+    }
+    if (party.members.length >= 6) {
+      socket.emit('party_error', { code: 'PARTY_FULL', message: 'Party is full (max 6).' });
+      return;
+    }
+    // Send invite to all receiver sockets
+    const receiverEntry = presence.get(toToken);
+    if (!receiverEntry || receiverEntry.sockets.size === 0) return;
+    const payload = {
+      partyId: party.id,
+      fromToken: token,
+      fromName: presence.get(token)?.nickname ?? 'Someone',
+      createdAt: Date.now(),
+    };
+    for (const sid of receiverEntry.sockets) {
+      io.to(sid).emit('party_invite_received', payload);
+    }
+    console.log(`[party] invite sent to ${receiverEntry.nickname} for party ${party.id}`);
+  });
+
+  socket.on('party_join', ({ partyId }) => {
+    const token = identifiedTokens.get(socket.id);
+    if (!token) return;
+    // Leave current party if in one
+    const existing = partyManager.getByToken(token);
+    if (existing && existing.id !== partyId) {
+      partyManager.leave(token);
+    }
+    const party = partyManager.join(partyId, token);
+    if (!party) {
+      socket.emit('party_error', { code: 'PARTY_NOT_FOUND', message: 'Party not found or full.' });
+      return;
+    }
+    broadcastParty(party);
+    console.log(`[party] ${presence.get(token)?.nickname} joined party ${party.id}`);
+  });
+
+  socket.on('party_leave', () => {
+    const token = identifiedTokens.get(socket.id);
+    if (!token) return;
+    const { party, disbanded } = partyManager.leave(token);
+    if (!party) return;
+    if (disbanded) {
+      // Notify all former members (except the host who left)
+      for (const memberToken of party.members) {
+        if (memberToken === token) continue;
+        const entry = presence.get(memberToken);
+        if (!entry) continue;
+        for (const sid of entry.sockets) {
+          io.to(sid).emit('party_disbanded');
+        }
+      }
+      console.log(`[party] host left, party ${party.id} disbanded`);
+    } else {
+      broadcastParty(party);
+      console.log(`[party] ${presence.get(token)?.nickname} left party ${party.id}`);
+    }
+  });
+
+  socket.on('party_kick', ({ token: targetToken }) => {
+    const token = identifiedTokens.get(socket.id);
+    if (!token) return;
+    // Notify kicked member
+    const kickedEntry = presence.get(targetToken);
+    const party = partyManager.kick(token, targetToken);
+    if (!party) {
+      socket.emit('party_error', { code: 'NOT_HOST', message: 'Only the host can kick members.' });
+      return;
+    }
+    if (kickedEntry) {
+      for (const sid of kickedEntry.sockets) {
+        io.to(sid).emit('party_disbanded');
+      }
+    }
+    broadcastParty(party);
+    console.log(`[party] ${presence.get(token)?.nickname} kicked ${kickedEntry?.nickname} from party ${party.id}`);
+  });
+
+  socket.on('party_launch', ({ gameId }) => {
+    const token = identifiedTokens.get(socket.id);
+    if (!token) return;
+    const party = partyManager.getByToken(token);
+    if (!party || party.hostToken !== token) {
+      socket.emit('party_error', { code: 'NOT_HOST', message: 'Only the host can launch a game.' });
+      return;
+    }
+    // Leave any existing rooms for all party members first
+    // Then create a room for the host
+    const handleLeaveForToken = (memberToken: string) => {
+      const memberEntry = presence.get(memberToken);
+      if (!memberEntry) return;
+      for (const sid of memberEntry.sockets) {
+        const existingRoom = roomManager.getRoomBySocket(sid);
+        if (existingRoom) {
+          roomManager.removeSocket(sid);
+          io.in(existingRoom.code).emit('player_left', {
+            playerId: memberToken,
+            playerIndex: -1,
+            playerCount: existingRoom.players.length,
+          });
+        }
+      }
+    };
+
+    // Leave existing rooms
+    for (const memberToken of party.members) {
+      handleLeaveForToken(memberToken);
+    }
+
+    // Create room with host (mirrors create_room handler)
+    const nickname = presence.get(token)?.nickname ?? 'Player';
+    const capacity = getGameCapacity(gameId);
+    const effectiveMax = Math.min(party.members.length, capacity.max);
+    const room = roomManager.createRoom(socket.id, token, gameId, nickname, 'private', undefined, undefined, capacity.min, effectiveMax);
+
+    // Set cosmetics on host player
+    const creatorPlayer = room.players.find((p) => p.playerToken === token);
+    if (creatorPlayer) {
+      const prof = profiles.get(token);
+      creatorPlayer.avatarId = prof?.avatarId;
+      creatorPlayer.nameColor = prof?.nameColor;
+      creatorPlayer.avatarFrame = prof?.avatarFrame;
+    }
+
+    socket.join(room.code);
+    addPresence(room.code, 0, socket.id);
+    socketActivity.set(socket.id, { kind: 'room', gameId, roomCode: room.code });
+
+    // Update party state
+    partyManager.setRoom(party.id, gameId, room.code);
+
+    // Emit room_created to host
+    socket.emit('room_created', {
+      roomCode: room.code,
+      playerIndex: 0 as const,
+      gameId,
+      players: roomPlayers(room),
+      maxPlayers: room.maxPlayers,
+    });
+    socket.emit('chat_history', { scope: 'room', messages: [] });
+
+    // Notify all party members to navigate to the game
+    for (const memberToken of party.members) {
+      const entry = presence.get(memberToken);
+      if (!entry) continue;
+      for (const sid of entry.sockets) {
+        io.to(sid).emit('party_game_starting', { gameId, roomCode: room.code });
+      }
+    }
+
+    broadcastParty(party);
+    broadcastPresence();
+    console.log(`[party] host launched ${gameId} for party ${party.id} → room ${room.code}`);
   });
 
   // ── leaderboard_get ───────────────────────────────────────────────────────

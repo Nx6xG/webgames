@@ -5,6 +5,7 @@ import { LanguageProvider } from '@/components/providers/LanguageProvider';
 import { AuthProvider } from '@/components/providers/AuthProvider';
 import { PatchNotesFloatingButton } from '@/components/PatchNotesFloatingButton';
 import { AchievementToastProvider } from '@/components/ui/AchievementToasts';
+import { PartyProvider } from '@/components/providers/PartyProvider';
 
 export const metadata: Metadata = {
   title: 'Web Games',
@@ -22,7 +23,9 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
         <LanguageProvider>
           <AuthProvider>
             <AchievementToastProvider>
-              <NicknameProvider>{children}</NicknameProvider>
+              <PartyProvider>
+                <NicknameProvider>{children}</NicknameProvider>
+              </PartyProvider>
             </AchievementToastProvider>
           </AuthProvider>
         </LanguageProvider>

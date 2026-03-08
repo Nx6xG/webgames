@@ -1,6 +1,6 @@
 'use client';
 
-import { getCosmeticDef, RARITY_COLORS, type CosmeticDef } from '@/lib/cosmetics';
+import { getCosmeticDef, RARITY_COLORS, type CosmeticDef, type CosmeticRarity } from '@/lib/cosmetics';
 import { useI18n } from '@/components/providers/LanguageProvider';
 import { Tooltip } from './Tooltip';
 
@@ -8,33 +8,42 @@ interface BadgeIconProps {
   badgeId: string;
   /** Show lock overlay + unlock requirement in tooltip */
   locked?: boolean;
-  size?: 'sm' | 'md';
+  size?: 'xs' | 'sm' | 'md';
   /** Show rarity label in tooltip (default true) */
   showRarity?: boolean;
 }
+
+/** Rarity-tinted border color for badges */
+const BADGE_BORDER: Record<CosmeticRarity, string> = {
+  common:    'border-zinc-600/40',
+  epic:      'border-emerald-500/30',
+  rare:      'border-blue-500/30',
+  legendary: 'border-amber-500/40',
+};
+
+/** Rarity glow for badge hover */
+const BADGE_GLOW: Record<CosmeticRarity, string> = {
+  common:    '',
+  epic:      'hover:shadow-[0_0_6px_rgba(52,211,153,0.2)]',
+  rare:      'hover:shadow-[0_0_6px_rgba(59,130,246,0.2)]',
+  legendary: 'hover:shadow-[0_0_8px_rgba(251,191,36,0.25)]',
+};
 
 function BadgeTooltipContent({ def, locked, showRarity }: { def: CosmeticDef; locked?: boolean; showRarity?: boolean }) {
   const { t } = useI18n();
   return (
     <div className="space-y-1">
-      {/* Title */}
       <p className="text-[11px] font-bold text-zinc-100 leading-tight">
         {def.emoji} {t(def.labelKey)}
       </p>
-
-      {/* Description */}
       {def.descriptionKey && (
         <p className="text-[10px] text-zinc-400 leading-snug">{t(def.descriptionKey)}</p>
       )}
-
-      {/* Unlock hint (when locked or always for achievement-gated badges) */}
       {def.unlockHintKey && (locked || def.requiredAchievement) && (
         <p className="text-[10px] text-zinc-500 leading-snug">
           {locked ? '🔒 ' : '✓ '}{t(def.unlockHintKey)}
         </p>
       )}
-
-      {/* Rarity */}
       {showRarity !== false && (
         <span className={`inline-block text-[9px] font-semibold uppercase tracking-wider ${RARITY_COLORS[def.rarity]}`}>
           {t(`cosmetics.rarity.${def.rarity}`)}
@@ -45,25 +54,24 @@ function BadgeTooltipContent({ def, locked, showRarity }: { def: CosmeticDef; lo
 }
 
 /**
- * Renders a single badge with a rich tooltip.
- * Drop-in replacement for raw badge emoji spans.
+ * Renders a single badge as a small prestige icon with tooltip.
+ * Designed to be compact — just the emoji in a tiny circle.
  */
 export function BadgeIcon({ badgeId, locked, size = 'sm', showRarity }: BadgeIconProps) {
   const def = getCosmeticDef(badgeId, 'badge');
   if (!def) return null;
 
-  const sizeClasses = size === 'md'
-    ? 'px-2 py-0.5 text-[11px] gap-0.5'
-    : 'px-1.5 py-0.5 text-[10px] gap-0.5';
-
-  const emojiSize = size === 'md' ? 'text-sm' : 'text-xs';
+  const sizeClasses =
+    size === 'md'  ? 'w-6 h-6 text-xs'  :
+    size === 'sm'  ? 'w-5 h-5 text-[10px]' :
+                     'w-4 h-4 text-[9px]';
 
   return (
     <Tooltip content={<BadgeTooltipContent def={def} locked={locked} showRarity={showRarity} />}>
       <span
-        className={`inline-flex items-center ${sizeClasses} rounded-full bg-zinc-800 border border-zinc-700/50 ${locked ? 'opacity-40' : ''}`}
+        className={`inline-flex items-center justify-center ${sizeClasses} rounded-full border bg-zinc-900/80 ${BADGE_BORDER[def.rarity]} ${BADGE_GLOW[def.rarity]} ${locked ? 'opacity-30 grayscale' : ''} transition-shadow`}
       >
-        <span className={`${emojiSize} leading-none`}>{def.emoji}</span>
+        <span className="leading-none">{def.emoji}</span>
       </span>
     </Tooltip>
   );

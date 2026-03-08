@@ -288,7 +288,7 @@ export async function runInitialSync(
 
   // Merge unlocked cosmetics (union per slot)
   const defaultMap: UnlockedCosmeticsMap = {
-    frame: [], head: [], portal: [], aura: [], banner: [], cardColor: [], badge: [],
+    frame: [], head: [], portal: [], aura: [], banner: [], cardColor: [], badge: [], title: [],
   };
   const mergedUnlockedCosmetics = mergeUnlockedCosmetics(
     localUnlockedCosmetics,

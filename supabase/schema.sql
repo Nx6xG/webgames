@@ -97,3 +97,22 @@ create policy "Users can insert own unlocked cosmetics"
 
 create policy "Users can update own unlocked cosmetics"
   on user_unlocked_cosmetics for update using (auth.uid() = user_id);
+
+-- ── Admin role + suspension ────────────────────────────────────────────────
+
+ALTER TABLE profiles ADD COLUMN IF NOT EXISTS role text NOT NULL DEFAULT 'user';
+ALTER TABLE profiles ADD COLUMN IF NOT EXISTS suspended_at timestamptz;
+
+-- ── Admin audit log ────────────────────────────────────────────────────────
+
+CREATE TABLE IF NOT EXISTS admin_audit_log (
+  id         bigint GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+  admin_id   uuid REFERENCES auth.users NOT NULL,
+  action     text NOT NULL,
+  target_user_id uuid,
+  details    jsonb,
+  created_at timestamptz DEFAULT now()
+);
+
+ALTER TABLE admin_audit_log ENABLE ROW LEVEL SECURITY;
+-- Audit log is accessed only via service role (API routes), no RLS select policies needed.

@@ -229,6 +229,40 @@ class RoomManager {
     return [...this.rooms.values()].filter((r) => r.visibility === 'public');
   }
 
+  /** All rooms (admin use only). */
+  getAllRooms(): Room[] {
+    return [...this.rooms.values()];
+  }
+
+  /** Force-delete a room by code. Returns true if found and deleted. */
+  forceCloseRoom(code: string): boolean {
+    const room = this.rooms.get(code);
+    if (!room) return false;
+    this.rooms.delete(code);
+    this.cancelRoomCleanup(code);
+
+    // Clean up all sockets and sessions
+    for (const p of room.players) {
+      this.socketRoom.delete(p.socketId);
+      this.socketTokens.delete(p.socketId);
+    }
+    for (const sid of room.spectators) {
+      this.socketRoom.delete(sid);
+      this.spectatorSockets.delete(sid);
+    }
+    room.spectators.clear();
+
+    for (const [tok, sess] of this.tokenSessions) {
+      if (sess.roomCode === code) {
+        if (sess.evictTimer !== null) clearTimeout(sess.evictTimer);
+        this.tokenSessions.delete(tok);
+      }
+    }
+
+    this.cleanupCb?.(room);
+    return true;
+  }
+
   /**
    * Defensive helper: if the room exists, is public, and has 0 players, delete it immediately.
    * Returns true if the room was deleted.

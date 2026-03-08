@@ -97,6 +97,7 @@ import { GlobalChatWidget } from '@/components/chat/GlobalChatWidget';
 import { ProfileMenu } from '@/components/ProfileMenu';
 import { OnlineNavChip } from '@/components/social/OnlineNavChip';
 import { useI18n } from '@/components/providers/LanguageProvider';
+import { usePartyCtx } from '@/components/providers/PartyProvider';
 import { GameDetailsModal } from '@/components/games/GameDetailsModal';
 import type { GameModalData } from '@/components/games/GameDetailsModal';
 import { DailyChallengesWidget } from '@/components/DailyChallengesWidget';
@@ -379,6 +380,7 @@ function GameCard({
 }) {
   const { manifest: game, titleKey, descKey, comingSoon } = entry;
   const { t } = useI18n();
+  const { isHost, launchGame } = usePartyCtx();
 
   if (comingSoon) {
     return (
@@ -422,20 +424,34 @@ function GameCard({
           </span>
         ))}
       </div>
-      <div className="relative z-[1] flex gap-2" onClick={(e) => e.stopPropagation()}>
-        <Link
-          href={`/games/${game.routeSlug}?quickplay=true`}
-          className="flex-1 py-2 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-white text-sm font-semibold text-center transition-colors"
-        >
-          {t('lobby.quickPlay')}
-        </Link>
-        <Link
-          href={`/games/${game.routeSlug}`}
-          className="px-3 py-2 rounded-lg border border-zinc-700 hover:border-zinc-500 text-zinc-400 hover:text-zinc-200 text-sm transition-colors"
-          title="Create or join a custom room"
-        >
-          {t('lobby.customGame')}
-        </Link>
+      <div className="relative z-[1] flex flex-col gap-1.5" onClick={(e) => e.stopPropagation()}>
+        <div className="flex gap-2">
+          {isHost ? (
+            <button
+              onClick={() => launchGame(game.id as import('shared').GameId)}
+              className="flex-1 py-2 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-white text-sm font-semibold text-center transition-colors"
+            >
+              {t('party.launchGame')}
+            </button>
+          ) : (
+            <Link
+              href={`/games/${game.routeSlug}?quickplay=true`}
+              className="flex-1 py-2 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-white text-sm font-semibold text-center transition-colors"
+            >
+              {t('lobby.quickPlay')}
+            </Link>
+          )}
+          <Link
+            href={`/games/${game.routeSlug}`}
+            className="px-3 py-2 rounded-lg border border-zinc-700 hover:border-zinc-500 text-zinc-400 hover:text-zinc-200 text-sm transition-colors"
+            title="Create or join a custom room"
+          >
+            {t('lobby.customGame')}
+          </Link>
+        </div>
+        {isHost && (
+          <p className="text-[10px] text-indigo-400/70 text-center">{t('party.launchHint')}</p>
+        )}
       </div>
 
       <StatsOverlay data={overlayData} t={t} />

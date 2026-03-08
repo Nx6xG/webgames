@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useRef } from 'react';
 import Link from 'next/link';
 import { useI18n } from '@/components/providers/LanguageProvider';
+import { usePartyCtx } from '@/components/providers/PartyProvider';
 import { ACHIEVEMENTS } from '@/lib/achievements/definitions';
 import type { AchievementDefinition } from '@/lib/achievements/definitions';
 import { loadStats } from '@/lib/achievements/store';
@@ -83,6 +84,7 @@ export function GameDetailsModal({
   onClose: () => void;
 }) {
   const { t } = useI18n();
+  const { isHost, launchGame } = usePartyCtx();
   const panelRef = useRef<HTMLDivElement>(null);
 
   // ESC to close + lock body scroll
@@ -173,32 +175,46 @@ export function GameDetailsModal({
           </div>
 
           {/* ── B) Actions ───────────────────────────────────────── */}
-          <div className="flex gap-3">
-            {data.mode === 'multiplayer' ? (
-              <>
+          <div className="space-y-2">
+            <div className="flex gap-3">
+              {data.mode === 'multiplayer' ? (
+                <>
+                  {isHost ? (
+                    <button
+                      onClick={() => { launchGame(data.gameId as import('shared').GameId); onClose(); }}
+                      className="flex-1 py-2.5 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-white text-sm font-semibold text-center transition-colors"
+                    >
+                      {t('party.launchGame')}
+                    </button>
+                  ) : (
+                    <Link
+                      href={data.playHref}
+                      className="flex-1 py-2.5 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-white text-sm font-semibold text-center transition-colors"
+                      onClick={onClose}
+                    >
+                      {t('modal.quickPlay')}
+                    </Link>
+                  )}
+                  <Link
+                    href={data.customHref!}
+                    className="px-5 py-2.5 rounded-lg border border-zinc-700 hover:border-zinc-500 text-zinc-400 hover:text-zinc-200 text-sm font-medium transition-colors"
+                    onClick={onClose}
+                  >
+                    {t('modal.custom')}
+                  </Link>
+                </>
+              ) : (
                 <Link
                   href={data.playHref}
                   className="flex-1 py-2.5 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-white text-sm font-semibold text-center transition-colors"
                   onClick={onClose}
                 >
-                  {t('modal.quickPlay')}
+                  {t('modal.play')}
                 </Link>
-                <Link
-                  href={data.customHref!}
-                  className="px-5 py-2.5 rounded-lg border border-zinc-700 hover:border-zinc-500 text-zinc-400 hover:text-zinc-200 text-sm font-medium transition-colors"
-                  onClick={onClose}
-                >
-                  {t('modal.custom')}
-                </Link>
-              </>
-            ) : (
-              <Link
-                href={data.playHref}
-                className="flex-1 py-2.5 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-white text-sm font-semibold text-center transition-colors"
-                onClick={onClose}
-              >
-                {t('modal.play')}
-              </Link>
+              )}
+            </div>
+            {isHost && data.mode === 'multiplayer' && (
+              <p className="text-[11px] text-indigo-400/70 text-center">{t('party.launchHint')}</p>
             )}
           </div>
 

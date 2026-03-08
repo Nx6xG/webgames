@@ -117,7 +117,7 @@ function IconTrash({ className }: { className?: string }) {
 export function ProfileMenu() {
   const { nickname, setNickname, avatarId, nameColor, avatarFrame, cosmetics, updateCosmetics } = useNickname();
   const { lang, setLang, t } = useI18n();
-  const { user, isSupabaseConfigured, isSyncing, signOut } = useAuth();
+  const { user, role, isSupabaseConfigured, isSyncing, signOut } = useAuth();
   const [open, setOpen] = useState(false);
   const [studioOpen, setStudioOpen] = useState(false);
   const [authOpen, setAuthOpen] = useState(false);
@@ -325,6 +325,14 @@ export function ProfileMenu() {
                 <IconStats className="w-3.5 h-3.5 text-zinc-400 shrink-0" />
                 <span className="text-xs text-zinc-200">{t('menu.stats')}</span>
               </Link>
+              {role === 'admin' && (
+                <Link href="/admin" onClick={closeMenu} className="flex items-center gap-2 px-2.5 py-1.5 rounded-lg hover:bg-red-950/30 transition-colors">
+                  <svg className="w-3.5 h-3.5 text-red-400 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.75}>
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M10.5 6h9.75M10.5 6a1.5 1.5 0 11-3 0m3 0a1.5 1.5 0 10-3 0M3.75 6H7.5m3 12h9.75m-9.75 0a1.5 1.5 0 01-3 0m3 0a1.5 1.5 0 00-3 0m-3.75 0H7.5m9-6h3.75m-3.75 0a1.5 1.5 0 01-3 0m3 0a1.5 1.5 0 00-3 0m-9.75 0h9.75" />
+                  </svg>
+                  <span className="text-xs text-red-400 font-medium">{t('nav.admin')}</span>
+                </Link>
+              )}
             </div>
 
             <div className="h-px bg-zinc-800 mx-1.5" />

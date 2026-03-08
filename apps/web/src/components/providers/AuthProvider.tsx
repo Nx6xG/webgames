@@ -22,6 +22,7 @@ const SYNC_TIMEOUT_MS = 10_000;
 interface AuthContextValue {
   user: User | null;
   session: Session | null;
+  role: string | null;
   isLoading: boolean;
   isSyncing: boolean;
   isSupabaseConfigured: boolean;
@@ -32,6 +33,7 @@ interface AuthContextValue {
 const AuthContext = createContext<AuthContextValue>({
   user: null,
   session: null,
+  role: null,
   isLoading: true,
   isSyncing: false,
   isSupabaseConfigured: false,
@@ -57,6 +59,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [session, setSession] = useState<Session | null>(null);
   const [isLoading, setIsLoading] = useState(isConfigured);
   const [isSyncing, setIsSyncing] = useState(false);
+  const [role, setRole] = useState<string | null>(null);
   const syncingRef = useRef(false);
 
   // Restore session on mount + subscribe to auth changes
@@ -94,6 +97,16 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           window.dispatchEvent(new Event('webgames:cloud-sync-done'));
         }
       }
+
+      // Fetch role from profiles table
+      try {
+        const { data: profile } = await client
+          .from('profiles')
+          .select('role')
+          .eq('id', u.id)
+          .single();
+        if (mounted && profile?.role) setRole(profile.role);
+      } catch { /* ignore */ }
     }
 
     // 1. Restore session from storage
@@ -144,6 +157,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     await sb.auth.signOut();
     setUser(null);
     setSession(null);
+    setRole(null);
   }, [sb]);
 
   return (
@@ -151,6 +165,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       value={{
         user,
         session,
+        role,
         isLoading,
         isSyncing,
         isSupabaseConfigured: isConfigured,

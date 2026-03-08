@@ -117,4 +117,8 @@ export type {
   InvitePayload,
   CosmeticsSlots,
   CosmeticsSelection,
+  PartyState,
+  PartyMember,
+  PartyInvitePayload,
+  PartyErrorCode,
 } from './protocol';
