@@ -4,6 +4,7 @@ import type { RpsState, RpsAction } from './games/rps';
 import type { ChessState, ChessAction } from './games/chess';
 import type { BattleshipState, BattleshipAction } from './games/battleship';
 import type { LiarsBarState, LiarsBarAction } from './games/liarsbar';
+import type { CurveFeverState, CurveFeverAction } from './games/curvefever';
 import type { GameId } from './registry';
 
 // ─── Game-state / action unions ───────────────────────────────────────────────
@@ -11,10 +12,10 @@ import type { GameId } from './registry';
 // the rest of the code stays unchanged.
 
 /** Union of all possible game states across every registered game. */
-export type AnyGameState = TicTacToeState | Connect4State | RpsState | ChessState | BattleshipState | LiarsBarState;
+export type AnyGameState = TicTacToeState | Connect4State | RpsState | ChessState | BattleshipState | LiarsBarState | CurveFeverState;
 
 /** Union of all possible game actions across every registered game. */
-export type AnyGameAction = TicTacToeAction | Connect4Action | RpsAction | ChessAction | BattleshipAction | LiarsBarAction;
+export type AnyGameAction = TicTacToeAction | Connect4Action | RpsAction | ChessAction | BattleshipAction | LiarsBarAction | CurveFeverAction;
 
 // ─── Cosmetics ───────────────────────────────────────────────────────────────
 
@@ -402,7 +403,7 @@ export interface ClientToServerEvents {
   identify: (data: { playerToken: string; nickname: string; avatarId?: string; nameColor?: string; avatarFrame?: string; cosmetics?: CosmeticsSelection; userId?: string }) => void;
 
   /** playerToken is stored server-side so the seat can survive a refresh */
-  create_room: (data: { playerToken: string; gameId?: GameId; nickname: string; visibility?: RoomVisibility; roomName?: string; rpsConfig?: { mode: string; bestOf?: number }; ldConfig?: { mode: string }; battleshipConfig?: { fleetPreset: string }; maxPlayers?: number }) => void;
+  create_room: (data: { playerToken: string; gameId?: GameId; nickname: string; visibility?: RoomVisibility; roomName?: string; rpsConfig?: { mode: string; bestOf?: number }; ldConfig?: { mode: string }; battleshipConfig?: { fleetPreset: string }; cfConfig?: { bestOf?: number }; maxPlayers?: number }) => void;
 
   /** If the room is full the socket joins as spectator instead */
   join_room: (data: { roomCode: string; playerToken: string; nickname: string }) => void;

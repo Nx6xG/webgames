@@ -6,12 +6,14 @@ import type { AchievementStats } from '@/lib/achievements/definitions';
 import type { UnlockedCosmeticsMap } from '@/lib/cloudSync';
 import { useAuth } from '@/components/providers/AuthProvider';
 import { getSupabase } from '@/lib/supabaseClient';
+import type { PlayerProgression } from '@/lib/progression';
 import {
   saveCloudCosmetics,
   saveCloudAchievements,
   saveCloudStats,
   saveCloudUnlockedCosmetics,
   saveCloudNickname,
+  saveCloudProgression,
 } from '@/lib/cloudSync';
 
 const DEBOUNCE_MS = 1000;
@@ -84,5 +86,14 @@ export function useCloudSync() {
     [user, debounce],
   );
 
-  return { isActive, syncCosmetics, syncAchievements, syncStats, syncUnlockedCosmetics, syncNickname };
+  const syncProgression = useCallback(
+    (prog: PlayerProgression) => {
+      const sb = getSupabase();
+      if (!sb || !user) return;
+      debounce('progression', () => saveCloudProgression(sb, user.id, prog));
+    },
+    [user, debounce],
+  );
+
+  return { isActive, syncCosmetics, syncAchievements, syncStats, syncUnlockedCosmetics, syncNickname, syncProgression };
 }

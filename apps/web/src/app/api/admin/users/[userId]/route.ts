@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { verifyAdmin } from '@/lib/adminAuth';
 import { getSupabaseAdmin } from '@/lib/supabaseAdmin';
+import { getXpRequiredForLevel } from '@/lib/progression';
 
 async function auditLog(
   sb: ReturnType<typeof getSupabaseAdmin>,
@@ -27,13 +28,14 @@ export async function GET(
   const { userId } = await params;
   const sb = getSupabaseAdmin()!;
 
-  const [profileRes, statsRes, achievementsRes, cosmeticsRes, unlockedRes, authRes] =
+  const [profileRes, statsRes, achievementsRes, cosmeticsRes, unlockedRes, progressionRes, authRes] =
     await Promise.all([
       sb.from('profiles').select('*').eq('id', userId).single(),
       sb.from('user_stats').select('*').eq('user_id', userId).single(),
       sb.from('user_achievements').select('*').eq('user_id', userId).single(),
       sb.from('user_cosmetics').select('*').eq('user_id', userId).single(),
       sb.from('user_unlocked_cosmetics').select('*').eq('user_id', userId).single(),
+      sb.from('user_progression').select('data').eq('user_id', userId).maybeSingle(),
       sb.auth.admin.getUserById(userId),
     ]);
 
@@ -48,6 +50,7 @@ export async function GET(
     achievements: achievementsRes.data ?? null,
     cosmetics: cosmeticsRes.data ?? null,
     unlockedCosmetics: unlockedRes.data ?? null,
+    progression: progressionRes.data?.data ?? null,
   });
 }
 
@@ -149,6 +152,86 @@ export async function PATCH(
       await sb.from('profiles').update({ role }).eq('id', userId);
       await auditLog(sb, admin.userId, 'set_role', userId, { role });
       return NextResponse.json({ ok: true });
+    }
+
+    case 'add_xp': {
+      const { amount } = body;
+      if (typeof amount !== 'number' || amount === 0) {
+        return NextResponse.json({ error: 'Invalid amount' }, { status: 400 });
+      }
+      const { data: progRow } = await sb
+        .from('user_progression')
+        .select('data')
+        .eq('user_id', userId)
+        .maybeSingle();
+      const prev = (progRow?.data ?? { xp: 0, level: 1, tokens: 0 }) as Record<string, unknown>;
+      const prevXp = (typeof prev.xp === 'number' ? prev.xp : 0);
+      const prevLevel = (typeof prev.level === 'number' ? prev.level : 1);
+      const prevTokens = (typeof prev.tokens === 'number' ? prev.tokens : 0);
+
+      // Apply XP change and recalculate level
+      let newXp = prevXp + amount;
+      let newLevel = prevLevel;
+      let newTokens = prevTokens;
+
+      if (amount > 0) {
+        // Level up loop
+        let required = getXpRequiredForLevel(newLevel);
+        while (newXp >= required) {
+          newXp -= required;
+          newLevel++;
+          newTokens++;
+          required = getXpRequiredForLevel(newLevel);
+        }
+      } else {
+        // Negative XP: allow going below 0 within current level, but clamp at 0
+        if (newXp < 0) {
+          // De-level: go down levels if needed
+          while (newXp < 0 && newLevel > 1) {
+            newLevel--;
+            newTokens = Math.max(0, newTokens - 1);
+            const required = getXpRequiredForLevel(newLevel);
+            newXp += required;
+          }
+          newXp = Math.max(0, newXp);
+        }
+      }
+
+      const updated = { ...prev, xp: newXp, level: newLevel, tokens: newTokens };
+      await sb.from('user_progression').upsert(
+        { user_id: userId, data: updated },
+        { onConflict: 'user_id' },
+      );
+      await auditLog(sb, admin.userId, 'add_xp', userId, {
+        amount,
+        prev: { xp: prevXp, level: prevLevel, tokens: prevTokens },
+        after: { xp: newXp, level: newLevel, tokens: newTokens },
+      });
+      return NextResponse.json({ ok: true, progression: updated });
+    }
+
+    case 'set_tokens': {
+      const { tokens } = body;
+      if (typeof tokens !== 'number' || tokens < 0) {
+        return NextResponse.json({ error: 'Invalid tokens' }, { status: 400 });
+      }
+      const { data: progRow } = await sb
+        .from('user_progression')
+        .select('data')
+        .eq('user_id', userId)
+        .maybeSingle();
+      const prev = (progRow?.data ?? { xp: 0, level: 1, tokens: 0 }) as Record<string, unknown>;
+      const prevTokens = typeof prev.tokens === 'number' ? prev.tokens : 0;
+      const updated = { ...prev, tokens };
+      await sb.from('user_progression').upsert(
+        { user_id: userId, data: updated },
+        { onConflict: 'user_id' },
+      );
+      await auditLog(sb, admin.userId, 'set_tokens', userId, {
+        prevTokens,
+        newTokens: tokens,
+      });
+      return NextResponse.json({ ok: true, progression: updated });
     }
 
     default:

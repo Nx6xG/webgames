@@ -8,12 +8,15 @@ import { useClickOutside, useEscape } from '@/hooks/useClickOutside';
 import { generateRandomNickname, sanitizeNickname } from '@/lib/nickname';
 import { loadQuickStats } from '@/lib/localStats';
 import type { QuickStats } from '@/lib/localStats';
+import { useProgression } from '@/components/providers/ProgressionProvider';
 import { AvatarBubble } from '@/components/ui/AvatarBubble';
 import { ProfileCard } from '@/components/ui/ProfileCard';
 import { CosmeticsStudio } from '@/components/ui/CosmeticsStudio';
 import { getNameColorClass } from '@/lib/nameColors';
+import { TokenIcon } from '@/components/ui/TokenIcon';
 import { useAuth } from '@/components/providers/AuthProvider';
 import { AuthModal } from '@/components/ui/AuthModal';
+import { ProgressionModal } from '@/components/ui/ProgressionModal';
 
 // ── Theme helpers ──────────────────────────────────────────────────────────────
 
@@ -44,6 +47,8 @@ function resetAllLocalData() {
     'webgames.flappy.highscores',
     'webgames.flappy.bestScore',
     'webgames.sudoku.stats',
+    'webgames_progression_v1',
+    'webgames_progression_levelups_v1',
   ];
   for (const k of keysToRemove) {
     try { localStorage.removeItem(k); } catch { /* ignore */ }
@@ -121,9 +126,11 @@ export function ProfileMenu() {
   const [open, setOpen] = useState(false);
   const [studioOpen, setStudioOpen] = useState(false);
   const [authOpen, setAuthOpen] = useState(false);
+  const [progressionOpen, setProgressionOpen] = useState(false);
 
-  // Quick stats (loaded once when dropdown opens)
+  // Quick stats + progression
   const [quickStats, setQuickStats] = useState<QuickStats | null>(null);
+  const { levelProgress, isHydrated } = useProgression();
 
   // Settings accordion
   const [settingsOpen, setSettingsOpen] = useState(false);
@@ -216,7 +223,14 @@ export function ProfileMenu() {
         aria-expanded={open}
         className="flex items-center gap-2 rounded-lg px-2 py-1 hover:bg-zinc-800 transition-colors group"
       >
-        <AvatarBubble avatarId={avatarId} avatarFrame={avatarFrame} nickname={nickname} size="md" cosmetics={cosmetics} />
+        <div className="relative">
+          <AvatarBubble avatarId={avatarId} avatarFrame={avatarFrame} nickname={nickname} size="md" cosmetics={cosmetics} />
+          {isHydrated && levelProgress.level > 1 && (
+            <span className="absolute -bottom-1.5 -right-1.5 min-w-[20px] h-[20px] flex items-center justify-center rounded-full bg-gradient-to-br from-indigo-500 to-indigo-700 border-2 border-zinc-900 text-[9px] font-black text-white leading-none px-1 shadow-sm shadow-indigo-500/30">
+              {levelProgress.level}
+            </span>
+          )}
+        </div>
         <span className={`hidden sm:block text-sm transition-colors max-w-[120px] truncate ${getNameColorClass(nameColor) || 'text-zinc-300 group-hover:text-zinc-100'}`}>
           {nickname || '…'}
         </span>
@@ -258,6 +272,44 @@ export function ProfileMenu() {
                   {quickStats.achievementsUnlocked}/{quickStats.achievementsTotal} {t('menu.achievementsCount')}
                 </Link>
               </div>
+            )}
+
+            {/* ═══ Progression card (clickable) ═══ */}
+            {(
+              <button
+                onClick={() => { setProgressionOpen(true); closeMenu(); }}
+                className="mt-2 mx-1 rounded-lg border border-indigo-500/20 bg-indigo-950/20 px-3 py-2.5 w-[calc(100%-0.5rem)] text-left hover:border-indigo-500/35 hover:bg-indigo-950/30 transition-all cursor-pointer group"
+              >
+                <div className="flex items-center gap-2.5 mb-2">
+                  <div className="w-8 h-8 rounded-lg bg-indigo-500/15 border border-indigo-500/25 flex items-center justify-center shrink-0">
+                    <span className="text-indigo-300 font-black text-xs">{levelProgress.level}</span>
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-1.5">
+                      <span className="text-xs font-bold text-indigo-300 leading-tight">Lv. {levelProgress.level}</span>
+                      <span className="text-[10px] text-indigo-500/80 font-medium">{t(`progression.rank.${levelProgress.rank.toLowerCase()}`)}</span>
+                    </div>
+                    <span className="text-[10px] text-zinc-500 tabular-nums leading-tight">
+                      {levelProgress.currentXp}/{levelProgress.requiredXp} {t('progression.xp')}
+                    </span>
+                  </div>
+                  <svg className="w-3.5 h-3.5 text-zinc-700 group-hover:text-indigo-400 transition-colors shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" />
+                  </svg>
+                </div>
+                <div className="h-1.5 rounded-full bg-zinc-800 overflow-hidden">
+                  <div
+                    className="h-full rounded-full bg-gradient-to-r from-indigo-600 to-indigo-400 transition-all duration-500"
+                    style={{ width: `${Math.max(2, levelProgress.progress * 100)}%` }}
+                  />
+                </div>
+                {levelProgress.totalTokens > 0 && (
+                  <p className="text-[10px] text-amber-400/60 mt-1.5 flex items-center gap-1">
+                    <TokenIcon size="xs" />
+                    <span className="font-medium">{levelProgress.totalTokens} {t('progression.tokens')}</span>
+                  </p>
+                )}
+              </button>
             )}
           </div>
 
@@ -496,6 +548,10 @@ export function ProfileMenu() {
       )}
 
       <AuthModal open={authOpen} onClose={() => setAuthOpen(false)} />
+
+      {progressionOpen && (
+        <ProgressionModal onClose={() => setProgressionOpen(false)} />
+      )}
     </div>
   );
 }

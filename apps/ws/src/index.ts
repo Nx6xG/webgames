@@ -52,10 +52,42 @@ const GAME_DISPLAY_NAMES: Record<GameId, string> = {
   chess: 'Chess',
   battleship: 'Battleship',
   liarsbar: "Liar's Deck",
+  curvefever: 'Curve Fever',
 };
 
 /** Per-gameId matchmaking queue: gameId → waiting room info */
 const quickPlayQueue = new Map<GameId, OpenRoomInfo>();
+
+// ── Tick loop management (real-time games like Curve Fever) ─────────────────
+
+const tickTimers = new Map<string, ReturnType<typeof setInterval>>();
+
+function startTickLoop(roomCode: string) {
+  if (tickTimers.has(roomCode)) return; // already running
+  const room = roomManager.getRoom(roomCode);
+  if (!room?.state) return;
+  const engine = engineRegistry[room.gameId];
+  if (!engine.tick || !engine.tickInterval) return;
+
+  const interval = setInterval(() => {
+    const r = roomManager.getRoom(roomCode);
+    if (!r?.state) { stopTickLoop(roomCode); return; }
+    const newState = engine.tick!(r.state);
+    r.state = newState;
+    emitGameState(r, newState);
+    const st = engine.getStatus(newState);
+    if (st.status !== 'ongoing') {
+      stopTickLoop(roomCode);
+    }
+  }, engine.tickInterval);
+
+  tickTimers.set(roomCode, interval);
+}
+
+function stopTickLoop(roomCode: string) {
+  const timer = tickTimers.get(roomCode);
+  if (timer) { clearInterval(timer); tickTimers.delete(roomCode); }
+}
 
 /** socketId → nickname for all identified sockets */
 const nicknameMap = new Map<string, string>();
@@ -426,19 +458,38 @@ roomManager.onPlayerEvicted((room, playerIndex) => {
       }
     }
   }
+  // Remove evicted player from curvefever lobby state
+  if (room.state && room.gameId === 'curvefever') {
+    const cfState = room.state as import('shared').CurveFeverState;
+    if (cfState.phase === 'lobby') {
+      const roomTokens = new Set(room.players.map(p => p.playerToken));
+      const keepIndices = cfState.playerIds.map((t, i) => roomTokens.has(t) ? i : -1).filter(i => i >= 0);
+      cfState.playerIds = keepIndices.map(i => cfState.playerIds[i]);
+      cfState.players = keepIndices.map(i => cfState.players[i]);
+      cfState.trails = keepIndices.map(i => cfState.trails[i]);
+      cfState.gapCounters = keepIndices.map(i => cfState.gapCounters[i]);
+      cfState.gapRemaining = keepIndices.map(i => cfState.gapRemaining[i]);
+      if (cfState.playerIds.length > 0) cfState.currentTurn = cfState.playerIds[0];
+    } else {
+      // During gameplay, stop tick loop if too few players remain
+      stopTickLoop(room.code);
+    }
+  }
   io.to(room.code).emit('player_left', {
     playerId: '(timeout)',
     playerIndex,
     playerCount: room.players.length,
   });
-  // Broadcast updated game state after liarsbar lobby change
-  if (room.state && room.gameId === 'liarsbar') {
+  // Broadcast updated game state after liarsbar/curvefever lobby change
+  if (room.state && (room.gameId === 'liarsbar' || room.gameId === 'curvefever')) {
     emitGameState(room, room.state);
   }
   if (room.visibility === 'public') broadcastOpenRooms();
 });
 
 roomManager.onRoomCleaned((room) => {
+  // Stop any tick loop for real-time games
+  stopTickLoop(room.code);
   // Kick any remaining spectators from the Socket.IO room channel
   io.in(room.code).socketsLeave(room.code);
   if (room.visibility === 'public') broadcastOpenRooms();
@@ -560,7 +611,7 @@ io.on('connection', (socket) => {
   });
 
   // ── create_room ───────────────────────────────────────────────────────────
-  socket.on('create_room', ({ playerToken, gameId = 'tictactoe', nickname, visibility = 'private', roomName, rpsConfig, ldConfig, battleshipConfig, maxPlayers: requestedMax }) => {
+  socket.on('create_room', ({ playerToken, gameId = 'tictactoe', nickname, visibility = 'private', roomName, rpsConfig, ldConfig, battleshipConfig, cfConfig, maxPlayers: requestedMax }) => {
     identifiedTokens.set(socket.id, playerToken);
     nicknameMap.set(socket.id, nickname);
     if (!profiles.has(playerToken)) profiles.set(playerToken, { nickname });
@@ -593,7 +644,9 @@ io.on('connection', (socket) => {
         ? ldConfig
         : gameId === 'battleship' && battleshipConfig
           ? battleshipConfig
-          : undefined;
+          : gameId === 'curvefever' && cfConfig
+            ? cfConfig
+            : undefined;
     const cap = getGameCapacity(gameId);
     // Allow creator to choose maxPlayers within the game's valid range
     const effectiveMax = requestedMax
@@ -608,10 +661,15 @@ io.on('connection', (socket) => {
       creatorPlayer.nameColor = crProf?.nameColor;
       creatorPlayer.avatarFrame = crProf?.avatarFrame;
     }
-    // Liarsbar: create lobby-phase state immediately so it can track players
-    if (gameId === 'liarsbar') {
+    // Liarsbar / Curvefever: create lobby-phase state immediately so it can track players
+    if (gameId === 'liarsbar' || gameId === 'curvefever') {
       const engine = engineRegistry[gameId];
       room.state = engine.initialState([playerToken], 0, room.gameConfig);
+      // Fix creator nickname in curvefever lobby state
+      if (gameId === 'curvefever') {
+        const cfState = room.state as import('shared').CurveFeverState;
+        if (cfState.players[0]) cfState.players[0].nickname = nickname;
+      }
     }
 
     socket.join(room.code);
@@ -725,6 +783,31 @@ io.on('connection', (socket) => {
           lbState.hands.push([]);
         }
       }
+      // For curvefever, update the lobby state when new players join
+      if (room.state && room.gameId === 'curvefever') {
+        const cfState = room.state as import('shared').CurveFeverState;
+        if (cfState.phase === 'lobby' && !cfState.playerIds.includes(playerToken)) {
+          const joinNick = profiles.get(playerToken)?.nickname ?? nickname;
+          const colors = ['#e74c3c', '#3498db', '#2ecc71', '#f1c40f', '#9b59b6', '#e67e22'];
+          cfState.playerIds.push(playerToken);
+          cfState.players.push({
+            token: playerToken,
+            nickname: joinNick,
+            x: 0, y: 0,
+            angle: 0,
+            alive: true,
+            score: 0,
+            color: colors[cfState.players.length % colors.length],
+            inGap: false,
+            steering: 'none',
+            effects: [],
+            hasShield: false,
+          });
+          cfState.trails.push([]);
+          cfState.gapCounters.push(0);
+          cfState.gapRemaining.push(0);
+        }
+      }
 
       socket.emit('room_joined', {
         roomCode: code,
@@ -816,7 +899,11 @@ io.on('connection', (socket) => {
     // across subsequent function calls (rateLimiter, getPlayer) that could
     // theoretically mutate room.state from TypeScript's perspective.
     const currentState = room.state;
-    if (!rateLimiter.check(socket.id)) {
+    const engine = engineRegistry[room.gameId];
+    const isSimultaneous = engine.simultaneousInput === true;
+
+    // Skip rate limiter for simultaneous-input games (players send rapid steering changes)
+    if (!isSimultaneous && !rateLimiter.check(socket.id)) {
       socket.emit('action_error', { code: 'RATE_LIMITED', message: 'Slow down — too many actions.' });
       return;
     }
@@ -834,27 +921,34 @@ io.on('connection', (socket) => {
       return;
     }
 
-    // Sanity guard: if the current-turn token is not among the room's connected
-    // players, the game cannot proceed.  Re-sync so clients show the true state
-    // and bail — this should never fire after a correct reconnect.
-    const connectedTokens = new Set(room.players.map((p) => p.playerToken));
-    const turnToken = 'currentTurn' in currentState
-      ? currentState.currentTurn
-      : currentState.currentPlayer;
-    if (!connectedTokens.has(turnToken)) {
-      console.error(`[sanity] ${code}: turn token ${turnToken} not in connected players ${[...connectedTokens].join(',')}, re-syncing`);
-      emitGameState(room, currentState);
-      return;
+    // Sanity guard: skip turn-order check for simultaneous-input games
+    if (!isSimultaneous) {
+      const connectedTokens = new Set(room.players.map((p) => p.playerToken));
+      const turnToken = 'currentTurn' in currentState
+        ? currentState.currentTurn
+        : currentState.currentPlayer;
+      if (!connectedTokens.has(turnToken)) {
+        console.error(`[sanity] ${code}: turn token ${turnToken} not in connected players ${[...connectedTokens].join(',')}, re-syncing`);
+        emitGameState(room, currentState);
+        return;
+      }
     }
 
     try {
-      const engine = engineRegistry[room.gameId];
       const prevStatus = currentState.status;
       const nextState = engine.applyAction(currentState, action, {
         playerId: player.playerToken,
         playerIndex: player.index,
       });
       room.state = nextState;
+      // Start tick loop when a real-time game transitions out of lobby
+      if (engine.tick && engine.tickInterval && 'phase' in nextState) {
+        const prevPhase = 'phase' in currentState ? (currentState as { phase: string }).phase : undefined;
+        const nextPhase = (nextState as { phase: string }).phase;
+        if (prevPhase === 'lobby' && nextPhase !== 'lobby') {
+          startTickLoop(room.code);
+        }
+      }
       // DEV: verify liarsbar lives broadcast
       if (room.gameId === 'liarsbar' && 'players' in nextState) {
         const lbPlayers = (nextState as { players: Array<{ id: string; lives: number }> }).players;

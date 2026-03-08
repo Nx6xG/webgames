@@ -5,6 +5,7 @@ import { rpsEngine } from './engines/rps.js';
 import { chessEngine } from './engines/chess.js';
 import { battleshipEngine } from './engines/battleship.js';
 import { liarsBarEngine } from './engines/liarsbar.js';
+import { curveFeverEngine } from './engines/curvefever.js';
 
 /**
  * Maps every GameId to its authoritative server-side engine.
@@ -21,4 +22,5 @@ export const engineRegistry: Record<GameId, GameEngine<any, any>> = {
   chess:      chessEngine,
   battleship: battleshipEngine,
   liarsbar:   liarsBarEngine,
+  curvefever: curveFeverEngine,
 };

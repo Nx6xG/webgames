@@ -116,3 +116,21 @@ CREATE TABLE IF NOT EXISTS admin_audit_log (
 
 ALTER TABLE admin_audit_log ENABLE ROW LEVEL SECURITY;
 -- Audit log is accessed only via service role (API routes), no RLS select policies needed.
+
+-- ── User progression (XP, levels, tokens) ──────────────────────────────────
+
+create table if not exists user_progression (
+  user_id uuid primary key references auth.users on delete cascade,
+  data    jsonb not null default '{}'::jsonb
+);
+
+alter table user_progression enable row level security;
+
+create policy "Users can read own progression"
+  on user_progression for select using (auth.uid() = user_id);
+
+create policy "Users can insert own progression"
+  on user_progression for insert with check (auth.uid() = user_id);
+
+create policy "Users can update own progression"
+  on user_progression for update using (auth.uid() = user_id);

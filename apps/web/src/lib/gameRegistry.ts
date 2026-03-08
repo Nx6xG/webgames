@@ -6,6 +6,7 @@ import { RpsGame } from '@/components/games/rps/RpsGame';
 import { ChessGame } from '@/components/games/chess/ChessGame';
 import { BattleshipGame } from '@/components/games/battleship/BattleshipGame';
 import { LiarsBarGame } from '@/components/games/liarsbar/LiarsBarGame';
+import { CurveFeverGame } from '@/components/games/curvefever/CurveFeverGame';
 
 /**
  * Props every game component must accept.
@@ -149,5 +150,20 @@ export const webRegistry: Record<GameId, WebGameEntry> = {
     titleKey: 'lobby.games.liarsbar.title',
     descKey:  'lobby.games.liarsbar.desc',
     Component: LiarsBarGame,
+  },
+  curvefever: {
+    manifest: {
+      id: 'curvefever',
+      name: 'Curve Fever',
+      description: 'Steer your snake and be the last one alive! 2-6 players real-time action.',
+      categories: ['multiplayer', 'arcade'],
+      version: '1.0.0',
+      routeSlug: 'curvefever',
+      minPlayers: 2,
+      maxPlayers: 6,
+    },
+    titleKey: 'lobby.games.curvefever.title',
+    descKey:  'lobby.games.curvefever.desc',
+    Component: CurveFeverGame,
   },
 };

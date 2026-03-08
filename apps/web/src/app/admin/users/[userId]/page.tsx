@@ -7,6 +7,13 @@ import { fetchUser, patchUser } from '@/lib/adminApi';
 import { ACHIEVEMENTS } from '@/lib/achievements/definitions';
 import { COSMETICS_REGISTRY, RARITY_COLORS, RARITY_BG, type CosmeticSlot } from '@/lib/cosmetics';
 
+interface ProgressionData {
+  xp: number;
+  level: number;
+  tokens: number;
+  [key: string]: unknown;
+}
+
 interface UserDetail {
   profile: { id: string; nickname: string | null; role: string; created_at: string; suspended_at: string | null };
   email: string | null;
@@ -14,6 +21,7 @@ interface UserDetail {
   achievements: { unlocked: string[] } | null;
   cosmetics: { data: Record<string, unknown> } | null;
   unlockedCosmetics: { data: Record<string, string[]> } | null;
+  progression: ProgressionData | null;
 }
 
 const SLOT_ORDER: CosmeticSlot[] = ['frame', 'head', 'portal', 'aura', 'banner', 'cardColor', 'badge', 'title'];
@@ -121,6 +129,17 @@ export default function AdminUserDetailPage() {
         ) : (
           <p className="text-xs text-zinc-600">{t('admin.users.noStats')}</p>
         )}
+      </Section>
+
+      {/* Progression */}
+      <Section title={t('admin.progression.title')}>
+        <ProgressionManager
+          progression={user.progression}
+          actionLoading={actionLoading}
+          t={t}
+          onAddXp={(amount) => quickAction({ action: 'add_xp', amount }, `add_xp_${amount}`)}
+          onSetTokens={(tokens) => quickAction({ action: 'set_tokens', tokens }, `set_tokens_${tokens}`)}
+        />
       </Section>
 
       {/* Achievements */}
@@ -397,6 +416,193 @@ function CosmeticsManager({
           );
         })}
       </div>
+    </div>
+  );
+}
+
+// ── Progression Manager ──────────────────────────────────────────────────────
+
+function ProgressionManager({
+  progression, actionLoading, t, onAddXp, onSetTokens,
+}: {
+  progression: ProgressionData | null;
+  actionLoading: string | null;
+  t: (key: string) => string;
+  onAddXp: (amount: number) => void;
+  onSetTokens: (tokens: number) => void;
+}) {
+  const [customXp, setCustomXp] = useState('');
+  const [customTokens, setCustomTokens] = useState('');
+  const [mode, setMode] = useState<'add' | 'remove'>('add');
+  const [feedback, setFeedback] = useState<string | null>(null);
+
+  const prog = progression ?? { xp: 0, level: 1, tokens: 0 };
+  const required = Math.floor(100 * Math.pow(prog.level, 1.45));
+
+  // Rank calculation (mirrors rank.ts)
+  const rankKey = prog.level >= 35 ? 'legend' : prog.level >= 20 ? 'master' : prog.level >= 10 ? 'challenger' : prog.level >= 5 ? 'player' : 'rookie';
+
+  const XP_PRESETS = [50, 100, 250, 500];
+
+  function showFeedback(msg: string) {
+    setFeedback(msg);
+    setTimeout(() => setFeedback(null), 2000);
+  }
+
+  function handlePresetXp(amount: number) {
+    const actual = mode === 'add' ? amount : -amount;
+    onAddXp(actual);
+    showFeedback(`${actual > 0 ? '+' : ''}${actual} XP`);
+  }
+
+  function handleCustomXp() {
+    const val = parseInt(customXp, 10);
+    if (!val || val <= 0) return;
+    const actual = mode === 'add' ? val : -val;
+    onAddXp(actual);
+    showFeedback(`${actual > 0 ? '+' : ''}${actual} XP`);
+    setCustomXp('');
+  }
+
+  function handleSetTokens() {
+    const val = parseInt(customTokens, 10);
+    if (isNaN(val) || val < 0) return;
+    onSetTokens(val);
+    showFeedback(`Tokens → ${val}`);
+    setCustomTokens('');
+  }
+
+  return (
+    <div className="space-y-3">
+      {/* Current stats */}
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 text-xs">
+        <div className="rounded-md bg-indigo-950/30 border border-indigo-500/15 px-2.5 py-2">
+          <p className="text-[10px] text-zinc-500 mb-0.5">{t('admin.progression.currentLevel')}</p>
+          <p className="text-indigo-300 font-bold text-base tabular-nums">Lv. {prog.level}</p>
+        </div>
+        <div className="rounded-md bg-zinc-800/30 border border-zinc-700/30 px-2.5 py-2">
+          <p className="text-[10px] text-zinc-500 mb-0.5">{t('progression.rank')}</p>
+          <p className="text-indigo-400 font-semibold">{t(`progression.rank.${rankKey}`)}</p>
+        </div>
+        <div className="rounded-md bg-zinc-800/30 border border-zinc-700/30 px-2.5 py-2">
+          <p className="text-[10px] text-zinc-500 mb-0.5">{t('admin.progression.currentXp')}</p>
+          <p className="text-zinc-200 tabular-nums font-medium">{prog.xp} <span className="text-zinc-600">/ {required}</span></p>
+        </div>
+        <div className="rounded-md bg-amber-950/20 border border-amber-500/15 px-2.5 py-2">
+          <p className="text-[10px] text-zinc-500 mb-0.5">{t('admin.progression.tokens')}</p>
+          <p className="text-amber-400 font-bold text-base tabular-nums">{prog.tokens}</p>
+        </div>
+      </div>
+
+      {/* XP progress bar */}
+      <div>
+        <div className="h-2 rounded-full bg-zinc-800 overflow-hidden">
+          <div
+            className="h-full rounded-full bg-gradient-to-r from-indigo-600 to-indigo-400 transition-all"
+            style={{ width: `${required > 0 ? Math.max(2, (prog.xp / required) * 100) : 0}%` }}
+          />
+        </div>
+        <div className="flex items-center justify-between mt-1">
+          <span className="text-[10px] text-zinc-600 tabular-nums">{required > 0 ? Math.round((prog.xp / required) * 100) : 0}%</span>
+          <span className="text-[10px] text-zinc-600 tabular-nums">{required - prog.xp} XP to Lv. {prog.level + 1}</span>
+        </div>
+      </div>
+
+      {/* Feedback toast */}
+      {feedback && (
+        <div className="px-3 py-1.5 rounded-md bg-indigo-900/40 border border-indigo-500/30 text-indigo-300 text-xs font-medium text-center">
+          {feedback}
+        </div>
+      )}
+
+      {/* Mode toggle */}
+      <div className="flex items-center gap-2">
+        <div className="flex gap-0.5 bg-zinc-800/50 rounded-md p-0.5">
+          <button
+            onClick={() => setMode('add')}
+            className={`px-2.5 py-1 rounded text-[10px] font-medium transition-colors ${
+              mode === 'add' ? 'bg-emerald-900/50 text-emerald-400' : 'text-zinc-500 hover:text-zinc-300'
+            }`}
+          >{t('admin.progression.addXp')}</button>
+          <button
+            onClick={() => setMode('remove')}
+            className={`px-2.5 py-1 rounded text-[10px] font-medium transition-colors ${
+              mode === 'remove' ? 'bg-rose-900/50 text-rose-400' : 'text-zinc-500 hover:text-zinc-300'
+            }`}
+          >{t('admin.progression.removeXp')}</button>
+        </div>
+      </div>
+
+      {/* XP presets */}
+      <div className="flex flex-wrap gap-1.5">
+        {XP_PRESETS.map((amount) => {
+          const actual = mode === 'add' ? amount : -amount;
+          const key = `add_xp_${actual}`;
+          return (
+            <button
+              key={amount}
+              onClick={() => handlePresetXp(amount)}
+              disabled={actionLoading === key}
+              className={`px-3 py-1.5 rounded-md text-[11px] font-medium border transition-colors disabled:opacity-40 ${
+                mode === 'add'
+                  ? 'border-emerald-800/60 text-emerald-400 hover:bg-emerald-900/30'
+                  : 'border-rose-800/60 text-rose-400 hover:bg-rose-900/30'
+              }`}
+            >
+              {mode === 'add' ? '+' : '-'}{amount} XP
+            </button>
+          );
+        })}
+      </div>
+
+      {/* Custom XP input */}
+      <div className="flex gap-1.5">
+        <input
+          type="number"
+          value={customXp}
+          onChange={(e) => setCustomXp(e.target.value)}
+          placeholder={t('admin.progression.customXp')}
+          min="1"
+          className="flex-1 min-w-[80px] bg-zinc-800/50 border border-zinc-700/50 rounded-md px-2.5 py-1.5 text-[11px] text-zinc-200 placeholder-zinc-600 focus:outline-none focus:border-indigo-500/50"
+          onKeyDown={(e) => { if (e.key === 'Enter') handleCustomXp(); }}
+        />
+        <button
+          onClick={handleCustomXp}
+          className={`px-3 py-1.5 rounded-md text-[11px] font-medium border transition-colors ${
+            mode === 'add'
+              ? 'border-emerald-800/60 text-emerald-400 hover:bg-emerald-900/30'
+              : 'border-rose-800/60 text-rose-400 hover:bg-rose-900/30'
+          }`}
+        >
+          {t('admin.progression.apply')}
+        </button>
+      </div>
+
+      {/* Token management */}
+      <div className="pt-2 border-t border-zinc-800">
+        <div className="flex gap-1.5 items-center">
+          <span className="text-[10px] text-zinc-500 font-medium shrink-0">{t('admin.progression.tokens')}:</span>
+          <input
+            type="number"
+            value={customTokens}
+            onChange={(e) => setCustomTokens(e.target.value)}
+            placeholder={String(prog.tokens)}
+            min="0"
+            className="w-20 bg-zinc-800/50 border border-zinc-700/50 rounded-md px-2.5 py-1 text-[11px] text-zinc-200 placeholder-zinc-600 focus:outline-none focus:border-indigo-500/50"
+            onKeyDown={(e) => { if (e.key === 'Enter') handleSetTokens(); }}
+          />
+          <button
+            onClick={handleSetTokens}
+            className="px-2.5 py-1 rounded-md text-[10px] font-medium border border-amber-800/60 text-amber-400 hover:bg-amber-900/30 transition-colors"
+          >
+            {t('admin.progression.apply')}
+          </button>
+        </div>
+      </div>
+
+      {!progression && (
+        <p className="text-[10px] text-zinc-600 italic">{t('admin.progression.noData')}</p>
+      )}
     </div>
   );
 }

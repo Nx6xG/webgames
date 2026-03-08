@@ -96,6 +96,7 @@ const SINGLEPLAYER_GAMES = [
 import { GlobalChatWidget } from '@/components/chat/GlobalChatWidget';
 import { ProfileMenu } from '@/components/ProfileMenu';
 import { OnlineNavChip } from '@/components/social/OnlineNavChip';
+import { TokenHeaderChip } from '@/components/ui/TokenHeaderChip';
 import { useI18n } from '@/components/providers/LanguageProvider';
 import { usePartyCtx } from '@/components/providers/PartyProvider';
 import { GameDetailsModal } from '@/components/games/GameDetailsModal';
@@ -104,6 +105,7 @@ import { DailyChallengesWidget } from '@/components/DailyChallengesWidget';
 import { GameOfTheDay } from '@/components/GameOfTheDay';
 import { RecentlyPlayed } from '@/components/RecentlyPlayed';
 import { ActiveRoomsWidget } from '@/components/ActiveRoomsWidget';
+import { LevelUpCelebration } from '@/components/LevelUpCelebration';
 
 /** Maps internal category IDs (used as CSS-class keys) to i18n message keys. */
 const CATEGORY_TAG_KEYS: Record<string, string> = {
@@ -150,6 +152,7 @@ const GAME_CONTROLS_KEY: Record<string, string> = {
   pong:            'modal.controls.pong',
   breakout:        'modal.controls.breakout',
   minesweeper:     'modal.controls.minesweeper',
+  curvefever:      'modal.controls.curvefever',
 };
 
 // ── Badge system ─────────────────────────────────────────────────────────────
@@ -569,6 +572,9 @@ export default function HomePage() {
 
   return (
     <main className="min-h-screen bg-[var(--bg)] text-[var(--fg)]">
+      {/* Level-up celebration overlay */}
+      <LevelUpCelebration />
+
       {/* Header */}
       <header className="border-b border-[var(--cardBorder)] bg-[var(--bg)]/80 backdrop-blur-xl sticky top-0 z-40">
         <div className="max-w-5xl mx-auto px-6 py-4 flex items-center gap-3">
@@ -576,13 +582,17 @@ export default function HomePage() {
             W
           </div>
           <span className="font-bold text-lg tracking-tight">Web Games</span>
-          <nav className="ml-auto flex items-center gap-4">
+          <nav className="ml-auto flex items-center gap-3">
             <Link href="/rooms" className="text-sm text-zinc-400 hover:text-zinc-100 transition-colors">
               {t('nav.rooms')}
             </Link>
-            <div className="w-px h-4 bg-zinc-700 shrink-0" aria-hidden />
-            <OnlineNavChip />
-            <ProfileMenu />
+            <div className="w-px h-4 bg-zinc-700/60 shrink-0" aria-hidden />
+            <TokenHeaderChip />
+            <div className="w-px h-4 bg-zinc-700/60 shrink-0" aria-hidden />
+            <div className="flex items-center gap-2">
+              <OnlineNavChip />
+              <ProfileMenu />
+            </div>
           </nav>
         </div>
       </header>

@@ -7,6 +7,7 @@ import { ProfileOverviewCards } from './ProfileOverviewCards';
 import { ProfileAchievementsSummary } from './ProfileAchievementsSummary';
 import { ProfileGameStats } from './ProfileGameStats';
 import { ProfileShowcase } from './ProfileShowcase';
+import { ProgressionTrack } from './ProgressionTrack';
 import type { ProfileData } from './types';
 
 interface Props {
@@ -38,6 +39,13 @@ export function ProfileView({ profile, sidebar }: Props) {
               <SectionHeader text={t('profilePage.overview')} />
               <ProfileOverviewCards profile={profile} />
             </section>
+
+            {/* Progression Track (own profile only) */}
+            {profile.isOwnProfile && (
+              <section>
+                <ProgressionTrack />
+              </section>
+            )}
 
             {/* Achievements */}
             <section>

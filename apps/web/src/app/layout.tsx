@@ -5,7 +5,9 @@ import { LanguageProvider } from '@/components/providers/LanguageProvider';
 import { AuthProvider } from '@/components/providers/AuthProvider';
 import { PatchNotesFloatingButton } from '@/components/PatchNotesFloatingButton';
 import { AchievementToastProvider } from '@/components/ui/AchievementToasts';
+import { LevelUpToastProvider } from '@/components/ui/LevelUpToasts';
 import { PartyProvider } from '@/components/providers/PartyProvider';
+import { ProgressionProvider } from '@/components/providers/ProgressionProvider';
 
 export const metadata: Metadata = {
   title: 'Web Games',
@@ -22,11 +24,15 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
       <body className="antialiased overflow-x-hidden">
         <LanguageProvider>
           <AuthProvider>
+            <ProgressionProvider>
             <AchievementToastProvider>
-              <PartyProvider>
-                <NicknameProvider>{children}</NicknameProvider>
-              </PartyProvider>
+              <LevelUpToastProvider>
+                <PartyProvider>
+                  <NicknameProvider>{children}</NicknameProvider>
+                </PartyProvider>
+              </LevelUpToastProvider>
             </AchievementToastProvider>
+            </ProgressionProvider>
           </AuthProvider>
         </LanguageProvider>
         <PatchNotesFloatingButton />

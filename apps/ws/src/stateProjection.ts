@@ -25,6 +25,7 @@ import type {
   BattleshipShip,
   BsPlayerState,
   LiarsBarState,
+  CurveFeverState,
 } from 'shared';
 
 // ── Viewer context ─────────────────────────────────────────────────────────────
@@ -90,6 +91,7 @@ export function projectGameState(
   ctx: ViewerCtx,
 ): AnyGameState {
   if (gameId === 'liarsbar') return projectLiarsBar(state as LiarsBarState, ctx);
+  if (gameId === 'curvefever') return projectCurveFever(state as CurveFeverState);
   if (gameId !== 'battleship') return state;
 
   const bs = state as BattleshipState;
@@ -159,4 +161,16 @@ function projectLiarsBar(state: LiarsBarState, ctx: ViewerCtx): LiarsBarState {
   );
 
   return { ...base, hands: projected };
+}
+
+// ── Curve Fever projector ───────────────────────────────────────────────────
+
+/**
+ * Strip server-only fields: trails, gapCounters, gapRemaining, powerUpSpawnCounter, powerUpNextId.
+ * All viewers (players + spectators) see the same projected state.
+ */
+function projectCurveFever(state: CurveFeverState): CurveFeverState {
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  const { trails: _t, gapCounters: _gc, gapRemaining: _gr, powerUpSpawnCounter: _sc, powerUpNextId: _ni, ...rest } = state;
+  return { ...rest, trails: [], gapCounters: [], gapRemaining: [], powerUpSpawnCounter: 0, powerUpNextId: 0 } as CurveFeverState;
 }

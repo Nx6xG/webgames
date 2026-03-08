@@ -12,6 +12,8 @@ import {
   loadUnlockedCosmetics,
   saveUnlockedCosmetics,
 } from '@/lib/achievements/store';
+import type { PlayerProgression } from '@/lib/progression';
+import { loadProgression, saveProgression } from '@/lib/progression';
 
 // ── Types ────────────────────────────────────────────────────────────────────
 
@@ -120,6 +122,28 @@ export async function saveCloudUnlockedCosmetics(
   await sb
     .from('user_unlocked_cosmetics')
     .upsert({ user_id: userId, data: map }, { onConflict: 'user_id' });
+}
+
+export async function fetchCloudProgression(
+  sb: SupabaseClient,
+  userId: string,
+): Promise<PlayerProgression | null> {
+  const { data } = await sb
+    .from('user_progression')
+    .select('data')
+    .eq('user_id', userId)
+    .maybeSingle();
+  return (data?.data as PlayerProgression) ?? null;
+}
+
+export async function saveCloudProgression(
+  sb: SupabaseClient,
+  userId: string,
+  prog: PlayerProgression,
+): Promise<void> {
+  await sb
+    .from('user_progression')
+    .upsert({ user_id: userId, data: prog }, { onConflict: 'user_id' });
 }
 
 // ── Merge helpers ────────────────────────────────────────────────────────────
@@ -251,14 +275,16 @@ export async function runInitialSync(
   const localUnlocked = [...loadUnlocked()];
   const localStats = loadStats();
   const localUnlockedCosmetics = loadUnlockedCosmetics();
+  const localProgression = loadProgression();
 
   // Load cloud data (each fetch is individually safe)
-  const [cloudCosmetics, cloudUnlocked, cloudStats, cloudUnlockedCosmetics] =
+  const [cloudCosmetics, cloudUnlocked, cloudStats, cloudUnlockedCosmetics, cloudProgression] =
     await Promise.all([
       fetchCloudCosmetics(sb, userId).catch((e) => { console.error('[cloudSync] fetchCosmetics:', e); return null; }),
       fetchCloudAchievements(sb, userId).catch((e) => { console.error('[cloudSync] fetchAchievements:', e); return null; }),
       fetchCloudStats(sb, userId).catch((e) => { console.error('[cloudSync] fetchStats:', e); return null; }),
       fetchCloudUnlockedCosmetics(sb, userId).catch((e) => { console.error('[cloudSync] fetchUnlockedCosmetics:', e); return null; }),
+      fetchCloudProgression(sb, userId).catch((e) => { console.error('[cloudSync] fetchProgression:', e); return null; }),
     ]);
 
   // Merge cosmetics (local wins per field, cloud fills gaps)
@@ -295,11 +321,22 @@ export async function runInitialSync(
     cloudUnlockedCosmetics ?? defaultMap,
   );
 
+  // Merge progression (take whichever is further ahead — higher level, or same level + more XP)
+  const cp = cloudProgression;
+  let mergedProgression = localProgression;
+  if (cp) {
+    const localAhead = localProgression.level > cp.level ||
+      (localProgression.level === cp.level && localProgression.xp >= cp.xp);
+    mergedProgression = localAhead ? localProgression : { ...localProgression, ...cp };
+    mergedProgression.tokens = Math.max(localProgression.tokens, cp.tokens);
+  }
+
   // Save merged → local
   saveCosmetics(mergedCosmetics);
   saveUnlocked(new Set(mergedUnlocked));
   saveStats(mergedStats);
   saveUnlockedCosmetics(mergedUnlockedCosmetics);
+  saveProgression(mergedProgression);
 
   // Save merged → cloud (each save is individually safe)
   await Promise.all([
@@ -307,6 +344,7 @@ export async function runInitialSync(
     safe('saveAchievements', () => saveCloudAchievements(sb, userId, mergedUnlocked)),
     safe('saveStats', () => saveCloudStats(sb, userId, mergedStats)),
     safe('saveUnlockedCosmetics', () => saveCloudUnlockedCosmetics(sb, userId, mergedUnlockedCosmetics)),
+    safe('saveProgression', () => saveCloudProgression(sb, userId, mergedProgression)),
   ]);
 
   markSyncDone(userId);
@@ -318,16 +356,18 @@ export async function loadCloudToLocal(
   sb: SupabaseClient,
   userId: string,
 ): Promise<void> {
-  const [cloudCosmetics, cloudUnlocked, cloudStats, cloudUnlockedCosmetics] =
+  const [cloudCosmetics, cloudUnlocked, cloudStats, cloudUnlockedCosmetics, cloudProgression] =
     await Promise.all([
       fetchCloudCosmetics(sb, userId).catch((e) => { console.error('[cloudSync] fetchCosmetics:', e); return null; }),
       fetchCloudAchievements(sb, userId).catch((e) => { console.error('[cloudSync] fetchAchievements:', e); return null; }),
       fetchCloudStats(sb, userId).catch((e) => { console.error('[cloudSync] fetchStats:', e); return null; }),
       fetchCloudUnlockedCosmetics(sb, userId).catch((e) => { console.error('[cloudSync] fetchUnlockedCosmetics:', e); return null; }),
+      fetchCloudProgression(sb, userId).catch((e) => { console.error('[cloudSync] fetchProgression:', e); return null; }),
     ]);
 
   if (cloudCosmetics) saveCosmetics(cloudCosmetics);
   if (cloudUnlocked) saveUnlocked(new Set(cloudUnlocked));
   if (cloudStats) saveStats(cloudStats);
   if (cloudUnlockedCosmetics) saveUnlockedCosmetics(cloudUnlockedCosmetics);
+  if (cloudProgression) saveProgression(cloudProgression);
 }

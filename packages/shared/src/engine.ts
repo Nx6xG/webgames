@@ -38,4 +38,11 @@ export interface GameEngine<TState, TAction> {
 
   /** Derive the current game status from state */
   getStatus(state: TState): StatusResult;
+
+  /** Called every tickInterval ms for real-time games (e.g. Curve Fever). */
+  tick?(state: TState): TState;
+  /** Interval in ms between tick() calls (e.g. 50 = 20 tps). */
+  tickInterval?: number;
+  /** When true, skip turn-order and rate-limit checks (all players act simultaneously). */
+  simultaneousInput?: boolean;
 }

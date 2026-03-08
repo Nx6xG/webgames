@@ -6,6 +6,7 @@ import { BadgeIcon } from '@/components/ui/BadgeIcon';
 import { getNameColorClass } from '@/lib/nameColors';
 import { getCosmeticDef } from '@/lib/cosmetics';
 import { useI18n } from '@/components/providers/LanguageProvider';
+import { useProgression } from '@/components/providers/ProgressionProvider';
 import type { ProfileData } from './types';
 
 interface Props {
@@ -17,6 +18,8 @@ interface Props {
 export function ProfileHero({ profile, actions }: Props) {
   const { t } = useI18n();
   const { cosmetics, nickname, badges, totalPlayed, totalWins, totalWinrate, isOwnProfile, isLocalOnly } = profile;
+  const { levelProgress, isHydrated } = useProgression();
+  const prog = isOwnProfile && isHydrated ? levelProgress : null;
 
   const banner = cosmetics.slots?.banner;
   const bannerClass = `wg-banner-${banner || 'default'}`;
@@ -52,9 +55,17 @@ export function ProfileHero({ profile, actions }: Props) {
           {/* Name row */}
           <div className="flex items-start justify-between gap-4 flex-wrap">
             <div className="min-w-0">
-              <h1 className={`text-xl sm:text-2xl font-bold truncate ${getNameColorClass(cosmetics.nameColor) || 'text-zinc-100'}`}>
-                {nickname}
-              </h1>
+              <div className="flex items-center gap-2.5 flex-wrap">
+                <h1 className={`text-xl sm:text-2xl font-bold truncate ${getNameColorClass(cosmetics.nameColor) || 'text-zinc-100'}`}>
+                  {nickname}
+                </h1>
+                {prog && (
+                  <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-indigo-500/15 border border-indigo-500/25 text-xs font-semibold text-indigo-300 shrink-0">
+                    Lv. {prog.level}
+                    <span className="text-indigo-400/60 font-medium">{t(`progression.rank.${prog.rank.toLowerCase()}`)}</span>
+                  </span>
+                )}
+              </div>
               {badges.length > 0 && (
                 <div className="flex gap-1.5 mt-1.5">
                   {badges.map((badgeId) => (

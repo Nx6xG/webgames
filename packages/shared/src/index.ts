@@ -94,6 +94,61 @@ export type {
   Card,
   CardRank,
 } from './games/liarsbar';
+import {
+  ARENA_W as _cfArenaW,
+  ARENA_H as _cfArenaH,
+  BASE_SPEED as _cfBaseSpeed,
+  SPEED_INCREASE_PER_SEC as _cfSpeedInc,
+  MAX_SPEED as _cfMaxSpeed,
+  TURN_RATE as _cfTurnRate,
+  PLAYER_RADIUS as _cfPlayerRadius,
+  TICK_INTERVAL as _cfTickInterval,
+  TICKS_PER_SEC as _cfTicksPerSec,
+  PLAYER_COLORS as _cfPlayerColors,
+  POWERUP_SPAWN_INTERVAL_MIN as _cfPuSpawnMin,
+  POWERUP_SPAWN_INTERVAL_MAX as _cfPuSpawnMax,
+  POWERUP_MAX_ACTIVE as _cfPuMaxActive,
+  POWERUP_LIFETIME as _cfPuLifetime,
+  POWERUP_PICKUP_RADIUS as _cfPuPickup,
+  POWERUP_SPEED_DURATION as _cfPuSpeedDur,
+  POWERUP_SPEED_MULTIPLIER as _cfPuSpeedMul,
+  POWERUP_SHIELD_DURATION as _cfPuShieldDur,
+  POWERUP_PHASE_DURATION as _cfPuPhaseDur,
+  KILL_FEED_MAX as _cfKillFeedMax,
+} from './games/curvefever';
+export const CF_ARENA_W = _cfArenaW;
+export const CF_ARENA_H = _cfArenaH;
+export const CF_BASE_SPEED = _cfBaseSpeed;
+export const CF_SPEED_INCREASE_PER_SEC = _cfSpeedInc;
+export const CF_MAX_SPEED = _cfMaxSpeed;
+export const CF_TURN_RATE = _cfTurnRate;
+export const CF_PLAYER_RADIUS = _cfPlayerRadius;
+export const CF_TICK_INTERVAL = _cfTickInterval;
+export const CF_TICKS_PER_SEC = _cfTicksPerSec;
+export const CF_PLAYER_COLORS = _cfPlayerColors;
+export const CF_POWERUP_SPAWN_INTERVAL_MIN = _cfPuSpawnMin;
+export const CF_POWERUP_SPAWN_INTERVAL_MAX = _cfPuSpawnMax;
+export const CF_POWERUP_MAX_ACTIVE = _cfPuMaxActive;
+export const CF_POWERUP_LIFETIME = _cfPuLifetime;
+export const CF_POWERUP_PICKUP_RADIUS = _cfPuPickup;
+export const CF_POWERUP_SPEED_DURATION = _cfPuSpeedDur;
+export const CF_POWERUP_SPEED_MULTIPLIER = _cfPuSpeedMul;
+export const CF_POWERUP_SHIELD_DURATION = _cfPuShieldDur;
+export const CF_POWERUP_PHASE_DURATION = _cfPuPhaseDur;
+export const CF_KILL_FEED_MAX = _cfKillFeedMax;
+export type {
+  CurveFeverPhase,
+  CurveFeverPlayer,
+  CurveFeverState,
+  CurveFeverAction,
+  CurveFeverConfig,
+  CfDeathEvent,
+  CfKillFeedEntry,
+  CfPowerUpType,
+  CfPowerUp,
+  CfActiveEffect,
+  TrailSegment,
+} from './games/curvefever';
 export type {
   AnyGameState,
   AnyGameAction,

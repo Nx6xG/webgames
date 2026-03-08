@@ -4,6 +4,8 @@ import { useEffect, useState } from 'react';
 import { useI18n } from '@/components/providers/LanguageProvider';
 import { GAME_EMOJI } from '@/lib/localStats';
 import { getActiveStreak } from '@/lib/playStreak';
+import { useProgression } from '@/components/providers/ProgressionProvider';
+import { TokenIcon } from '@/components/ui/TokenIcon';
 import type { ProfileData } from './types';
 
 interface Props {
@@ -13,6 +15,8 @@ interface Props {
 export function ProfileOverviewCards({ profile }: Props) {
   const { t } = useI18n();
   const [streak, setStreak] = useState({ currentStreak: 0, bestStreak: 0 });
+  const { levelProgress, isHydrated } = useProgression();
+  const prog = profile.isOwnProfile && isHydrated ? levelProgress : null;
 
   useEffect(() => {
     setStreak(getActiveStreak());
@@ -40,6 +44,41 @@ export function ProfileOverviewCards({ profile }: Props) {
           small={!profile.favoriteGame}
         />
       </div>
+
+      {/* Progression card (own profile only) */}
+      {prog && profile.isOwnProfile && (
+        <div className="rounded-xl border border-indigo-500/20 bg-gradient-to-br from-indigo-950/30 to-zinc-800/30 p-4">
+          <div className="flex items-center justify-between mb-3">
+            <div className="flex items-center gap-2.5">
+              <div className="w-10 h-10 rounded-lg bg-indigo-500/15 flex items-center justify-center">
+                <span className="text-lg font-black text-indigo-300">{prog.level}</span>
+              </div>
+              <div>
+                <p className="text-sm font-bold text-zinc-100">{t('progression.level')} {prog.level}</p>
+                <p className="text-[11px] text-indigo-400 font-medium">{t(`progression.rank.${prog.rank.toLowerCase()}`)}</p>
+              </div>
+            </div>
+            {prog.totalTokens > 0 && (
+              <div className="flex items-center gap-1 px-2 py-1 rounded-md bg-amber-500/10 border border-amber-500/20">
+                <TokenIcon size="sm" />
+                <span className="text-xs font-semibold text-amber-400">{prog.totalTokens}</span>
+              </div>
+            )}
+          </div>
+          <div className="space-y-1">
+            <div className="flex justify-between text-[10px]">
+              <span className="text-zinc-500">{t('progression.nextLevel')}</span>
+              <span className="text-zinc-400 tabular-nums">{prog.currentXp} / {prog.requiredXp} {t('progression.xp')}</span>
+            </div>
+            <div className="h-2 rounded-full bg-zinc-800 overflow-hidden">
+              <div
+                className="h-full rounded-full bg-gradient-to-r from-indigo-600 to-indigo-400 transition-all duration-700"
+                style={{ width: `${Math.max(2, prog.progress * 100)}%` }}
+              />
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Streak + most played row */}
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
