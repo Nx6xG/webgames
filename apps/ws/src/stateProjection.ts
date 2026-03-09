@@ -26,6 +26,7 @@ import type {
   BsPlayerState,
   LiarsBarState,
   CurveFeverState,
+  UnoState,
 } from 'shared';
 
 // ── Viewer context ─────────────────────────────────────────────────────────────
@@ -90,6 +91,7 @@ export function projectGameState(
   state: AnyGameState,
   ctx: ViewerCtx,
 ): AnyGameState {
+  if (gameId === 'uno') return projectUno(state as UnoState, ctx);
   if (gameId === 'liarsbar') return projectLiarsBar(state as LiarsBarState, ctx);
   if (gameId === 'curvefever') return projectCurveFever(state as CurveFeverState);
   if (gameId !== 'battleship') return state;
@@ -173,4 +175,32 @@ function projectCurveFever(state: CurveFeverState): CurveFeverState {
   // eslint-disable-next-line @typescript-eslint/no-unused-vars
   const { trails: _t, gapCounters: _gc, gapRemaining: _gr, powerUpSpawnCounter: _sc, powerUpNextId: _ni, ...rest } = state;
   return { ...rest, trails: [], gapCounters: [], gapRemaining: [], powerUpSpawnCounter: 0, powerUpNextId: 0 } as CurveFeverState;
+}
+
+// ── UNO projector ───────────────────────────────────────────────────────────
+
+/**
+ * Strip drawPile, discardPile, nextCardId.
+ * Each player sees only their own hand; opponents get empty arrays.
+ * Spectators see no hands.
+ */
+function projectUno(state: UnoState, ctx: ViewerCtx): UnoState {
+  const emptyHands = state.hands.map(() => [] as UnoState['hands'][number]);
+
+  const base = {
+    ...state,
+    drawPile: [],
+    discardPile: [],
+    nextCardId: 0,
+  };
+
+  if (ctx.isSpectator || ctx.playerIndex === null) {
+    return { ...base, hands: emptyHands };
+  }
+
+  const projected = emptyHands.map((_, i) =>
+    i === ctx.playerIndex ? [...state.hands[i]] : [],
+  );
+
+  return { ...base, hands: projected };
 }

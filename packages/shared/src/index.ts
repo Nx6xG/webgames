@@ -149,6 +149,18 @@ export type {
   CfActiveEffect,
   TrailSegment,
 } from './games/curvefever';
+import { UNO_HAND_SIZE as _unoHandSize, UNO_PENALTY_CARDS as _unoPenalty } from './games/uno';
+export const UNO_HAND_SIZE = _unoHandSize;
+export const UNO_PENALTY_CARDS = _unoPenalty;
+export type {
+  UnoColor,
+  UnoCardType,
+  UnoCard,
+  UnoPlayer,
+  UnoPhase,
+  UnoState,
+  UnoAction,
+} from './games/uno';
 export type {
   AnyGameState,
   AnyGameAction,

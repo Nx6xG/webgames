@@ -4,6 +4,7 @@ import type { GameId } from 'shared';
 const CAPACITY: Partial<Record<GameId, { min: number; max: number }>> = {
   liarsbar: { min: 2, max: 6 },
   curvefever: { min: 2, max: 6 },
+  uno: { min: 2, max: 4 },
 };
 
 export function getGameCapacity(gameId: GameId): { min: number; max: number } {

@@ -53,6 +53,7 @@ const GAME_DISPLAY_NAMES: Record<GameId, string> = {
   battleship: 'Battleship',
   liarsbar: "Liar's Deck",
   curvefever: 'Curve Fever',
+  uno: 'UNO',
 };
 
 /** Per-gameId matchmaking queue: gameId → waiting room info */
@@ -458,6 +459,18 @@ roomManager.onPlayerEvicted((room, playerIndex) => {
       }
     }
   }
+  // Remove evicted player from uno lobby state
+  if (room.state && room.gameId === 'uno') {
+    const unoState = room.state as import('shared').UnoState;
+    if (unoState.phase === 'lobby') {
+      const roomTokens = new Set(room.players.map(p => p.playerToken));
+      const keepIndices = unoState.playerIds.map((t, i) => roomTokens.has(t) ? i : -1).filter(i => i >= 0);
+      unoState.playerIds = keepIndices.map(i => unoState.playerIds[i]);
+      unoState.players = keepIndices.map(i => unoState.players[i]);
+      unoState.hands = keepIndices.map(i => unoState.hands[i]);
+      if (unoState.playerIds.length > 0) unoState.currentTurn = unoState.playerIds[0];
+    }
+  }
   // Remove evicted player from curvefever lobby state
   if (room.state && room.gameId === 'curvefever') {
     const cfState = room.state as import('shared').CurveFeverState;
@@ -481,7 +494,7 @@ roomManager.onPlayerEvicted((room, playerIndex) => {
     playerCount: room.players.length,
   });
   // Broadcast updated game state after liarsbar/curvefever lobby change
-  if (room.state && (room.gameId === 'liarsbar' || room.gameId === 'curvefever')) {
+  if (room.state && (room.gameId === 'liarsbar' || room.gameId === 'curvefever' || room.gameId === 'uno')) {
     emitGameState(room, room.state);
   }
   if (room.visibility === 'public') broadcastOpenRooms();
@@ -662,13 +675,18 @@ io.on('connection', (socket) => {
       creatorPlayer.avatarFrame = crProf?.avatarFrame;
     }
     // Liarsbar / Curvefever: create lobby-phase state immediately so it can track players
-    if (gameId === 'liarsbar' || gameId === 'curvefever') {
+    if (gameId === 'liarsbar' || gameId === 'curvefever' || gameId === 'uno') {
       const engine = engineRegistry[gameId];
       room.state = engine.initialState([playerToken], 0, room.gameConfig);
       // Fix creator nickname in curvefever lobby state
       if (gameId === 'curvefever') {
         const cfState = room.state as import('shared').CurveFeverState;
         if (cfState.players[0]) cfState.players[0].nickname = nickname;
+      }
+      // Fix creator nickname in uno lobby state
+      if (gameId === 'uno') {
+        const unoState = room.state as import('shared').UnoState;
+        if (unoState.players[0]) unoState.players[0].nickname = nickname;
       }
     }
 
@@ -781,6 +799,21 @@ io.on('connection', (socket) => {
             eliminated: false,
           });
           lbState.hands.push([]);
+        }
+      }
+      // For uno, update the lobby state when new players join
+      if (room.state && room.gameId === 'uno') {
+        const unoState = room.state as import('shared').UnoState;
+        if (unoState.phase === 'lobby' && !unoState.playerIds.includes(playerToken)) {
+          const joinNick = profiles.get(playerToken)?.nickname ?? nickname;
+          unoState.playerIds.push(playerToken);
+          unoState.players.push({
+            token: playerToken,
+            nickname: joinNick,
+            handCount: 0,
+            calledUno: false,
+          });
+          unoState.hands.push([]);
         }
       }
       // For curvefever, update the lobby state when new players join
@@ -1160,6 +1193,21 @@ io.on('connection', (socket) => {
                 eliminated: false,
               });
               lbState.hands.push([]);
+            }
+          }
+          // For uno, add the new player to the lobby state
+          if (room.state && room.gameId === 'uno') {
+            const unoState = room.state as import('shared').UnoState;
+            if (unoState.phase === 'lobby' && !unoState.playerIds.includes(playerToken)) {
+              const joinNick = profiles.get(playerToken)?.nickname ?? nickname;
+              unoState.playerIds.push(playerToken);
+              unoState.players.push({
+                token: playerToken,
+                nickname: joinNick,
+                handCount: 0,
+                calledUno: false,
+              });
+              unoState.hands.push([]);
             }
           }
 

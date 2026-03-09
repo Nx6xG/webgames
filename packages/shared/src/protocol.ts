@@ -5,6 +5,7 @@ import type { ChessState, ChessAction } from './games/chess';
 import type { BattleshipState, BattleshipAction } from './games/battleship';
 import type { LiarsBarState, LiarsBarAction } from './games/liarsbar';
 import type { CurveFeverState, CurveFeverAction } from './games/curvefever';
+import type { UnoState, UnoAction } from './games/uno';
 import type { GameId } from './registry';
 
 // ─── Game-state / action unions ───────────────────────────────────────────────
@@ -12,10 +13,10 @@ import type { GameId } from './registry';
 // the rest of the code stays unchanged.
 
 /** Union of all possible game states across every registered game. */
-export type AnyGameState = TicTacToeState | Connect4State | RpsState | ChessState | BattleshipState | LiarsBarState | CurveFeverState;
+export type AnyGameState = TicTacToeState | Connect4State | RpsState | ChessState | BattleshipState | LiarsBarState | CurveFeverState | UnoState;
 
 /** Union of all possible game actions across every registered game. */
-export type AnyGameAction = TicTacToeAction | Connect4Action | RpsAction | ChessAction | BattleshipAction | LiarsBarAction | CurveFeverAction;
+export type AnyGameAction = TicTacToeAction | Connect4Action | RpsAction | ChessAction | BattleshipAction | LiarsBarAction | CurveFeverAction | UnoAction;
 
 // ─── Cosmetics ───────────────────────────────────────────────────────────────
 

@@ -17,6 +17,7 @@ const GAME_DISPLAY_NAMES: Record<GameId, string> = {
   battleship: 'Schiffe Versenken',
   liarsbar: "Liar's Deck",
   curvefever: 'Curve Fever',
+  uno: 'UNO',
 };
 
 function ActivityLabel({ activity, t }: { activity?: PresenceActivity; t: (key: string) => string }) {

@@ -153,6 +153,7 @@ const GAME_CONTROLS_KEY: Record<string, string> = {
   breakout:        'modal.controls.breakout',
   minesweeper:     'modal.controls.minesweeper',
   curvefever:      'modal.controls.curvefever',
+  uno:             'modal.controls.uno',
 };
 
 // ── Badge system ─────────────────────────────────────────────────────────────

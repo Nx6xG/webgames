@@ -303,6 +303,7 @@ export const messages: Record<Lang, Record<string, string>> = {
     'modal.controls.battleship':'Platziere Schiffe, dann schieße auf das gegnerische Feld.',
     'modal.controls.liarsbar':  'Wähle Karten, bluffe oder challenge deinen Gegner.',
     'modal.controls.curvefever':'Pfeiltasten links/rechts zum Steuern. Letzte Schlange gewinnt!',
+    'modal.controls.uno':       'Klicke auf eine spielbare Karte oder ziehe eine Karte. Rufe UNO bei einer Karte!',
     'modal.controls.2048':      'Pfeiltasten oder Swipe zum Verschieben.',
     'modal.controls.snake':     'Pfeiltasten zum Steuern.',
     'modal.controls.sudoku':    'Klicke ein Feld und gib eine Zahl ein (1–9).',
@@ -324,6 +325,8 @@ export const messages: Record<Lang, Record<string, string>> = {
     'lobby.games.liarsbar.desc':   'Bluffe mit verdeckten Karten. Wirst du erwischt, verlierst du ein Leben!',
     'lobby.games.curvefever.title': 'Curve Fever',
     'lobby.games.curvefever.desc':  'Überlebe als Letzter! Steuere deine Schlange und weiche den Spuren aus.',
+    'lobby.games.uno.title':        'UNO',
+    'lobby.games.uno.desc':         'Klassisches Kartenspiel! Farben und Zahlen zuordnen, Aktionskarten spielen und als Erster alle Karten ablegen.',
 
     // ── Category tags ──────────────────────────────────────────────────────
     'lobby.tags.classic':          'Klassiker',
@@ -560,6 +563,26 @@ export const messages: Record<Lang, Record<string, string>> = {
     'curvefever.powerup.speed':    'Turbo',
     'curvefever.powerup.shield':   'Schild',
     'curvefever.powerup.phase':    'Geist',
+
+    // ── UNO ───────────────────────────────────────────────────────────────
+    'uno.playing':             'Aktiv',
+    'uno.finished':            'Beendet',
+    'uno.yourTurn':            'Du bist dran!',
+    'uno.mustDraw':            'Du musst ziehen!',
+    'uno.mustDrawOrStack':     'Ziehen oder stapeln!',
+    'uno.waitingForPlayers':   'Warte auf Spieler…',
+    'uno.startGame':           'Spiel starten',
+    'uno.needMorePlayers':     'Mindestens 2 Spieler nötig',
+    'uno.cards':               'Karten',
+    'uno.draw':                'Ziehen',
+    'uno.pending':             'ausstehend',
+    'uno.yourHand':            'Deine Hand',
+    'uno.youWin':              'Du hast gewonnen!',
+    'uno.wins':                'gewinnt!',
+    'uno.maxPlayers':          'Spieler',
+    'uno.or':                  'oder',
+    'uno.drawPile':            'Ziehstapel',
+    'uno.chooseColor':         'Farbe wählen',
 
     // ── Rooms page ─────────────────────────────────────────────────────────
     'rooms.title':               'Offene Räume',
@@ -1575,6 +1598,7 @@ export const messages: Record<Lang, Record<string, string>> = {
     'modal.controls.battleship':'Place your ships, then fire at the enemy grid.',
     'modal.controls.liarsbar':  'Pick cards, bluff, or challenge your opponent.',
     'modal.controls.curvefever':'Arrow keys left/right to steer. Last snake standing wins!',
+    'modal.controls.uno':       'Click a playable card or draw from the pile. Call UNO when you have one card!',
     'modal.controls.2048':      'Arrow keys or swipe to slide tiles.',
     'modal.controls.snake':     'Arrow keys to steer.',
     'modal.controls.sudoku':    'Click a cell and enter a number (1–9).',
@@ -1596,6 +1620,8 @@ export const messages: Record<Lang, Record<string, string>> = {
     'lobby.games.liarsbar.desc':   'Bluff your way through with face-down cards. Get called out and lose a life!',
     'lobby.games.curvefever.title': 'Curve Fever',
     'lobby.games.curvefever.desc':  'Be the last one standing! Steer your snake and dodge the trails.',
+    'lobby.games.uno.title':        'UNO',
+    'lobby.games.uno.desc':         'Classic card game! Match colors and numbers, play action cards, and empty your hand first.',
 
     // ── Category tags ──────────────────────────────────────────────────────
     'lobby.tags.classic':          'Classic',
@@ -1832,6 +1858,26 @@ export const messages: Record<Lang, Record<string, string>> = {
     'curvefever.powerup.speed':    'Speed',
     'curvefever.powerup.shield':   'Shield',
     'curvefever.powerup.phase':    'Ghost',
+
+    // ── UNO ───────────────────────────────────────────────────────────────
+    'uno.playing':             'Playing',
+    'uno.finished':            'Finished',
+    'uno.yourTurn':            'Your turn!',
+    'uno.mustDraw':            'You must draw!',
+    'uno.mustDrawOrStack':     'Draw or stack!',
+    'uno.waitingForPlayers':   'Waiting for players…',
+    'uno.startGame':           'Start Game',
+    'uno.needMorePlayers':     'Need at least 2 players',
+    'uno.cards':               'cards',
+    'uno.draw':                'Draw',
+    'uno.pending':             'pending',
+    'uno.yourHand':            'Your Hand',
+    'uno.youWin':              'You won!',
+    'uno.wins':                'wins!',
+    'uno.maxPlayers':          'Players',
+    'uno.or':                  'or',
+    'uno.drawPile':            'Draw Pile',
+    'uno.chooseColor':         'Choose Color',
 
     // ── Rooms page ─────────────────────────────────────────────────────────
     'rooms.title':               'Open Rooms',

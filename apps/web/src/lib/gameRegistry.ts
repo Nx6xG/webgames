@@ -7,6 +7,7 @@ import { ChessGame } from '@/components/games/chess/ChessGame';
 import { BattleshipGame } from '@/components/games/battleship/BattleshipGame';
 import { LiarsBarGame } from '@/components/games/liarsbar/LiarsBarGame';
 import { CurveFeverGame } from '@/components/games/curvefever/CurveFeverGame';
+import { UnoGame } from '@/components/games/uno/UnoGame';
 
 /**
  * Props every game component must accept.
@@ -165,5 +166,20 @@ export const webRegistry: Record<GameId, WebGameEntry> = {
     titleKey: 'lobby.games.curvefever.title',
     descKey:  'lobby.games.curvefever.desc',
     Component: CurveFeverGame,
+  },
+  uno: {
+    manifest: {
+      id: 'uno',
+      name: 'UNO',
+      description: 'Classic card game! Match colors and numbers, play action cards, and be first to empty your hand.',
+      categories: ['cards', 'multiplayer', 'classic'],
+      version: '1.0.0',
+      routeSlug: 'uno',
+      minPlayers: 2,
+      maxPlayers: 4,
+    },
+    titleKey: 'lobby.games.uno.title',
+    descKey:  'lobby.games.uno.desc',
+    Component: UnoGame,
   },
 };
