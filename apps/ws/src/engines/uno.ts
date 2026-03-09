@@ -1,6 +1,6 @@
 import type { GameEngine, ActionContext, StatusResult, GameStatus } from 'shared';
-import type { UnoState, UnoAction, UnoCard, UnoColor, UnoPlayer } from 'shared';
-import { UNO_HAND_SIZE, UNO_PENALTY_CARDS } from 'shared';
+import type { UnoState, UnoAction, UnoCard, UnoColor, UnoPlayer, UnoRuleConfig } from 'shared';
+import { UNO_HAND_SIZE, UNO_PENALTY_CARDS, UNO_DEFAULT_RULES } from 'shared';
 
 // ── Deck builder ────────────────────────────────────────────────────────────
 
@@ -61,6 +61,23 @@ function hasPlayableCard(hand: UnoCard[], topCard: UnoCard, chosenColor: UnoColo
   return hand.some(c => canPlayCard(c, topCard, chosenColor));
 }
 
+/** Check if a card can be stacked on an active draw penalty. */
+function canStackCard(card: UnoCard, source: 'draw2' | 'wild4', rules: Required<UnoRuleConfig>): boolean {
+  if (source === 'draw2') {
+    if (card.type === 'draw2' && rules.stackDraw2) return true;
+    if (card.type === 'wild4' && rules.allowDraw4OnDraw2) return true;
+    return false;
+  }
+  // source === 'wild4'
+  if (card.type === 'wild4' && rules.stackDraw4) return true;
+  if (card.type === 'draw2' && rules.allowDraw2OnDraw4) return true;
+  return false;
+}
+
+function hasStackableCard(hand: UnoCard[], source: 'draw2' | 'wild4', rules: Required<UnoRuleConfig>): boolean {
+  return hand.some(c => canStackCard(c, source, rules));
+}
+
 // ── Turn advancement ────────────────────────────────────────────────────────
 
 function advanceTurn(state: UnoState, skip: number = 1): void {
@@ -84,15 +101,37 @@ function drawCards(state: UnoState, playerIndex: number, count: number): void {
   state.players[playerIndex].handCount = state.hands[playerIndex].length;
 }
 
+// ── Scoring ─────────────────────────────────────────────────────────────────
+
+function cardPoints(card: UnoCard): number {
+  if (card.type === 'number') return card.value ?? 0;
+  if (card.type === 'skip' || card.type === 'reverse' || card.type === 'draw2') return 20;
+  // wild / wild4
+  return 50;
+}
+
+function scoreHands(hands: UnoCard[][], winnerIndex: number): number {
+  let total = 0;
+  for (let i = 0; i < hands.length; i++) {
+    if (i === winnerIndex) continue;
+    for (const c of hands[i]) total += cardPoints(c);
+  }
+  return total;
+}
+
 // ── Engine ──────────────────────────────────────────────────────────────────
 
 export const unoEngine: GameEngine<UnoState, UnoAction> = {
-  initialState(playerIds: string[], startingPlayerIndex: number = 0): UnoState {
+  initialState(playerIds: string[], startingPlayerIndex: number = 0, config?: unknown): UnoState {
+    const cfg = (config ?? {}) as UnoRuleConfig;
+    const rules: Required<UnoRuleConfig> = { ...UNO_DEFAULT_RULES, ...cfg };
+
     const players: UnoPlayer[] = playerIds.map(token => ({
       token,
       nickname: '',
       handCount: 0,
       calledUno: false,
+      matchScore: 0,
     }));
 
     // Lobby state — game starts when host sends UNO_START
@@ -114,6 +153,13 @@ export const unoEngine: GameEngine<UnoState, UnoAction> = {
       lastAction: null,
       nextCardId: 0,
       mustDraw: false,
+      matchTargetScore: rules.targetScore,
+      roundNumber: 1,
+      roundWinner: null,
+      roundPoints: 0,
+      rules,
+      drawnCardId: null,
+      pendingDrawSource: null,
     };
   },
 
@@ -180,6 +226,79 @@ export const unoEngine: GameEngine<UnoState, UnoAction> = {
         pendingDraw = 2;
       }
 
+      const drawSrc = pendingDraw > 0 ? 'draw2' as const : null;
+      s.phase = 'playing';
+      s.hands = hands;
+      s.drawPile = deck;
+      s.discardPile = discardPile;
+      s.topCard = topCard;
+      s.chosenColor = null;
+      s.turnIndex = turnIdx;
+      s.direction = direction;
+      s.pendingDraw = pendingDraw;
+      s.pendingDrawSource = drawSrc;
+      s.currentTurn = s.playerIds[turnIdx];
+      s.nextCardId = nextId;
+      s.drawnCardId = null;
+      s.mustDraw = pendingDraw > 0
+        ? !hasStackableCard(hands[turnIdx], drawSrc!, s.rules)
+        : !hasPlayableCard(hands[turnIdx], topCard, null);
+      s.lastAction = null;
+      s.players.forEach((p, i) => { p.handCount = hands[i].length; p.calledUno = false; });
+
+      return s;
+    }
+
+    if (action.type === 'UNO_NEXT_ROUND') {
+      if (s.phase !== 'round_end') throw new Error('INVALID_ACTION: Not in round_end phase');
+      if (ctx.playerIndex !== 0) throw new Error('INVALID_ACTION: Only host can start next round');
+
+      // Build and shuffle deck
+      let deck = shuffle(buildDeck());
+      deck = deck.map((c, i) => ({ ...c, id: i }));
+      const nextId = deck.length;
+
+      // Deal hands
+      const hands: UnoCard[][] = s.playerIds.map(() => []);
+      for (let i = 0; i < UNO_HAND_SIZE; i++) {
+        for (let p = 0; p < s.playerIds.length; p++) {
+          hands[p].push(deck.pop()!);
+        }
+      }
+
+      // Flip first non-wild card for discard
+      let topCard: UnoCard | undefined;
+      const discardPile: UnoCard[] = [];
+      while (deck.length > 0) {
+        const c = deck.pop()!;
+        if (c.type === 'wild' || c.type === 'wild4') {
+          deck.unshift(c);
+          continue;
+        }
+        topCard = c;
+        discardPile.push(c);
+        break;
+      }
+      if (!topCard) {
+        topCard = deck.pop()!;
+        discardPile.push(topCard);
+      }
+
+      // Apply starting card effects
+      let turnIdx = 0;
+      let direction: 1 | -1 = 1;
+      let pendingDraw = 0;
+      const n = s.playerIds.length;
+
+      if (topCard.type === 'skip') {
+        turnIdx = ((turnIdx + direction) % n + n) % n;
+      } else if (topCard.type === 'reverse') {
+        direction = -1;
+        if (n === 2) turnIdx = ((turnIdx + direction) % n + n) % n;
+      } else if (topCard.type === 'draw2') {
+        pendingDraw = 2;
+      }
+
       s.phase = 'playing';
       s.hands = hands;
       s.drawPile = deck;
@@ -193,6 +312,11 @@ export const unoEngine: GameEngine<UnoState, UnoAction> = {
       s.nextCardId = nextId;
       s.mustDraw = pendingDraw > 0 ? true : !hasPlayableCard(hands[turnIdx], topCard, null);
       s.lastAction = null;
+      s.roundNumber += 1;
+      s.roundWinner = null;
+      s.roundPoints = 0;
+      s.status = 'ongoing';
+      s.winner = null;
       s.players.forEach((p, i) => { p.handCount = hands[i].length; p.calledUno = false; });
 
       return s;
@@ -275,12 +399,23 @@ export const unoEngine: GameEngine<UnoState, UnoAction> = {
         s.players[pIdx].calledUno = false;
       }
 
-      // Check win
+      // Check win — round over
       if (s.hands[pIdx].length === 0) {
-        s.phase = 'finished';
-        s.status = 'win';
-        s.winner = myToken;
-        s.lastAction = `${s.players[pIdx].nickname || 'Player'} wins!`;
+        const points = scoreHands(s.hands, pIdx);
+        s.players[pIdx].matchScore += points;
+        s.roundWinner = myToken;
+        s.roundPoints = points;
+        s.lastAction = `${s.players[pIdx].nickname || 'Player'} wins the round! (+${points})`;
+
+        if (s.players[pIdx].matchScore >= s.matchTargetScore) {
+          s.phase = 'match_end';
+          s.status = 'win';
+          s.winner = myToken;
+        } else {
+          s.phase = 'round_end';
+          s.status = 'ongoing';
+          s.winner = null;
+        }
         return s;
       }
 
@@ -327,7 +462,7 @@ export const unoEngine: GameEngine<UnoState, UnoAction> = {
   },
 
   getStatus(state: UnoState): StatusResult {
-    const status: GameStatus = state.phase === 'finished' ? 'win' : 'ongoing';
+    const status: GameStatus = state.phase === 'match_end' ? 'win' : 'ongoing';
     return {
       status,
       winner: state.winner ?? undefined,

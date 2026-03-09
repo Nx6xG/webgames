@@ -3,6 +3,7 @@
 import { useEffect, useState, useRef, useCallback, useSyncExternalStore } from 'react';
 import { useRouter } from 'next/navigation';
 import type { UnoState, UnoCard, UnoColor, RoomVisibility } from 'shared';
+import { UNO_TARGET_SCORES, UNO_DEFAULT_TARGET } from 'shared';
 import { useMultiplayer } from '@/hooks/useMultiplayer';
 import type { GameComponentProps } from '@/lib/gameRegistry';
 import { CountdownOverlay } from '@/components/CountdownOverlay';
@@ -443,7 +444,7 @@ function OpponentZone({
       {/* Status */}
       <div className="flex items-center gap-1.5">
         <span className="text-[9px] font-medium" style={{ color: '#a1a1aa' }}>
-          {player.handCount} {pt('uno.cards')}
+          {player.handCount} {pt('uno.cards')} · {player.matchScore} {pt('uno.score')}
         </span>
         {player.calledUno && (
           <span
@@ -618,6 +619,7 @@ export function UnoGame({ wsUrl, gameId, initialRoomCode, quickPlay: isQuickPlay
   const [roomName, setRoomName] = useState('');
   const [joinInput, setJoinInput] = useState('');
   const [maxPlayers, setMaxPlayers] = useState(4);
+  const [targetScore, setTargetScore] = useState(UNO_DEFAULT_TARGET);
   const autoJoined = useRef(false);
 
   // ── Game UI state ─────────────────────────────────────────────────────────
@@ -630,7 +632,7 @@ export function UnoGame({ wsUrl, gameId, initialRoomCode, quickPlay: isQuickPlay
 
   // ── End overlay ───────────────────────────────────────────────────────────
   const lastFinishKeyRef = useRef('');
-  const [endOverlay, setEndOverlay] = useState<{ iWon: boolean; winnerNick: string | null } | null>(null);
+  const [endOverlay, setEndOverlay] = useState<{ kind: 'round_end' | 'match_end'; iWon: boolean; winnerNick: string | null; points: number } | null>(null);
 
   // ── Auto-join / quick-play ────────────────────────────────────────────────
   useEffect(() => {
@@ -658,8 +660,8 @@ export function UnoGame({ wsUrl, gameId, initialRoomCode, quickPlay: isQuickPlay
     if (mp.phase === 'playing' && !mp.isSpectator) ach.trackPlay();
   }, [mp.phase, mp.isSpectator, ach]);
 
-  const finishKey = gs?.phase === 'finished' && gs?.winner && !mp.isSpectator && myIdx !== null
-    ? `${mp.roomCode ?? ''}|${gs.winner}`
+  const finishKey = (gs?.phase === 'match_end' || gs?.phase === 'round_end') && gs?.roundWinner && !mp.isSpectator && myIdx !== null
+    ? `${mp.roomCode ?? ''}|${gs.phase}|${gs.roundNumber}|${gs.roundWinner}`
     : '';
 
   useEffect(() => {
@@ -670,10 +672,12 @@ export function UnoGame({ wsUrl, gameId, initialRoomCode, quickPlay: isQuickPlay
     }
     if (finishKey === lastFinishKeyRef.current) return;
     lastFinishKeyRef.current = finishKey;
-    const iWon = gs?.winner != null && myIdx !== null && gs.playerIds[myIdx] === gs.winner;
-    const winnerPlayer = gs?.players.find(p => p.token === gs?.winner);
-    setEndOverlay({ iWon: !!iWon, winnerNick: winnerPlayer?.nickname ?? null });
-    if (iWon) ach.trackWin();
+    const roundWinnerToken = gs?.roundWinner;
+    const iWon = roundWinnerToken != null && myIdx !== null && gs!.playerIds[myIdx] === roundWinnerToken;
+    const winnerPlayer = gs?.players.find(p => p.token === roundWinnerToken);
+    const kind = gs?.phase === 'match_end' ? 'match_end' : 'round_end';
+    setEndOverlay({ kind, iWon: !!iWon, winnerNick: winnerPlayer?.nickname ?? null, points: gs?.roundPoints ?? 0 });
+    if (iWon && kind === 'match_end') ach.trackWin();
   }, [finishKey, gs, myIdx, ach]);
 
   // ── Chat unread tracking ─────────────────────────────────────────────────
@@ -775,21 +779,26 @@ export function UnoGame({ wsUrl, gameId, initialRoomCode, quickPlay: isQuickPlay
               UNO
             </h2>
             {gs && gs.phase !== 'lobby' && (
-              <span
-                className="font-bold uppercase tracking-wider"
-                style={{
-                  fontSize: 9,
-                  padding: '3px 10px',
-                  borderRadius: 100,
-                  background: gs.phase === 'finished'
-                    ? 'rgba(16,185,129,0.1)'
-                    : 'rgba(99,102,241,0.1)',
-                  color: gs.phase === 'finished' ? '#34d399' : '#818cf8',
-                  border: `1px solid ${gs.phase === 'finished' ? 'rgba(16,185,129,0.2)' : 'rgba(99,102,241,0.2)'}`,
-                }}
-              >
-                {gs.phase === 'finished' ? t('uno.finished') : t('uno.playing')}
-              </span>
+              <>
+                <span
+                  className="font-bold uppercase tracking-wider"
+                  style={{
+                    fontSize: 9,
+                    padding: '3px 10px',
+                    borderRadius: 100,
+                    background: (gs.phase === 'match_end' || gs.phase === 'round_end')
+                      ? 'rgba(16,185,129,0.1)'
+                      : 'rgba(99,102,241,0.1)',
+                    color: (gs.phase === 'match_end' || gs.phase === 'round_end') ? '#34d399' : '#818cf8',
+                    border: `1px solid ${(gs.phase === 'match_end' || gs.phase === 'round_end') ? 'rgba(16,185,129,0.2)' : 'rgba(99,102,241,0.2)'}`,
+                  }}
+                >
+                  {gs.phase === 'match_end' ? t('uno.matchEnd') : gs.phase === 'round_end' ? t('uno.roundEnd') : t('uno.playing')}
+                </span>
+                <span className="text-[10px] font-semibold" style={{ color: '#71717a' }}>
+                  {t('uno.round')} {gs.roundNumber} · {t('uno.target')}: {gs.matchTargetScore}
+                </span>
+              </>
             )}
             {gs && gs.phase === 'playing' && (
               <span
@@ -927,7 +936,7 @@ export function UnoGame({ wsUrl, gameId, initialRoomCode, quickPlay: isQuickPlay
                       player={p}
                       index={i}
                       isCurrent={isCurrent}
-                      isFinished={gs.phase === 'finished'}
+                      isFinished={gs.phase === 'match_end' || gs.phase === 'round_end'}
                       compact={compact}
                       pt={t}
                     />
@@ -1073,6 +1082,11 @@ export function UnoGame({ wsUrl, gameId, initialRoomCode, quickPlay: isQuickPlay
                     <span className="font-semibold" style={{ fontSize: compact ? 11 : 13, color: '#a1a1aa' }}>
                       {t('uno.yourHand')}
                     </span>
+                    {myIdx !== null && gs.players[myIdx] && (
+                      <span className="text-[10px] font-bold" style={{ color: '#a5b4fc', background: 'rgba(99,102,241,0.1)', padding: '2px 8px', borderRadius: 100, border: '1px solid rgba(129,140,248,0.15)' }}>
+                        {gs.players[myIdx].matchScore} {t('uno.score')}
+                      </span>
+                    )}
                     <span
                       className="font-medium"
                       style={{
@@ -1153,14 +1167,14 @@ export function UnoGame({ wsUrl, gameId, initialRoomCode, quickPlay: isQuickPlay
                 </div>
               )}
 
-              {/* ── End overlay ─────────────────────────────────────────── */}
+              {/* ── End overlay (round_end or match_end) ─────────────── */}
               {endOverlay && (
                 <div
                   className="fixed inset-0 z-40 flex items-center justify-center pointer-events-none"
-                  style={{ backgroundColor: 'rgba(0,0,0,0.65)' }}
+                  style={{ backgroundColor: endOverlay.kind === 'match_end' ? 'rgba(0,0,0,0.65)' : 'rgba(0,0,0,0.5)' }}
                 >
-                  {/* Confetti for winner */}
-                  {endOverlay.iWon && Array.from({ length: 30 }).map((_, i) => {
+                  {/* Confetti for match winner */}
+                  {endOverlay.kind === 'match_end' && endOverlay.iWon && Array.from({ length: 30 }).map((_, i) => {
                     const size = 6 + (i % 4) * 2;
                     return (
                       <div
@@ -1178,8 +1192,8 @@ export function UnoGame({ wsUrl, gameId, initialRoomCode, quickPlay: isQuickPlay
                       />
                     );
                   })}
-                  {/* Loss vignette */}
-                  {!endOverlay.iWon && (
+                  {/* Loss vignette (match end only) */}
+                  {endOverlay.kind === 'match_end' && !endOverlay.iWon && (
                     <div
                       className="absolute inset-0 pointer-events-none"
                       style={{ background: 'radial-gradient(ellipse at center, transparent 30%, rgba(159,18,57,0.2) 100%)' }}
@@ -1199,47 +1213,108 @@ export function UnoGame({ wsUrl, gameId, initialRoomCode, quickPlay: isQuickPlay
                       animation: 'uno-pop 0.3s cubic-bezier(0.34, 1.56, 0.64, 1)',
                     }}
                   >
-                    <p
-                      className="font-bold mb-3"
-                      style={{ fontSize: 42, color: endOverlay.iWon ? '#818cf8' : '#fb7185' }}
-                    >
-                      {endOverlay.iWon ? '🏆' : '💀'}
-                    </p>
-                    <p
-                      className="font-black mb-6"
-                      style={{ fontSize: 20, color: '#f4f4f5' }}
-                    >
-                      {endOverlay.iWon
-                        ? t('uno.youWin')
-                        : `${endOverlay.winnerNick} ${t('uno.wins')}`}
-                    </p>
-                    <div className="flex flex-col gap-2.5">
-                      <button
-                        onClick={mp.requestRematch}
-                        className="w-full font-semibold text-sm text-white transition-all cursor-pointer border-0 outline-none active:scale-[0.98]"
-                        style={{
-                          padding: '11px 20px',
-                          borderRadius: 12,
-                          background: 'linear-gradient(145deg, #4f46e5, #4338ca)',
-                          boxShadow: '0 4px 12px rgba(79,70,229,0.3), inset 0 1px 0 rgba(255,255,255,0.1)',
-                        }}
-                      >
-                        {t('game.actions.rematch')}
-                      </button>
-                      <button
-                        onClick={mp.leaveRoom}
-                        className="w-full text-sm transition-all cursor-pointer outline-none active:scale-[0.98]"
-                        style={{
-                          padding: '9px 16px',
-                          borderRadius: 12,
-                          background: 'transparent',
-                          border: '1px solid rgba(63,63,70,0.5)',
-                          color: '#a1a1aa',
-                        }}
-                      >
-                        {t('game.actions.leaveRoom')}
-                      </button>
-                    </div>
+                    {endOverlay.kind === 'round_end' ? (
+                      <>
+                        <p className="font-bold mb-1" style={{ fontSize: 32, color: endOverlay.iWon ? '#818cf8' : '#fbbf24' }}>
+                          {t('uno.roundEnd')}
+                        </p>
+                        <p className="font-semibold mb-1" style={{ fontSize: 15, color: '#d4d4d8' }}>
+                          {endOverlay.winnerNick} — +{endOverlay.points} {t('uno.points')}
+                        </p>
+                        {/* Scoreboard */}
+                        <div className="flex flex-col gap-1 mb-4 mt-3">
+                          {gs && [...gs.players].sort((a, b) => b.matchScore - a.matchScore).map((p) => (
+                            <div
+                              key={p.token}
+                              className="flex items-center justify-between px-3 py-1.5 rounded-lg"
+                              style={{
+                                background: p.token === gs.roundWinner ? 'rgba(99,102,241,0.1)' : 'rgba(39,39,42,0.5)',
+                                border: p.token === gs.roundWinner ? '1px solid rgba(129,140,248,0.2)' : '1px solid rgba(63,63,70,0.3)',
+                              }}
+                            >
+                              <span className="text-sm font-medium" style={{ color: '#e4e4e7' }}>{p.nickname || 'Player'}</span>
+                              <span className="text-sm font-bold" style={{ color: '#a5b4fc' }}>{p.matchScore}</span>
+                            </div>
+                          ))}
+                        </div>
+                        {myIdx === 0 ? (
+                          <button
+                            onClick={() => mp.sendAction({ type: 'UNO_NEXT_ROUND' })}
+                            className="w-full font-semibold text-sm text-white transition-all cursor-pointer border-0 outline-none active:scale-[0.98]"
+                            style={{
+                              padding: '11px 20px',
+                              borderRadius: 12,
+                              background: 'linear-gradient(145deg, #16a34a, #15803d)',
+                              boxShadow: '0 4px 12px rgba(22,163,74,0.3), inset 0 1px 0 rgba(255,255,255,0.1)',
+                            }}
+                          >
+                            {t('uno.nextRound')}
+                          </button>
+                        ) : (
+                          <p className="text-sm" style={{ color: '#71717a' }}>{t('uno.waitingNextRound')}</p>
+                        )}
+                      </>
+                    ) : (
+                      <>
+                        <p
+                          className="font-bold mb-3"
+                          style={{ fontSize: 42, color: endOverlay.iWon ? '#818cf8' : '#fb7185' }}
+                        >
+                          {endOverlay.iWon ? '🏆' : '💀'}
+                        </p>
+                        <p
+                          className="font-black mb-2"
+                          style={{ fontSize: 20, color: '#f4f4f5' }}
+                        >
+                          {endOverlay.iWon
+                            ? t('uno.youWin')
+                            : `${endOverlay.winnerNick} ${t('uno.wins')}`}
+                        </p>
+                        {/* Final scoreboard */}
+                        <div className="flex flex-col gap-1 mb-4 mt-2">
+                          {gs && [...gs.players].sort((a, b) => b.matchScore - a.matchScore).map((p, rank) => (
+                            <div
+                              key={p.token}
+                              className="flex items-center justify-between px-3 py-1.5 rounded-lg"
+                              style={{
+                                background: rank === 0 ? 'rgba(99,102,241,0.1)' : 'rgba(39,39,42,0.5)',
+                                border: rank === 0 ? '1px solid rgba(129,140,248,0.2)' : '1px solid rgba(63,63,70,0.3)',
+                              }}
+                            >
+                              <span className="text-sm font-medium" style={{ color: '#e4e4e7' }}>{p.nickname || 'Player'}</span>
+                              <span className="text-sm font-bold" style={{ color: '#a5b4fc' }}>{p.matchScore}</span>
+                            </div>
+                          ))}
+                        </div>
+                        <div className="flex flex-col gap-2.5">
+                          <button
+                            onClick={mp.requestRematch}
+                            className="w-full font-semibold text-sm text-white transition-all cursor-pointer border-0 outline-none active:scale-[0.98]"
+                            style={{
+                              padding: '11px 20px',
+                              borderRadius: 12,
+                              background: 'linear-gradient(145deg, #4f46e5, #4338ca)',
+                              boxShadow: '0 4px 12px rgba(79,70,229,0.3), inset 0 1px 0 rgba(255,255,255,0.1)',
+                            }}
+                          >
+                            {t('game.actions.rematch')}
+                          </button>
+                          <button
+                            onClick={mp.leaveRoom}
+                            className="w-full text-sm transition-all cursor-pointer outline-none active:scale-[0.98]"
+                            style={{
+                              padding: '9px 16px',
+                              borderRadius: 12,
+                              background: 'transparent',
+                              border: '1px solid rgba(63,63,70,0.5)',
+                              color: '#a1a1aa',
+                            }}
+                          >
+                            {t('game.actions.leaveRoom')}
+                          </button>
+                        </div>
+                      </>
+                    )}
                   </div>
                 </div>
               )}
@@ -1383,8 +1458,26 @@ export function UnoGame({ wsUrl, gameId, initialRoomCode, quickPlay: isQuickPlay
                 </div>
               </div>
 
+              {/* Target score */}
+              <div className="flex items-center gap-2">
+                <span className="text-xs text-zinc-400">{t('uno.targetScore')}</span>
+                <div className="flex gap-1">
+                  {UNO_TARGET_SCORES.map((sc) => (
+                    <button
+                      key={sc}
+                      onClick={() => setTargetScore(sc)}
+                      className={`px-2.5 h-8 rounded-lg text-sm font-bold transition-colors cursor-pointer ${
+                        targetScore === sc ? 'bg-indigo-600 text-white' : 'bg-zinc-800 text-zinc-400 hover:text-zinc-200'
+                      }`}
+                    >
+                      {sc}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
               <button
-                onClick={() => mp.createRoom({ visibility: roomVisibility, roomName: roomName.trim() || undefined, maxPlayers })}
+                onClick={() => mp.createRoom({ visibility: roomVisibility, roomName: roomName.trim() || undefined, maxPlayers, unoConfig: { targetScore } })}
                 className="w-full py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white font-bold transition-colors cursor-pointer active:scale-[0.98]"
               >
                 {t('game.lobby.createRoom')}

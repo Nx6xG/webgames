@@ -624,7 +624,7 @@ io.on('connection', (socket) => {
   });
 
   // ── create_room ───────────────────────────────────────────────────────────
-  socket.on('create_room', ({ playerToken, gameId = 'tictactoe', nickname, visibility = 'private', roomName, rpsConfig, ldConfig, battleshipConfig, cfConfig, maxPlayers: requestedMax }) => {
+  socket.on('create_room', ({ playerToken, gameId = 'tictactoe', nickname, visibility = 'private', roomName, rpsConfig, ldConfig, battleshipConfig, cfConfig, unoConfig, maxPlayers: requestedMax }) => {
     identifiedTokens.set(socket.id, playerToken);
     nicknameMap.set(socket.id, nickname);
     if (!profiles.has(playerToken)) profiles.set(playerToken, { nickname });
@@ -659,7 +659,9 @@ io.on('connection', (socket) => {
           ? battleshipConfig
           : gameId === 'curvefever' && cfConfig
             ? cfConfig
-            : undefined;
+            : gameId === 'uno' && unoConfig
+              ? unoConfig
+              : undefined;
     const cap = getGameCapacity(gameId);
     // Allow creator to choose maxPlayers within the game's valid range
     const effectiveMax = requestedMax
@@ -812,6 +814,7 @@ io.on('connection', (socket) => {
             nickname: joinNick,
             handCount: 0,
             calledUno: false,
+            matchScore: 0,
           });
           unoState.hands.push([]);
         }
@@ -1206,6 +1209,7 @@ io.on('connection', (socket) => {
                 nickname: joinNick,
                 handCount: 0,
                 calledUno: false,
+                matchScore: 0,
               });
               unoState.hands.push([]);
             }
