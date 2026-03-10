@@ -299,6 +299,7 @@ export const unoEngine: GameEngine<UnoState, UnoAction> = {
         pendingDraw = 2;
       }
 
+      const nrDrawSrc = pendingDraw > 0 ? 'draw2' as const : null;
       s.phase = 'playing';
       s.hands = hands;
       s.drawPile = deck;
@@ -308,9 +309,13 @@ export const unoEngine: GameEngine<UnoState, UnoAction> = {
       s.turnIndex = turnIdx;
       s.direction = direction;
       s.pendingDraw = pendingDraw;
+      s.pendingDrawSource = nrDrawSrc;
       s.currentTurn = s.playerIds[turnIdx];
       s.nextCardId = nextId;
-      s.mustDraw = pendingDraw > 0 ? true : !hasPlayableCard(hands[turnIdx], topCard, null);
+      s.drawnCardId = null;
+      s.mustDraw = pendingDraw > 0
+        ? !hasStackableCard(hands[turnIdx], nrDrawSrc!, s.rules)
+        : !hasPlayableCard(hands[turnIdx], topCard, null);
       s.lastAction = null;
       s.roundNumber += 1;
       s.roundWinner = null;
@@ -338,11 +343,33 @@ export const unoEngine: GameEngine<UnoState, UnoAction> = {
     if (myToken !== s.currentTurn) throw new Error('NOT_YOUR_TURN: Not your turn');
 
     if (action.type === 'UNO_DRAW_CARD') {
+      // If in drawn-card-playable window, drawing again means declining to play it
+      if (s.drawnCardId !== null) {
+        s.drawnCardId = null;
+        advanceTurn(s);
+        s.pendingDrawSource = null;
+        s.mustDraw = s.pendingDraw > 0
+          ? (s.pendingDrawSource ? !hasStackableCard(s.hands[s.turnIndex], s.pendingDrawSource, s.rules) : true)
+          : !hasPlayableCard(s.hands[s.turnIndex], s.topCard, s.chosenColor);
+        return s;
+      }
+
       const count = s.pendingDraw > 0 ? s.pendingDraw : 1;
       drawCards(s, pIdx, count);
       s.pendingDraw = 0;
+      s.pendingDrawSource = null;
       s.players[pIdx].calledUno = false;
       s.lastAction = `${s.players[pIdx].nickname || 'Player'} drew ${count} card${count > 1 ? 's' : ''}`;
+
+      // playDrawnCardImmediately: if drew exactly 1 card and it's playable, keep turn
+      if (count === 1 && s.rules.playDrawnCardImmediately) {
+        const drawnCard = s.hands[pIdx][s.hands[pIdx].length - 1];
+        if (canPlayCard(drawnCard, s.topCard, s.chosenColor)) {
+          s.drawnCardId = drawnCard.id;
+          s.mustDraw = false;
+          return s;
+        }
+      }
 
       // Advance turn
       advanceTurn(s);
@@ -351,12 +378,18 @@ export const unoEngine: GameEngine<UnoState, UnoAction> = {
     }
 
     if (action.type === 'UNO_PLAY_CARD') {
-      // Must draw if there are pending draws
-      if (s.pendingDraw > 0 && action.cardId !== undefined) {
-        // Allow stacking draw2 on draw2, or wild4 on wild4/draw2
+      // If in drawn-card-playable window, only the drawn card may be played
+      if (s.drawnCardId !== null) {
+        if (action.cardId !== s.drawnCardId) {
+          throw new Error('INVALID_ACTION: Only the drawn card may be played now');
+        }
+      }
+
+      // Must draw if there are pending draws — check stacking via rules
+      if (s.pendingDraw > 0 && s.drawnCardId === null) {
         const card = s.hands[pIdx].find(c => c.id === action.cardId);
         if (!card) throw new Error('INVALID_ACTION: Card not in hand');
-        if (s.pendingDraw > 0 && card.type !== 'draw2' && card.type !== 'wild4') {
+        if (!s.pendingDrawSource || !canStackCard(card, s.pendingDrawSource, s.rules)) {
           throw new Error('INVALID_ACTION: Must draw or stack');
         }
       }
@@ -365,8 +398,8 @@ export const unoEngine: GameEngine<UnoState, UnoAction> = {
       if (cardIdx === -1) throw new Error('INVALID_ACTION: Card not in hand');
       const card = s.hands[pIdx][cardIdx];
 
-      // Check playability
-      if (!canPlayCard(card, s.topCard, s.chosenColor)) {
+      // Check playability (skip if playing drawn card — already validated above)
+      if (s.drawnCardId === null && !canPlayCard(card, s.topCard, s.chosenColor)) {
         throw new Error('INVALID_ACTION: Card cannot be played');
       }
 
@@ -374,6 +407,9 @@ export const unoEngine: GameEngine<UnoState, UnoAction> = {
       if ((card.type === 'wild' || card.type === 'wild4') && !action.chosenColor) {
         throw new Error('INVALID_ACTION: Must choose a color for wild card');
       }
+
+      // Clear drawn card window
+      s.drawnCardId = null;
 
       // Remove card from hand
       s.hands[pIdx].splice(cardIdx, 1);
@@ -440,21 +476,29 @@ export const unoEngine: GameEngine<UnoState, UnoAction> = {
         }
       } else if (card.type === 'draw2') {
         s.pendingDraw += 2;
+        s.pendingDrawSource = 'draw2';
         s.lastAction = `${s.players[pIdx].nickname || 'Player'} played +2!`;
         advanceTurn(s);
       } else if (card.type === 'wild4') {
         s.pendingDraw += 4;
+        s.pendingDrawSource = 'wild4';
         s.lastAction = `${s.players[pIdx].nickname || 'Player'} played Wild +4!`;
         advanceTurn(s);
       } else if (card.type === 'wild') {
+        s.pendingDrawSource = null;
         s.lastAction = `${s.players[pIdx].nickname || 'Player'} played Wild!`;
         advanceTurn(s);
       } else {
+        s.pendingDrawSource = null;
         s.lastAction = null;
         advanceTurn(s);
       }
 
-      s.mustDraw = s.pendingDraw > 0 ? true : !hasPlayableCard(s.hands[s.turnIndex], s.topCard, s.chosenColor);
+      if (s.pendingDraw > 0 && s.pendingDrawSource) {
+        s.mustDraw = !hasStackableCard(s.hands[s.turnIndex], s.pendingDrawSource, s.rules);
+      } else {
+        s.mustDraw = !hasPlayableCard(s.hands[s.turnIndex], s.topCard, s.chosenColor);
+      }
       return s;
     }
 

@@ -73,7 +73,7 @@ export interface MultiplayerState<TState extends AnyGameState = AnyGameState> {
 }
 
 export interface MultiplayerActions {
-  createRoom: (options?: { visibility?: RoomVisibility; roomName?: string; rpsConfig?: { mode: string; bestOf?: number }; ldConfig?: { mode: string }; battleshipConfig?: { fleetPreset: string }; cfConfig?: { bestOf?: number }; unoConfig?: { targetScore?: number }; maxPlayers?: number }) => void;
+  createRoom: (options?: { visibility?: RoomVisibility; roomName?: string; rpsConfig?: { mode: string; bestOf?: number }; ldConfig?: { mode: string }; battleshipConfig?: { fleetPreset: string }; cfConfig?: { bestOf?: number }; unoConfig?: { targetScore?: number; stackDraw2?: boolean; stackDraw4?: boolean; allowDraw2OnDraw4?: boolean; allowDraw4OnDraw2?: boolean; playDrawnCardImmediately?: boolean }; maxPlayers?: number }) => void;
   joinRoom: (code: string) => void;
   /** Join the per-gameId matchmaking queue. Server assigns a room automatically. */
   quickPlay: () => void;
@@ -467,7 +467,7 @@ export function useMultiplayer<TState extends AnyGameState = AnyGameState>(
     };
   }, [wsUrl]);
 
-  const createRoom = useCallback((options?: { visibility?: RoomVisibility; roomName?: string; rpsConfig?: { mode: string; bestOf?: number }; ldConfig?: { mode: string }; battleshipConfig?: { fleetPreset: string }; cfConfig?: { bestOf?: number }; unoConfig?: { targetScore?: number }; maxPlayers?: number }) => {
+  const createRoom = useCallback((options?: { visibility?: RoomVisibility; roomName?: string; rpsConfig?: { mode: string; bestOf?: number }; ldConfig?: { mode: string }; battleshipConfig?: { fleetPreset: string }; cfConfig?: { bestOf?: number }; unoConfig?: { targetScore?: number; stackDraw2?: boolean; stackDraw4?: boolean; allowDraw2OnDraw4?: boolean; allowDraw4OnDraw2?: boolean; playDrawnCardImmediately?: boolean }; maxPlayers?: number }) => {
     set((prev) => ({ ...prev, error: null }));
     socketRef.current?.emit('create_room', {
       playerToken: tokenRef.current,

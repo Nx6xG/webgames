@@ -595,6 +595,13 @@ export const messages: Record<Lang, Record<string, string>> = {
     'uno.waitingNextRound':    'Warte auf nächste Runde…',
     'uno.roundEnd':            'Rundenende',
     'uno.matchEnd':            'Spielende',
+    'uno.pass':                'Passen',
+    'uno.rules':               'Hausregeln',
+    'uno.rules.stackDraw2':    '+2 stapeln',
+    'uno.rules.stackDraw4':    '+4 stapeln',
+    'uno.rules.allowDraw2OnDraw4': '+2 auf +4 erlauben',
+    'uno.rules.allowDraw4OnDraw2': '+4 auf +2 erlauben',
+    'uno.rules.playDrawnCard': 'Gezogene Karte direkt legen',
 
     // ── Rooms page ─────────────────────────────────────────────────────────
     'rooms.title':               'Offene Räume',
@@ -1902,6 +1909,13 @@ export const messages: Record<Lang, Record<string, string>> = {
     'uno.waitingNextRound':    'Waiting for next round…',
     'uno.roundEnd':            'Round Over',
     'uno.matchEnd':            'Match Over',
+    'uno.pass':                'Pass',
+    'uno.rules':               'House Rules',
+    'uno.rules.stackDraw2':    'Stack +2',
+    'uno.rules.stackDraw4':    'Stack +4',
+    'uno.rules.allowDraw2OnDraw4': 'Allow +2 on +4',
+    'uno.rules.allowDraw4OnDraw2': 'Allow +4 on +2',
+    'uno.rules.playDrawnCard': 'Play drawn card immediately',
 
     // ── Rooms page ─────────────────────────────────────────────────────────
     'rooms.title':               'Open Rooms',

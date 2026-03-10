@@ -3,7 +3,7 @@
 import { useEffect, useState, useRef, useCallback, useSyncExternalStore } from 'react';
 import { useRouter } from 'next/navigation';
 import type { UnoState, UnoCard, UnoColor, RoomVisibility } from 'shared';
-import { UNO_TARGET_SCORES, UNO_DEFAULT_TARGET } from 'shared';
+import { UNO_TARGET_SCORES, UNO_DEFAULT_TARGET, UNO_DEFAULT_RULES } from 'shared';
 import { useMultiplayer } from '@/hooks/useMultiplayer';
 import type { GameComponentProps } from '@/lib/gameRegistry';
 import { CountdownOverlay } from '@/components/CountdownOverlay';
@@ -620,6 +620,11 @@ export function UnoGame({ wsUrl, gameId, initialRoomCode, quickPlay: isQuickPlay
   const [joinInput, setJoinInput] = useState('');
   const [maxPlayers, setMaxPlayers] = useState(4);
   const [targetScore, setTargetScore] = useState(UNO_DEFAULT_TARGET);
+  const [stackDraw2, setStackDraw2] = useState(UNO_DEFAULT_RULES.stackDraw2);
+  const [stackDraw4, setStackDraw4] = useState(UNO_DEFAULT_RULES.stackDraw4);
+  const [allowDraw2OnDraw4, setAllowDraw2OnDraw4] = useState(UNO_DEFAULT_RULES.allowDraw2OnDraw4);
+  const [allowDraw4OnDraw2, setAllowDraw4OnDraw2] = useState(UNO_DEFAULT_RULES.allowDraw4OnDraw2);
+  const [playDrawnCard, setPlayDrawnCard] = useState(UNO_DEFAULT_RULES.playDrawnCardImmediately);
   const autoJoined = useRef(false);
 
   // ── Game UI state ─────────────────────────────────────────────────────────
@@ -697,7 +702,28 @@ export function UnoGame({ wsUrl, gameId, initialRoomCode, quickPlay: isQuickPlay
 
   const canPlayCard = useCallback((card: UnoCard): boolean => {
     if (!gs || !isMyTurn) return false;
-    if (gs.pendingDraw > 0 && card.type !== 'draw2' && card.type !== 'wild4') return false;
+
+    // Drawn-card window: only the drawn card may be played
+    if (gs.drawnCardId !== null) {
+      return card.id === gs.drawnCardId;
+    }
+
+    // Pending draw stack: only stackable cards allowed
+    if (gs.pendingDraw > 0 && gs.pendingDrawSource) {
+      const src = gs.pendingDrawSource;
+      const rules = gs.rules;
+      if (src === 'draw2') {
+        if (card.type === 'draw2' && rules.stackDraw2) return true;
+        if (card.type === 'wild4' && rules.allowDraw4OnDraw2) return true;
+        return false;
+      }
+      // src === 'wild4'
+      if (card.type === 'wild4' && rules.stackDraw4) return true;
+      if (card.type === 'draw2' && rules.allowDraw2OnDraw4) return true;
+      return false;
+    }
+
+    // Normal playability
     if (card.type === 'wild' || card.type === 'wild4') return true;
     if (card.color === activeColor) return true;
     if (card.type === 'number' && gs.topCard.type === 'number' && card.value === gs.topCard.value) return true;
@@ -998,14 +1024,35 @@ export function UnoGame({ wsUrl, gameId, initialRoomCode, quickPlay: isQuickPlay
                 />
 
                 <div className={`relative z-10 flex items-center justify-center ${compact ? 'gap-6' : 'gap-10'}`}>
-                  {/* Draw pile */}
+                  {/* Draw pile / Pass button */}
                   <div className="flex flex-col items-center gap-2">
-                    <DrawPileStack compact={compact} isMyTurn={isMyTurn} onClick={handleDraw} />
+                    {gs.drawnCardId !== null && isMyTurn ? (
+                      <button
+                        onClick={handleDraw}
+                        className="font-bold text-xs cursor-pointer transition-all active:scale-[0.96]"
+                        style={{
+                          width: compact ? 50 : 60,
+                          height: compact ? 70 : 84,
+                          borderRadius: compact ? 6 : 8,
+                          background: 'linear-gradient(145deg, #3f3f46, #27272a)',
+                          border: '1.5px solid rgba(251,191,36,0.4)',
+                          boxShadow: '0 0 12px rgba(251,191,36,0.15)',
+                          color: '#fbbf24',
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                        }}
+                      >
+                        {t('uno.pass')}
+                      </button>
+                    ) : (
+                      <DrawPileStack compact={compact} isMyTurn={isMyTurn} onClick={handleDraw} />
+                    )}
                     <span
                       className="font-semibold uppercase tracking-wider"
                       style={{ fontSize: 9, color: '#71717a', letterSpacing: '0.1em' }}
                     >
-                      {t('uno.drawPile')}
+                      {gs.drawnCardId !== null && isMyTurn ? t('uno.pass') : t('uno.drawPile')}
                     </span>
                   </div>
 
@@ -1476,8 +1523,58 @@ export function UnoGame({ wsUrl, gameId, initialRoomCode, quickPlay: isQuickPlay
                 </div>
               </div>
 
+              {/* House rules */}
+              <div
+                className="flex flex-col gap-2"
+                style={{
+                  padding: '10px 12px',
+                  borderRadius: 10,
+                  background: 'rgba(39,39,42,0.5)',
+                  border: '1px solid rgba(63,63,70,0.3)',
+                }}
+              >
+                <span className="text-[10px] font-semibold uppercase tracking-wider" style={{ color: '#71717a' }}>{t('uno.rules')}</span>
+                {([
+                  [stackDraw2, setStackDraw2, 'uno.rules.stackDraw2'] as const,
+                  [stackDraw4, setStackDraw4, 'uno.rules.stackDraw4'] as const,
+                  [allowDraw4OnDraw2, setAllowDraw4OnDraw2, 'uno.rules.allowDraw4OnDraw2'] as const,
+                  [allowDraw2OnDraw4, setAllowDraw2OnDraw4, 'uno.rules.allowDraw2OnDraw4'] as const,
+                  [playDrawnCard, setPlayDrawnCard, 'uno.rules.playDrawnCard'] as const,
+                ]).map(([val, setter, key]) => (
+                  <label key={key} className="flex items-center justify-between cursor-pointer group">
+                    <span className="text-xs text-zinc-300 group-hover:text-zinc-100 transition-colors select-none">{t(key)}</span>
+                    <button
+                      type="button"
+                      onClick={() => (setter as (v: boolean) => void)(!val)}
+                      className="relative shrink-0 cursor-pointer"
+                      style={{
+                        width: 34,
+                        height: 18,
+                        borderRadius: 9,
+                        background: val ? '#4f46e5' : '#3f3f46',
+                        border: `1px solid ${val ? 'rgba(99,102,241,0.4)' : 'rgba(63,63,70,0.5)'}`,
+                        transition: 'background 0.15s, border-color 0.15s',
+                      }}
+                    >
+                      <span
+                        style={{
+                          position: 'absolute',
+                          top: 2,
+                          left: val ? 17 : 2,
+                          width: 12,
+                          height: 12,
+                          borderRadius: 6,
+                          background: val ? '#c7d2fe' : '#71717a',
+                          transition: 'left 0.15s, background 0.15s',
+                        }}
+                      />
+                    </button>
+                  </label>
+                ))}
+              </div>
+
               <button
-                onClick={() => mp.createRoom({ visibility: roomVisibility, roomName: roomName.trim() || undefined, maxPlayers, unoConfig: { targetScore } })}
+                onClick={() => mp.createRoom({ visibility: roomVisibility, roomName: roomName.trim() || undefined, maxPlayers, unoConfig: { targetScore, stackDraw2, stackDraw4, allowDraw2OnDraw4, allowDraw4OnDraw2, playDrawnCardImmediately: playDrawnCard } })}
                 className="w-full py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white font-bold transition-colors cursor-pointer active:scale-[0.98]"
               >
                 {t('game.lobby.createRoom')}
