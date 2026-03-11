@@ -4,14 +4,15 @@ import { NicknameProvider } from '@/components/providers/NicknameProvider';
 import { LanguageProvider } from '@/components/providers/LanguageProvider';
 import { AuthProvider } from '@/components/providers/AuthProvider';
 import { PatchNotesFloatingButton } from '@/components/PatchNotesFloatingButton';
+import { FeedbackButton } from '@/components/FeedbackButton';
 import { AchievementToastProvider } from '@/components/ui/AchievementToasts';
 import { LevelUpToastProvider } from '@/components/ui/LevelUpToasts';
 import { PartyProvider } from '@/components/providers/PartyProvider';
 import { ProgressionProvider } from '@/components/providers/ProgressionProvider';
 
 export const metadata: Metadata = {
-  title: 'Web Games',
-  description: 'Echtzeit-Multiplayer-Spiele im Browser. Spiele zusammen.',
+  title: 'Dashboard',
+  description: 'Willkommen auf deinem persönlichen Dashboard.',
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
@@ -36,6 +37,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
           </AuthProvider>
         </LanguageProvider>
         <PatchNotesFloatingButton />
+        <FeedbackButton />
       </body>
     </html>
   );

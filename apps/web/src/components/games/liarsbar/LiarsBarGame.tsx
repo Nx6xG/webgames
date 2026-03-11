@@ -232,8 +232,8 @@ export function LiarsBarGame({ wsUrl, gameId, initialRoomCode, quickPlay: isQuic
 
   // ── Achievement tracking ──────────────────────────────────────────────────
   useEffect(() => {
-    if (mp.phase === 'playing' && !mp.isSpectator) ach.trackPlay();
-  }, [mp.phase]); // eslint-disable-line react-hooks/exhaustive-deps
+    if (mp.phase === 'playing' && !mp.isSpectator && mp.gameState?.status === 'ongoing') ach.trackPlay();
+  }, [mp.phase, mp.gameState?.status]); // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
     const gs = mp.gameState;

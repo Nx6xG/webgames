@@ -6,7 +6,6 @@ import type { UnoState, UnoCard, UnoColor, RoomVisibility } from 'shared';
 import { UNO_TARGET_SCORES, UNO_DEFAULT_TARGET, UNO_DEFAULT_RULES } from 'shared';
 import { useMultiplayer } from '@/hooks/useMultiplayer';
 import type { GameComponentProps } from '@/lib/gameRegistry';
-import { CountdownOverlay } from '@/components/CountdownOverlay';
 import { WaitingForConnectionOverlay } from '@/components/WaitingForConnectionOverlay';
 import { ChatPanelWithProfile as ChatPanel } from '@/components/chat/ChatPanelWithProfile';
 import { NicknameEditor } from '@/components/NicknameEditor';
@@ -662,8 +661,8 @@ export function UnoGame({ wsUrl, gameId, initialRoomCode, quickPlay: isQuickPlay
 
   // ── Achievement tracking ──────────────────────────────────────────────────
   useEffect(() => {
-    if (mp.phase === 'playing' && !mp.isSpectator) ach.trackPlay();
-  }, [mp.phase, mp.isSpectator, ach]);
+    if (mp.phase === 'playing' && !mp.isSpectator && mp.gameState?.status === 'ongoing') ach.trackPlay();
+  }, [mp.phase, mp.isSpectator, ach, mp.gameState?.status]);
 
   const finishKey = (gs?.phase === 'match_end' || gs?.phase === 'round_end') && gs?.roundWinner && !mp.isSpectator && myIdx !== null
     ? `${mp.roomCode ?? ''}|${gs.phase}|${gs.roundNumber}|${gs.roundWinner}`
@@ -787,7 +786,6 @@ export function UnoGame({ wsUrl, gameId, initialRoomCode, quickPlay: isQuickPlay
       <div className={`grid ${gapMain} lg:grid-cols-[1fr_340px] w-full items-start`}>
         {/* ── Main game area ──────────────────────────────────────────── */}
         <div className={`relative min-w-0 flex flex-col items-center ${gapMain} max-w-3xl mx-auto w-full`}>
-          <CountdownOverlay countdown={mp.matchCountdown} />
           <WaitingForConnectionOverlay
             show={mp.phase === 'waiting' && mp.playerCount < (mp.roomMaxPlayers ?? 2) && !mp.gameState}
             label={t('game.status.waiting')}

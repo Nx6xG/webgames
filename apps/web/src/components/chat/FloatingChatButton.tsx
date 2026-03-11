@@ -11,7 +11,7 @@ export function FloatingChatButton({ open, onClick, unreadCount = 0 }: FloatingC
     <button
       onClick={onClick}
       aria-label={open ? 'Close chat' : 'Open global chat'}
-      className="fixed bottom-6 right-6 z-40 w-[52px] h-[52px] rounded-full bg-indigo-600 hover:bg-indigo-500 active:scale-95 text-white shadow-lg shadow-indigo-900/40 transition-all duration-150 flex items-center justify-center"
+      className="fixed bottom-16 right-6 z-40 w-[52px] h-[52px] rounded-full bg-indigo-600 hover:bg-indigo-500 active:scale-95 text-white shadow-lg shadow-indigo-900/40 transition-all duration-150 flex items-center justify-center"
     >
       {open ? (
         <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
