@@ -4,7 +4,8 @@ import { useParams, useRouter } from 'next/navigation';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useI18n } from '@/components/providers/LanguageProvider';
 import { fetchUser, patchUser } from '@/lib/adminApi';
-import { ACHIEVEMENTS } from '@/lib/achievements/definitions';
+import { ACHIEVEMENTS, CATEGORY_ORDER } from '@/lib/achievements/definitions';
+import type { AchievementCategory } from '@/lib/achievements/definitions';
 import { COSMETICS_REGISTRY, RARITY_COLORS, RARITY_BG, type CosmeticSlot } from '@/lib/cosmetics';
 
 interface ProgressionData {
@@ -153,6 +154,8 @@ export default function AdminUserDetailPage() {
           t={t}
           onGrant={(id) => quickAction({ action: 'grant_achievement', achievementId: id }, `grant_ach_${id}`)}
           onRevoke={(id) => quickAction({ action: 'revoke_achievement', achievementId: id }, `revoke_ach_${id}`)}
+          onBulkGrant={(ids) => doAction({ action: 'bulk_grant_achievements', achievementIds: ids }, `bulk_grant_ach_${ids.length}`)}
+          onBulkRevoke={(ids) => doAction({ action: 'bulk_revoke_achievements', achievementIds: ids }, `bulk_revoke_ach_${ids.length}`)}
         />
       </Section>
 
@@ -167,6 +170,8 @@ export default function AdminUserDetailPage() {
           t={t}
           onGrant={(id, slot) => quickAction({ action: 'grant_cosmetic', cosmeticId: id, slot }, `grant_cos_${slot}_${id}`)}
           onRevoke={(id, slot) => quickAction({ action: 'revoke_cosmetic', cosmeticId: id, slot }, `revoke_cos_${slot}_${id}`)}
+          onBulkGrant={(items) => doAction({ action: 'bulk_grant_cosmetics', cosmetics: items }, `bulk_grant_cos_${items.length}`)}
+          onBulkRevoke={(items) => doAction({ action: 'bulk_revoke_cosmetics', cosmetics: items }, `bulk_revoke_cos_${items.length}`)}
         />
       </Section>
 
@@ -229,16 +234,19 @@ export default function AdminUserDetailPage() {
 // ── Achievement Manager ──────────────────────────────────────────────────────
 
 function AchievementManager({
-  unlockedSet, actionLoading, t, onGrant, onRevoke,
+  unlockedSet, actionLoading, t, onGrant, onRevoke, onBulkGrant, onBulkRevoke,
 }: {
   unlockedSet: Set<string>;
   actionLoading: string | null;
   t: (key: string) => string;
   onGrant: (id: string) => void;
   onRevoke: (id: string) => void;
+  onBulkGrant: (ids: string[]) => void;
+  onBulkRevoke: (ids: string[]) => void;
 }) {
   const [filter, setFilter] = useState<'all' | 'unlocked' | 'locked'>('all');
   const [search, setSearch] = useState('');
+  const [bulkCategory, setBulkCategory] = useState<AchievementCategory | 'all'>('all');
 
   const filtered = useMemo(() => {
     const q = search.toLowerCase().trim();
@@ -253,15 +261,57 @@ function AchievementManager({
         return true;
       })
       .sort((a, b) => {
-        // unlocked first
         const au = unlockedSet.has(a.id) ? 0 : 1;
         const bu = unlockedSet.has(b.id) ? 0 : 1;
         return au - bu;
       });
   }, [filter, search, unlockedSet, t]);
 
+  const bulkIds = useMemo(() => {
+    if (bulkCategory === 'all') return ACHIEVEMENTS.map((a) => a.id);
+    return ACHIEVEMENTS.filter((a) => a.tags?.[0] === bulkCategory).map((a) => a.id);
+  }, [bulkCategory]);
+
+  const bulkLocked = bulkIds.filter((id) => !unlockedSet.has(id));
+  const bulkUnlocked = bulkIds.filter((id) => unlockedSet.has(id));
+
   return (
-    <div className="space-y-2">
+    <div className="space-y-3">
+      {/* Bulk actions */}
+      <div className="rounded-lg bg-zinc-800/30 border border-zinc-700/40 p-3 space-y-2">
+        <div className="flex items-center gap-2 flex-wrap">
+          <select
+            value={bulkCategory}
+            onChange={(e) => setBulkCategory(e.target.value as AchievementCategory | 'all')}
+            className="rounded-md border border-zinc-700 bg-zinc-800 px-2 py-1 text-[11px] text-zinc-300 outline-none focus:border-indigo-500"
+          >
+            <option value="all">{t('admin.achievements.filter.all')} ({ACHIEVEMENTS.length})</option>
+            {CATEGORY_ORDER.map((cat) => {
+              const count = ACHIEVEMENTS.filter((a) => a.tags?.[0] === cat).length;
+              return (
+                <option key={cat} value={cat}>
+                  {t(`achievements.category.${cat}`)} ({count})
+                </option>
+              );
+            })}
+          </select>
+          <button
+            onClick={() => onBulkGrant(bulkLocked.length > 0 ? bulkLocked : bulkIds)}
+            disabled={actionLoading?.startsWith('bulk_grant_ach') || bulkLocked.length === 0}
+            className="px-2.5 py-1 rounded-md text-[10px] font-semibold border border-emerald-800/60 text-emerald-400 hover:bg-emerald-900/30 transition-colors disabled:opacity-40"
+          >
+            {t('admin.achievements.grantAll')} ({bulkLocked.length})
+          </button>
+          <button
+            onClick={() => onBulkRevoke(bulkUnlocked)}
+            disabled={actionLoading?.startsWith('bulk_revoke_ach') || bulkUnlocked.length === 0}
+            className="px-2.5 py-1 rounded-md text-[10px] font-semibold border border-rose-800/60 text-rose-400 hover:bg-rose-900/30 transition-colors disabled:opacity-40"
+          >
+            {t('admin.achievements.revokeAll')} ({bulkUnlocked.length})
+          </button>
+        </div>
+      </div>
+
       {/* Controls row */}
       <div className="flex items-center gap-2 flex-wrap">
         <div className="flex gap-0.5 bg-zinc-800/50 rounded-md p-0.5">
@@ -323,16 +373,19 @@ function AchievementManager({
 // ── Cosmetics Manager ────────────────────────────────────────────────────────
 
 function CosmeticsManager({
-  unlockedCosmetics, actionLoading, t, onGrant, onRevoke,
+  unlockedCosmetics, actionLoading, t, onGrant, onRevoke, onBulkGrant, onBulkRevoke,
 }: {
   unlockedCosmetics: Record<string, string[]>;
   actionLoading: string | null;
   t: (key: string) => string;
   onGrant: (id: string, slot: string) => void;
   onRevoke: (id: string, slot: string) => void;
+  onBulkGrant: (items: { slot: string; id: string }[]) => void;
+  onBulkRevoke: (items: { slot: string; id: string }[]) => void;
 }) {
   const [activeSlot, setActiveSlot] = useState<CosmeticSlot>('frame');
   const [search, setSearch] = useState('');
+  const [bulkSlot, setBulkSlot] = useState<CosmeticSlot | 'all'>('all');
 
   const items = useMemo(() => {
     const slotUnlocked = new Set(unlockedCosmetics[activeSlot] ?? []);
@@ -349,8 +402,51 @@ function CosmeticsManager({
 
   const slotUnlocked = new Set(unlockedCosmetics[activeSlot] ?? []);
 
+  const bulkItems = useMemo(() => {
+    if (bulkSlot === 'all') return COSMETICS_REGISTRY.map((c) => ({ slot: c.slot, id: c.id }));
+    return COSMETICS_REGISTRY.filter((c) => c.slot === bulkSlot).map((c) => ({ slot: c.slot, id: c.id }));
+  }, [bulkSlot]);
+
+  const bulkLocked = bulkItems.filter((c) => !(unlockedCosmetics[c.slot] ?? []).includes(c.id));
+  const bulkUnlockedItems = bulkItems.filter((c) => (unlockedCosmetics[c.slot] ?? []).includes(c.id));
+
   return (
-    <div className="space-y-2">
+    <div className="space-y-3">
+      {/* Bulk actions */}
+      <div className="rounded-lg bg-zinc-800/30 border border-zinc-700/40 p-3 space-y-2">
+        <div className="flex items-center gap-2 flex-wrap">
+          <select
+            value={bulkSlot}
+            onChange={(e) => setBulkSlot(e.target.value as CosmeticSlot | 'all')}
+            className="rounded-md border border-zinc-700 bg-zinc-800 px-2 py-1 text-[11px] text-zinc-300 outline-none focus:border-indigo-500"
+          >
+            <option value="all">{t('admin.achievements.filter.all')} ({COSMETICS_REGISTRY.length})</option>
+            {SLOT_ORDER.map((s) => {
+              const count = COSMETICS_REGISTRY.filter((c) => c.slot === s).length;
+              return (
+                <option key={s} value={s}>
+                  {t(`admin.cosmetics.slot.${s}`)} ({count})
+                </option>
+              );
+            })}
+          </select>
+          <button
+            onClick={() => onBulkGrant(bulkLocked.length > 0 ? bulkLocked : bulkItems)}
+            disabled={actionLoading?.startsWith('bulk_grant_cos') || bulkLocked.length === 0}
+            className="px-2.5 py-1 rounded-md text-[10px] font-semibold border border-emerald-800/60 text-emerald-400 hover:bg-emerald-900/30 transition-colors disabled:opacity-40"
+          >
+            {t('admin.cosmetics.grantAll')} ({bulkLocked.length})
+          </button>
+          <button
+            onClick={() => onBulkRevoke(bulkUnlockedItems)}
+            disabled={actionLoading?.startsWith('bulk_revoke_cos') || bulkUnlockedItems.length === 0}
+            className="px-2.5 py-1 rounded-md text-[10px] font-semibold border border-rose-800/60 text-rose-400 hover:bg-rose-900/30 transition-colors disabled:opacity-40"
+          >
+            {t('admin.cosmetics.revokeAll')} ({bulkUnlockedItems.length})
+          </button>
+        </div>
+      </div>
+
       {/* Slot tabs */}
       <div className="flex gap-0.5 flex-wrap bg-zinc-800/30 rounded-md p-0.5">
         {SLOT_ORDER.map((slot) => {

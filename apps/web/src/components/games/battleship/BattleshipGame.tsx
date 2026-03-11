@@ -17,6 +17,7 @@ import { AvatarBubble } from '@/components/ui/AvatarBubble';
 import { getNameColorClass } from '@/lib/nameColors';
 import { RoomInviteButton } from '@/components/social/RoomInviteButton';
 import { useAchievements } from '@/hooks/useAchievements';
+import { ReconnectBanner } from '@/components/ui/ReconnectBanner';
 
 // ── Cell display types ────────────────────────────────────────────────────────
 
@@ -649,7 +650,7 @@ export function BattleshipGame({ wsUrl, gameId, initialRoomCode, quickPlay: isQu
   const router    = useRouter();
   const mp        = useMultiplayer<BattleshipState>(wsUrl, gameId);
   const { t }     = useI18n();
-  const ach       = useAchievements('battleship');
+  const ach       = useAchievements('battleship', mp.roomCode);
 
   const [joinInput,       setJoinInput]       = useState(initialRoomCode ?? '');
   const [copied,          setCopied]           = useState(false);
@@ -725,6 +726,12 @@ export function BattleshipGame({ wsUrl, gameId, initialRoomCode, quickPlay: isQu
   }, [mp.roomMessages.length, mp.globalMessages.length]);
 
   // ── Achievement tracking ──────────────────────────────────────────────────
+  const prevPhaseRef = useRef(mp.phase);
+  useEffect(() => {
+    if (prevPhaseRef.current === 'ended' && mp.phase !== 'ended') ach.reset();
+    prevPhaseRef.current = mp.phase;
+  }, [mp.phase, ach]);
+
   useEffect(() => {
     if (mp.phase === 'playing' && !mp.isSpectator && mp.gameState?.status === 'ongoing') ach.trackPlay();
   }, [mp.phase, mp.gameState?.status]); // eslint-disable-line react-hooks/exhaustive-deps
@@ -734,6 +741,14 @@ export function BattleshipGame({ wsUrl, gameId, initialRoomCode, quickPlay: isQu
     const mySlotAch: BsSlot | null = mp.playerIndex !== null ? (mp.playerIndex === 0 ? 'A' : 'B') : null;
     if (gs?.phase === 'finished' && mySlotAch !== null && gs.winner === mySlotAch) {
       ach.trackWin();
+    }
+  }, [mp.gameState?.phase]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  useEffect(() => {
+    const gs = mp.gameState;
+    const mySlotAch: BsSlot | null = mp.playerIndex !== null ? (mp.playerIndex === 0 ? 'A' : 'B') : null;
+    if (gs?.phase === 'finished' && mySlotAch !== null && gs.winner !== null && gs.winner !== mySlotAch) {
+      ach.trackLoss();
     }
   }, [mp.gameState?.phase]); // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -1287,6 +1302,7 @@ export function BattleshipGame({ wsUrl, gameId, initialRoomCode, quickPlay: isQu
     <div className="grid gap-6 lg:grid-cols-[1fr_360px] w-full items-start">
       {/* ── Game area ──────────────────────────────────────────────────────── */}
       <div className="relative min-w-0 flex flex-col items-center gap-4 min-h-[400px]">
+        <ReconnectBanner mp={mp} />
         {/* Keyframe for shot-result pop overlay */}
         <style>{`
           @keyframes bs-shot-pop {

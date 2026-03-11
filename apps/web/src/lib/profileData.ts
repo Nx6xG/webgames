@@ -6,12 +6,13 @@
  * swapped to fetch from the server.
  */
 
-import type { CosmeticsSelection } from 'shared';
+import type { CosmeticsSelection, ProfileShowcase } from 'shared';
 import { loadLocalProfile, GAME_EMOJI } from '@/lib/localStats';
 import type { LocalProfile } from '@/lib/localStats';
 import { loadCosmetics } from '@/lib/cosmetics';
 import { getPublicProfileByUserId } from '@/lib/cloudQueries';
 import { ACHIEVEMENTS } from '@/lib/achievements/definitions';
+import { loadShowcaseConfig, buildShowcase } from '@/lib/showcase';
 
 // ── Types ────────────────────────────────────────────────────────────────────
 
@@ -31,6 +32,8 @@ export interface ProfileData {
   cosmetics: CosmeticsSelection;
   /** null = stats not available (other player without accounts) */
   stats: ProfileStats | null;
+  /** User-curated showcase (favorite game, stats, achievements). */
+  showcase?: ProfileShowcase;
   /** true when this profile belongs to the current user */
   isMe: boolean;
 }
@@ -55,6 +58,7 @@ export function resolveMyProfile(nickname: string, playerToken: string): Profile
       achievementsTotal: local.achievementsTotal,
       favoriteGameId: local.favoriteGameId,
     },
+    showcase: buildShowcase(loadShowcaseConfig()),
     isMe: true,
   };
 }
@@ -67,12 +71,14 @@ export function resolveOtherProfile(
   playerToken: string,
   nickname: string,
   cosmetics: CosmeticsSelection | undefined,
+  showcase?: ProfileShowcase,
 ): ProfileData {
   return {
     id: playerToken,
     nickname,
     cosmetics: cosmetics ?? { slots: {} },
     stats: null,
+    showcase,
     isMe: false,
   };
 }

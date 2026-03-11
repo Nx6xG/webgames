@@ -1,10 +1,10 @@
 'use client';
 
 import { createContext, useCallback, useContext, useEffect, useRef, useState } from 'react';
-import { getAchievementById } from '@/lib/achievements';
+import { getAchievementById, TIER_XP, TIER_TOKENS } from '@/lib/achievements';
 import type { AchievementDefinition } from '@/lib/achievements';
 import { useI18n } from '@/components/providers/LanguageProvider';
-import { AVATAR_REGISTRY, getAvatarForAchievement, addRecentAvatarUnlocks } from '@/lib/avatars';
+import { getAvatarForAchievement, addRecentAvatarUnlocks } from '@/lib/avatars';
 
 // ── Recently-unlocked tracking (in-memory, shared across components) ──────────
 
@@ -132,11 +132,14 @@ function ToastStack({ toasts }: { toasts: ToastItem[] }) {
             </p>
             <p className="text-sm font-bold text-yellow-400 truncate">{t(toast.def.nameKey)}</p>
             <p className="text-xs text-zinc-400 truncate">{t(toast.def.descKey)}</p>
-            {(() => {
-              const avatarDef = AVATAR_REGISTRY.find((a) => a.requiredAchievement === toast.def.id);
-              if (!avatarDef) return null;
-              return <p className="text-[10px] text-indigo-400 mt-0.5">{t('avatar.unlocked')}: {avatarDef.emoji}</p>;
-            })()}
+            <div className="flex items-center gap-1.5 mt-0.5">
+              {TIER_XP[toast.def.tier] > 0 && (
+                <span className="text-[10px] font-semibold text-amber-400/80">+{TIER_XP[toast.def.tier]} XP</span>
+              )}
+              {TIER_TOKENS[toast.def.tier] > 0 && (
+                <span className="text-[10px] font-semibold text-purple-400">+{TIER_TOKENS[toast.def.tier]} Token</span>
+              )}
+            </div>
           </div>
         </div>
       ))}

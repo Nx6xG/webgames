@@ -144,6 +144,11 @@ function UserRow({
           <span className={`text-sm truncate block ${isMe ? 'text-indigo-300 font-medium' : (getNameColorClass(u.cosmetics?.nameColor ?? u.nameColor) || 'text-zinc-300')}`}>
             {u.nickname}
             {isFrd && <span className="ml-1 text-[10px] text-indigo-400">★</span>}
+            {u.level != null && u.level > 0 && (
+              <span className="ml-1 inline-flex items-center px-1 py-px rounded text-[9px] font-bold bg-indigo-500/15 text-indigo-400 border border-indigo-500/20 leading-none align-middle">
+                {u.level}
+              </span>
+            )}
             {u.cosmetics?.badges?.slice(0, 3).map((id) => (
               <BadgeIcon key={id} badgeId={id} size="sm" />
             ))}

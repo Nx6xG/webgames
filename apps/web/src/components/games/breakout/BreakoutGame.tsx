@@ -10,6 +10,7 @@ import { useNickname } from '@/components/providers/NicknameProvider';
 import { loadStats, saveStats, updateStats } from './stats';
 import type { BreakoutStats } from './stats';
 import * as sfx from './sound';
+import { useVisibilityPause } from '@/hooks/useVisibilityPause';
 
 // ── Constants ────────────────────────────────────────────────────────────────
 
@@ -628,8 +629,10 @@ export function BreakoutGame() {
     setLives(diff.lives);
     setLevel(1);
     setWinner(null);
+    ach.reset();
+    ach.trackPlay();
     setPhase('playing');
-  }, []);
+  }, [ach]);
 
   // ── Level advance ───────────────────────────────────────────────────────────
 
@@ -674,6 +677,9 @@ export function BreakoutGame() {
     });
   }, []);
 
+  // ── Auto-pause on tab switch ────────────────────────────────────────────────
+  useVisibilityPause(phase === 'playing', togglePause);
+
   const toggleMute = useCallback(() => {
     setMuted((prev) => {
       const next = !prev;
@@ -708,7 +714,6 @@ export function BreakoutGame() {
       saveStats(next);
       return next;
     });
-    ach.trackPlay();
     if (won) { ach.trackWin(); sfx.winSound(); } else { sfx.loseSound(); }
     pb.submit(g.score, { level: g.level + 1 });
   }, [ach]); // eslint-disable-line react-hooks/exhaustive-deps

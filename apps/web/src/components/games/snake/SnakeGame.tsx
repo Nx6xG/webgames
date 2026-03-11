@@ -10,6 +10,7 @@ import { ScoreboardPanel } from '@/components/ui/ScoreboardPanel';
 import { useAuth } from '@/components/providers/AuthProvider';
 import { useNickname } from '@/components/providers/NicknameProvider';
 import { useSwipe } from '@/hooks/useSwipe';
+import { useVisibilityPause } from '@/hooks/useVisibilityPause';
 
 // ── Best-score persistence ─────────────────────────────────────────────────────
 
@@ -26,7 +27,7 @@ function saveBest(score: number) {
 
 // ── Phase ──────────────────────────────────────────────────────────────────────
 
-type Phase = 'countdown' | 'running' | 'over';
+type Phase = 'countdown' | 'running' | 'paused' | 'over';
 
 // ── Last run ───────────────────────────────────────────────────────────────────
 
@@ -105,6 +106,17 @@ export function SnakeGame() {
 
   useEffect(() => { phaseRef.current = phase; }, [phase]);
 
+  const togglePause = useCallback(() => {
+    setPhase(p => {
+      if (p === 'running') { phaseRef.current = 'paused'; return 'paused'; }
+      if (p === 'paused') { phaseRef.current = 'running'; return 'running'; }
+      return p;
+    });
+  }, []);
+
+  // ── Auto-pause on tab switch ──────────────────────────────────────────
+  useVisibilityPause(phase === 'running', togglePause);
+
   // Gentle speed scaling: base 160 ms, −5 ms per 10 food eaten, floor 100 ms
   const speedLevel = Math.floor(state.score / 10);
 
@@ -149,6 +161,13 @@ export function SnakeGame() {
     if (phase === 'countdown') ach.reset();
   }, [phase]); // eslint-disable-line react-hooks/exhaustive-deps
 
+  // ── Achievement flag tracking ──────────────────────────────────────────
+  useEffect(() => {
+    if (phase !== 'running') return;
+    if (state.score >= 25) ach.trackEvent({ type: 'flag', key: 'snake_score_25' });
+    if (state.score >= 50) ach.trackEvent({ type: 'flag', key: 'snake_score_50' });
+  }, [state.score, phase]); // eslint-disable-line react-hooks/exhaustive-deps
+
   // ── Transition to over ────────────────────────────────────────────────────────
   useEffect(() => {
     if (state.status === 'over') {
@@ -173,15 +192,20 @@ export function SnakeGame() {
       W: 'up',  S: 'down',  A: 'left',  D: 'right',
     };
     function onKeyDown(e: KeyboardEvent) {
+      if (e.key === 'p' || e.key === 'P') {
+        e.preventDefault();
+        togglePause();
+        return;
+      }
       const dir = KEY_DIR[e.key];
       if (!dir) return;
       e.preventDefault();
-      if (phaseRef.current === 'over') return;
+      if (phaseRef.current === 'over' || phaseRef.current === 'paused') return;
       setState(prev => changeDirection(prev, dir));
     }
     window.addEventListener('keydown', onKeyDown);
     return () => window.removeEventListener('keydown', onKeyDown);
-  }, []);
+  }, [togglePause]);
 
   // ── Swipe (mobile) ─────────────────────────────────────────────────────────
   const swipeHandlers = useSwipe({
@@ -272,6 +296,20 @@ export function SnakeGame() {
             >
               {cdNum === 0 ? t('game.go') : cdNum}
             </span>
+          </div>
+        )}
+
+        {/* Pause overlay */}
+        {phase === 'paused' && (
+          <div className="absolute inset-0 rounded-xl bg-zinc-950/80 flex flex-col items-center justify-center gap-3 backdrop-blur-[2px] z-10">
+            <p className="text-2xl font-black text-zinc-100">{t('game.paused')}</p>
+            <p className="text-sm text-zinc-500">{t('tetris.pressP')}</p>
+            <button
+              onClick={togglePause}
+              className="mt-1 px-6 py-2 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white text-sm font-semibold transition-colors"
+            >
+              {t('game.resume')}
+            </button>
           </div>
         )}
 

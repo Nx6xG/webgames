@@ -4,10 +4,10 @@ import { useEffect, useMemo, useRef } from 'react';
 import Link from 'next/link';
 import { useI18n } from '@/components/providers/LanguageProvider';
 import { usePartyCtx } from '@/components/providers/PartyProvider';
-import { ACHIEVEMENTS } from '@/lib/achievements/definitions';
+import { ACHIEVEMENTS, TIER_XP, TIER_TOKENS } from '@/lib/achievements/definitions';
 import type { AchievementDefinition } from '@/lib/achievements/definitions';
 import { loadStats } from '@/lib/achievements/store';
-import { getAvatarForAchievement } from '@/lib/avatars';
+
 import { useOpenRooms } from '@/hooks/useOpenRooms';
 
 // ── Types ────────────────────────────────────────────────────────────────────
@@ -418,9 +418,6 @@ function AchievementRow({
   t: (k: string) => string;
 }) {
   const progress = !isUnlocked && def.getProgress ? def.getProgress(stats) : null;
-  const avatarDef = getAvatarForAchievement(def.id);
-  const isHidden = !!def.hidden && !isUnlocked;
-
   return (
     <div
       className={`flex items-center gap-3 rounded-lg border px-3 py-2 ${
@@ -429,19 +426,16 @@ function AchievementRow({
           : 'border-zinc-800 bg-zinc-800/20 opacity-60'
       }`}
     >
-      <span className="text-xl shrink-0">{isUnlocked ? def.icon : (isHidden ? '❓' : def.icon)}</span>
+      <span className="text-xl shrink-0">{def.icon}</span>
       <div className="min-w-0 flex-1">
         <p className={`text-sm font-medium truncate ${isUnlocked ? 'text-zinc-200' : 'text-zinc-400'}`}>
-          {isHidden ? '???' : t(def.nameKey)}
+          {t(def.nameKey)}
         </p>
-        {avatarDef && !isHidden && (
-          <span className={`inline-flex items-center gap-1 text-[10px] ${
-            isUnlocked ? 'text-indigo-400' : 'text-zinc-500'
-          }`}>
-            <span className="text-xs leading-none">{avatarDef.emoji}</span>
-            {isUnlocked ? t('achievements.avatarUnlocked') : t('achievements.unlocksAvatar')}
-          </span>
-        )}
+        <div className="flex items-center gap-1.5 mt-0.5">
+          <span className="text-[9px] font-semibold uppercase text-zinc-500">{t(`achievements.tier.${def.tier}`)}</span>
+          {TIER_XP[def.tier] > 0 && <span className="text-[9px] font-semibold text-amber-400/70">+{TIER_XP[def.tier]} XP</span>}
+          {TIER_TOKENS[def.tier] > 0 && <span className="text-[9px] font-semibold text-purple-400/70">+{TIER_TOKENS[def.tier]} Token</span>}
+        </div>
         {progress && (
           <p className="text-[10px] text-zinc-500 tabular-nums">
             {progress.current}/{progress.target}

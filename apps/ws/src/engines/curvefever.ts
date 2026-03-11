@@ -134,7 +134,7 @@ function collidesWithTrailsDetailed(
     for (let s = 0; s < end; s++) {
       const seg = trail[s];
       const dx = px - seg.x;
-      const dy = px - seg.y;
+      const dy = py - seg.y;
       if (dx * dx + dy * dy < COLLISION_DIST_SQ) return ti;
     }
   }

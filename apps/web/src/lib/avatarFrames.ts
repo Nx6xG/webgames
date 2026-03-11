@@ -14,76 +14,18 @@ export interface FrameDef {
   /** CSS class for the animated wrapper (applied to .wg-frame-* in globals.css) */
   animClass: string;
   labelKey: string;
-  /** i18n key describing how to unlock */
-  unlockHintKey: string;
   /** Emoji shown in the frame picker tile */
   emoji: string;
-  requiredAchievement?: string;
 }
 
 export const FRAME_DEFS: FrameDef[] = [
-  {
-    id: 'none',
-    staticClass: '',
-    animClass: '',
-    labelKey: 'frame.none',
-    unlockHintKey: '',
-    emoji: '⊘',
-  },
-  {
-    id: 'bronze',
-    staticClass: 'ring-2 ring-amber-600',
-    animClass: 'wg-frame-bronze',
-    labelKey: 'frame.bronze',
-    unlockHintKey: 'frame.unlock.bronze',
-    emoji: '◆',
-    requiredAchievement: 'general.play_10',
-  },
-  {
-    id: 'silver',
-    staticClass: 'ring-2 ring-gray-300',
-    animClass: 'wg-frame-silver',
-    labelKey: 'frame.silver',
-    unlockHintKey: 'frame.unlock.silver',
-    emoji: '◈',
-    requiredAchievement: 'general.win_10',
-  },
-  {
-    id: 'gold',
-    staticClass: 'ring-2 ring-yellow-400',
-    animClass: 'wg-frame-gold',
-    labelKey: 'frame.gold',
-    unlockHintKey: 'frame.unlock.gold',
-    emoji: '✦',
-    requiredAchievement: 'chess.win_3',
-  },
-  {
-    id: 'fire',
-    staticClass: 'ring-2 ring-orange-500 shadow-[0_0_10px_rgba(255,120,0,0.6)]',
-    animClass: 'wg-frame-fire',
-    labelKey: 'frame.fire',
-    unlockHintKey: 'frame.unlock.fire',
-    emoji: '🔥',
-    requiredAchievement: 'battleship.win_3',
-  },
-  {
-    id: 'diamond',
-    staticClass: 'ring-2 ring-cyan-300 shadow-[0_0_12px_rgba(103,232,249,0.5)]',
-    animClass: 'wg-frame-diamond',
-    labelKey: 'frame.diamond',
-    unlockHintKey: 'frame.unlock.diamond',
-    emoji: '💎',
-    requiredAchievement: 'pong.win_5',
-  },
-  {
-    id: 'obsidian',
-    staticClass: 'ring-2 ring-purple-800 shadow-[0_0_10px_rgba(107,33,168,0.5)]',
-    animClass: 'wg-frame-obsidian',
-    labelKey: 'frame.obsidian',
-    unlockHintKey: 'frame.unlock.obsidian',
-    emoji: '🖤',
-    requiredAchievement: 'liarsbar.play_5',
-  },
+  { id: 'none',     staticClass: '',                                                                  animClass: '',                  labelKey: 'frame.none',     emoji: '⊘' },
+  { id: 'bronze',   staticClass: 'ring-2 ring-amber-600',                                             animClass: 'wg-frame-bronze',   labelKey: 'frame.bronze',   emoji: '◆' },
+  { id: 'silver',   staticClass: 'ring-2 ring-gray-300',                                              animClass: 'wg-frame-silver',   labelKey: 'frame.silver',   emoji: '◈' },
+  { id: 'gold',     staticClass: 'ring-2 ring-yellow-400',                                            animClass: 'wg-frame-gold',     labelKey: 'frame.gold',     emoji: '✦' },
+  { id: 'fire',     staticClass: 'ring-2 ring-orange-500 shadow-[0_0_10px_rgba(255,120,0,0.6)]',      animClass: 'wg-frame-fire',     labelKey: 'frame.fire',     emoji: '🔥' },
+  { id: 'diamond',  staticClass: 'ring-2 ring-cyan-300 shadow-[0_0_12px_rgba(103,232,249,0.5)]',      animClass: 'wg-frame-diamond',  labelKey: 'frame.diamond',  emoji: '💎' },
+  { id: 'obsidian', staticClass: 'ring-2 ring-purple-800 shadow-[0_0_10px_rgba(107,33,168,0.5)]',     animClass: 'wg-frame-obsidian', labelKey: 'frame.obsidian', emoji: '🖤' },
 ];
 
 const frameMap = new Map(FRAME_DEFS.map((f) => [f.id, f]));

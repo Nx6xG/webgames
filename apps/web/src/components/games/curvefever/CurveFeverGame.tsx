@@ -5,6 +5,7 @@ import type { GameComponentProps } from '@/lib/gameRegistry';
 import { useMultiplayer } from '@/hooks/useMultiplayer';
 import { useI18n } from '@/components/providers/LanguageProvider';
 import type { CurveFeverState, CfDeathEvent, CfKillFeedEntry, CfPowerUpType, RoomVisibility } from 'shared';
+import { ReconnectBanner } from '@/components/ui/ReconnectBanner';
 
 const ARENA_W = 800;
 const ARENA_H = 600;
@@ -594,8 +595,7 @@ export function CurveFeverGame({ wsUrl, gameId, initialRoomCode, quickPlay: auto
       const cfP = gs.players.find(p => p.token === token);
       if (cfP) return cfP.nickname;
     }
-    const mpP = mp.players.find(p => p.nickname);
-    return mpP?.nickname ?? 'Player';
+    return mp.players[0]?.nickname ?? 'Player';
   };
 
   const isHost = mp.playerIndex === 0;
@@ -780,7 +780,8 @@ export function CurveFeverGame({ wsUrl, gameId, initialRoomCode, quickPlay: auto
 
   // ── Game UI ─────────────────────────────────────────────────────────────
   return (
-    <div className="flex flex-col lg:flex-row gap-4 p-4 max-w-6xl mx-auto">
+    <div className="flex flex-col lg:flex-row gap-4 p-4 max-w-6xl mx-auto relative">
+      <ReconnectBanner mp={mp} />
       {/* Arena */}
       <div className="flex-1 flex flex-col items-center gap-3">
         <div

@@ -8,6 +8,7 @@ import type { SudokuStats } from './stats';
 import { useAchievements } from '@/hooks/useAchievements';
 import { useI18n } from '@/components/providers/LanguageProvider';
 import { createSeededRng } from '@/lib/seededRandom';
+import { useVisibilityPause } from '@/hooks/useVisibilityPause';
 import { getTodayStr } from '@/lib/dailyChallenges/definitions';
 
 const MAX_LIVES = 3;
@@ -169,7 +170,10 @@ export function SudokuGame() {
   // ── Achievement tracking ──────────────────────────────────────────────────
   useEffect(() => {
     if (phase === 'playing') ach.trackPlay();
-    if (phase === 'won') ach.trackWin();
+    if (phase === 'won') {
+      ach.trackWin();
+      ach.trackEvent({ type: 'flag', key: `sudoku_${difficulty}` });
+    }
     if (phase === 'config') ach.reset();
   }, [phase]); // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -179,6 +183,9 @@ export function SudokuGame() {
     const id = setInterval(() => setElapsedSec(s => s + 1), 1000);
     return () => clearInterval(id);
   }, [phase]);
+
+  // ── Auto-pause on tab switch ──────────────────────────────────────────
+  useVisibilityPause(phase === 'playing', useCallback(() => setPhase('paused'), []));
 
   // ── Save stats on win ─────────────────────────────────────────────────────────
   useEffect(() => {
@@ -494,6 +501,19 @@ export function SudokuGame() {
             wrongCells={wrongCells}
             onCellClick={handleCellClick}
           />
+
+          {/* Paused overlay */}
+          {phase === 'paused' && (
+            <div className="absolute inset-0 rounded-xl bg-zinc-950/90 backdrop-blur-[2px] flex flex-col items-center justify-center gap-3 z-10">
+              <p className="text-2xl font-black text-zinc-100">{t('game.paused')}</p>
+              <button
+                onClick={() => setPhase('playing')}
+                className="px-5 py-2 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-white text-sm font-semibold transition-colors"
+              >
+                {t('game.resume')}
+              </button>
+            </div>
+          )}
 
           {/* Win overlay */}
           {phase === 'won' && (

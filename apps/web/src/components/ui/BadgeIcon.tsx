@@ -39,11 +39,6 @@ function BadgeTooltipContent({ def, locked, showRarity }: { def: CosmeticDef; lo
       {def.descriptionKey && (
         <p className="text-[10px] text-zinc-400 leading-snug">{t(def.descriptionKey)}</p>
       )}
-      {def.unlockHintKey && (locked || def.requiredAchievement) && (
-        <p className="text-[10px] text-zinc-500 leading-snug">
-          {locked ? '🔒 ' : '✓ '}{t(def.unlockHintKey)}
-        </p>
-      )}
       {showRarity !== false && (
         <span className={`inline-block text-[9px] font-semibold uppercase tracking-wider ${RARITY_COLORS[def.rarity]}`}>
           {t(`cosmetics.rarity.${def.rarity}`)}

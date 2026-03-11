@@ -11,12 +11,13 @@ import { loadStats, saveStats, updateStats } from './stats';
 import type { MinesweeperStats } from './stats';
 import * as sfx from './sound';
 import { createSeededRng } from '@/lib/seededRandom';
+import { useVisibilityPause } from '@/hooks/useVisibilityPause';
 import { getTodayStr } from '@/lib/dailyChallenges/definitions';
 
 // ── Types ────────────────────────────────────────────────────────────────────
 
 type Difficulty = 'easy' | 'medium' | 'hard';
-type Phase = 'menu' | 'playing' | 'won' | 'lost';
+type Phase = 'menu' | 'playing' | 'paused' | 'won' | 'lost';
 
 interface DiffConfig {
   rows: number;
@@ -232,6 +233,9 @@ export function MinesweeperGame() {
     };
   }, [phase, firstClick]);
 
+  // ── Auto-pause on tab switch ──────────────────────────────────────────
+  useVisibilityPause(phase === 'playing' && !firstClick, useCallback(() => setPhase('paused'), []));
+
   const pbMap = { easy: pbEasy, medium: pbMedium, hard: pbHard };
 
   const saveResult = useCallback((won: boolean, diff: Difficulty, timeSec: number) => {
@@ -243,9 +247,9 @@ export function MinesweeperGame() {
       saveStats(next);
       return next;
     });
-    ach.trackPlay();
     if (won) {
       ach.trackWin();
+      ach.trackEvent({ type: 'flag', key: `minesweeper_${diff}` });
       pbMap[diff].submit(timeSec, { won: true });
     }
   }, [ach, pbMap]); // eslint-disable-line react-hooks/exhaustive-deps
@@ -262,6 +266,7 @@ export function MinesweeperGame() {
     setIsDaily(!!seed);
     setFlagMode(false);
     ach.reset();
+    ach.trackPlay();
     setPhase('playing');
   }, [ach]);
 
@@ -512,7 +517,7 @@ export function MinesweeperGame() {
                   content = <span className="text-sm">🚩</span>;
                 }
 
-                const gameOver = phase === 'won' || phase === 'lost';
+                const gameOver = phase === 'won' || phase === 'lost' || phase === 'paused';
 
                 // Staggered pop animation for flood-revealed cells (max 300ms total delay)
                 const revealAnim = cell.state === 'revealed' && !cell.mine && cell.revealOrder >= 0
@@ -534,6 +539,19 @@ export function MinesweeperGame() {
               }),
             )}
           </div>
+
+          {/* Paused overlay */}
+          {phase === 'paused' && (
+            <div className="flex flex-col items-center gap-2 py-4">
+              <h3 className="text-2xl font-black text-zinc-100">{t('game.paused')}</h3>
+              <button
+                onClick={() => setPhase('playing')}
+                className="px-6 py-2.5 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-white font-bold transition-colors"
+              >
+                {t('game.resume')}
+              </button>
+            </div>
+          )}
 
           {/* Win overlay */}
           {phase === 'won' && (

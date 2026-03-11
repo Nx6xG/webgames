@@ -17,6 +17,7 @@ import { getNameColorClass } from '@/lib/nameColors';
 import { RoomInviteButton } from '@/components/social/RoomInviteButton';
 import { useAchievements } from '@/hooks/useAchievements';
 import { SpectatorBanner } from '@/components/ui/SpectatorBanner';
+import { ReconnectBanner } from '@/components/ui/ReconnectBanner';
 
 // ── Compact viewport hook ────────────────────────────────────────────────────
 // Fires when viewport height ≤ 800px (covers 1366×768 and similar).
@@ -177,7 +178,7 @@ export function LiarsBarGame({ wsUrl, gameId, initialRoomCode, quickPlay: isQuic
   const router = useRouter();
   const mp = useMultiplayer<LiarsBarState>(wsUrl, gameId);
   const { t } = useI18n();
-  const ach = useAchievements('liarsbar');
+  const ach = useAchievements('liarsbar', mp.roomCode);
   const compact = useCompact();
   const [joinInput, setJoinInput] = useState(initialRoomCode ?? '');
   const [copied, setCopied] = useState(false);
@@ -231,6 +232,12 @@ export function LiarsBarGame({ wsUrl, gameId, initialRoomCode, quickPlay: isQuic
   }, [mp.roomMessages.length, mp.globalMessages.length]);
 
   // ── Achievement tracking ──────────────────────────────────────────────────
+  const prevPhaseRef = useRef(mp.phase);
+  useEffect(() => {
+    if (prevPhaseRef.current === 'ended' && mp.phase !== 'ended') ach.reset();
+    prevPhaseRef.current = mp.phase;
+  }, [mp.phase, ach]);
+
   useEffect(() => {
     if (mp.phase === 'playing' && !mp.isSpectator && mp.gameState?.status === 'ongoing') ach.trackPlay();
   }, [mp.phase, mp.gameState?.status]); // eslint-disable-line react-hooks/exhaustive-deps
@@ -240,6 +247,14 @@ export function LiarsBarGame({ wsUrl, gameId, initialRoomCode, quickPlay: isQuic
     const myI = mp.playerIndex;
     if (gs?.phase === 'ended' && gs?.winner && myI !== null && gs.winner === gs.players[myI]?.id) {
       ach.trackWin();
+    }
+  }, [mp.gameState?.phase]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  useEffect(() => {
+    const gs = mp.gameState;
+    const myI = mp.playerIndex;
+    if (gs?.phase === 'ended' && gs?.winner && myI !== null && gs.winner !== gs.players[myI]?.id) {
+      ach.trackLoss();
     }
   }, [mp.gameState?.phase]); // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -464,6 +479,7 @@ export function LiarsBarGame({ wsUrl, gameId, initialRoomCode, quickPlay: isQuic
     <div className={`grid ${compact ? 'gap-3' : 'gap-6'} lg:grid-cols-[1fr_340px] w-full items-start`}>
       {/* ── Game area ────────────────────────────────────────────────────── */}
       <div className={`relative min-w-0 flex flex-col items-center ${gapMain} max-w-2xl mx-auto w-full`}>
+        <ReconnectBanner mp={mp} />
         <CountdownOverlay countdown={mp.matchCountdown} />
         <WaitingForConnectionOverlay
           show={mp.phase === 'playing' && !mp.roomReady && !mp.isSpectator}

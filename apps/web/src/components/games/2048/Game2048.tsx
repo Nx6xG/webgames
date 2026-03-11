@@ -129,6 +129,14 @@ export function Game2048() {
     if (state.status === 'won') ach.trackWin();
   }, [state.moves, state.status]); // eslint-disable-line react-hooks/exhaustive-deps
 
+  // ── Achievement flag tracking ──────────────────────────────────────────
+  useEffect(() => {
+    if (state.status === 'over' || state.moves === 0) return;
+    const highest = maxTile(state.grid);
+    if (highest >= 2048) ach.trackEvent({ type: 'flag', key: '2048_reach_2048' });
+    if (highest >= 4096) ach.trackEvent({ type: 'flag', key: '2048_reach_4096' });
+  }, [state.grid, state.moves, state.status]); // eslint-disable-line react-hooks/exhaustive-deps
+
   // ── Save score when the game ends ───────────────────────────────────────────
   useEffect(() => {
     if (state.status === 'over' && !savedRef.current) {

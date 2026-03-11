@@ -12,7 +12,10 @@ import { useProgression } from '@/components/providers/ProgressionProvider';
 import { AvatarBubble } from '@/components/ui/AvatarBubble';
 import { ProfileCard } from '@/components/ui/ProfileCard';
 import { CosmeticsStudio } from '@/components/ui/CosmeticsStudio';
+import { ShowcaseEditor } from '@/components/ui/ShowcaseEditor';
 import { getNameColorClass } from '@/lib/nameColors';
+import { trackAchievementEvent } from '@/lib/achievements/engine';
+import { useAchievementToasts } from '@/components/ui/AchievementToasts';
 import { TokenIcon } from '@/components/ui/TokenIcon';
 import { useAuth } from '@/components/providers/AuthProvider';
 import { AuthModal } from '@/components/ui/AuthModal';
@@ -123,8 +126,10 @@ export function ProfileMenu() {
   const { nickname, setNickname, avatarId, nameColor, avatarFrame, cosmetics, updateCosmetics } = useNickname();
   const { lang, setLang, t } = useI18n();
   const { user, role, isSupabaseConfigured, isSyncing, signOut } = useAuth();
+  const achToasts = useAchievementToasts();
   const [open, setOpen] = useState(false);
   const [studioOpen, setStudioOpen] = useState(false);
+  const [showcaseOpen, setShowcaseOpen] = useState(false);
   const [authOpen, setAuthOpen] = useState(false);
   const [progressionOpen, setProgressionOpen] = useState(false);
 
@@ -166,8 +171,8 @@ export function ProfileMenu() {
     setConfirmReset(false);
   }
 
-  useClickOutside(containerRef, closeMenu, open && !studioOpen);
-  useEscape(closeMenu, open && !studioOpen);
+  useClickOutside(containerRef, closeMenu, open && !studioOpen && !showcaseOpen);
+  useEscape(closeMenu, open && !studioOpen && !showcaseOpen);
 
   // Auto-focus nick input when entering edit mode
   useEffect(() => {
@@ -187,6 +192,8 @@ export function ProfileMenu() {
     const clean = sanitizeNickname(nickValue);
     if (clean.length < 2) { setNickError(t('settings.nicknameTooShort')); return; }
     setNickname(clean);
+    const ids = trackAchievementEvent({ type: 'profile_customized' });
+    if (ids.length > 0) achToasts.push(ids);
     setEditingNick(false);
     setNickError(null);
   }
@@ -316,14 +323,21 @@ export function ProfileMenu() {
           {/* ═══ Scrollable body ═══ */}
           <div className="overflow-y-auto overscroll-contain flex-1 min-h-0">
 
-            {/* Customize button */}
-            <div className="px-1 py-0.5">
+            {/* Customize + Showcase buttons */}
+            <div className="px-1 py-0.5 space-y-0.5">
               <button
                 onClick={() => setStudioOpen(true)}
                 className="flex items-center gap-2 px-2.5 py-1.5 rounded-lg hover:bg-zinc-800 transition-colors w-full text-left"
               >
                 <span className="text-sm shrink-0">🎨</span>
                 <span className="text-xs text-zinc-200">{t('studio.customize')}</span>
+              </button>
+              <button
+                onClick={() => setShowcaseOpen(true)}
+                className="flex items-center gap-2 px-2.5 py-1.5 rounded-lg hover:bg-zinc-800 transition-colors w-full text-left"
+              >
+                <span className="text-sm shrink-0">🪟</span>
+                <span className="text-xs text-zinc-200">{t('showcase.edit')}</span>
               </button>
             </div>
 
@@ -542,8 +556,14 @@ export function ProfileMenu() {
         <CosmeticsStudio
           initialCosmetics={cosmetics}
           nickname={nickname}
-          onSave={(newCosmetics) => updateCosmetics(newCosmetics)}
+          onSave={(newCosmetics) => { updateCosmetics(newCosmetics); const ids = trackAchievementEvent({ type: 'profile_customized' }); if (ids.length > 0) achToasts.push(ids); }}
           onClose={() => setStudioOpen(false)}
+        />
+      )}
+
+      {showcaseOpen && (
+        <ShowcaseEditor
+          onClose={() => setShowcaseOpen(false)}
         />
       )}
 

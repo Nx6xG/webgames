@@ -367,6 +367,13 @@ class RoomManager {
     return { type: 'player', room, player };
   }
 
+  /** Cancel eviction timer and remove token session. Used for explicit leaves. */
+  cancelEviction(token: string): void {
+    const session = this.tokenSessions.get(token);
+    if (session?.evictTimer) clearTimeout(session.evictTimer);
+    this.tokenSessions.delete(token);
+  }
+
   // ── Private helpers ─────────────────────────────────────────────────────────
 
   private evictPlayer(token: string, room: Room) {

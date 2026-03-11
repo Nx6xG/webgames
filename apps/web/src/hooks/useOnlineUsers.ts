@@ -4,6 +4,8 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { getWsUrl } from '@/lib/getWsUrl';
 import { io, type Socket } from 'socket.io-client';
 import type { ServerToClientEvents, ClientToServerEvents, OnlineUser, InvitePayload, GameId } from 'shared';
+import { loadProgression } from '@/lib/progression';
+import { loadShowcaseConfig, buildShowcase } from '@/lib/showcase';
 
 type GameSocket = Socket<ServerToClientEvents, ClientToServerEvents>;
 
@@ -45,7 +47,9 @@ export function useOnlineUsers(wsUrl: string, userId?: string) {
 
     socket.on('connect', () => {
       setConnected(true);
-      socket.emit('identify', { playerToken: token, nickname: nick, userId });
+      const prog = loadProgression();
+      const showcase = buildShowcase(loadShowcaseConfig());
+      socket.emit('identify', { playerToken: token, nickname: nick, userId, level: prog.level, showcase });
       socket.emit('presence_update', { activity: { kind: 'home' } });
       socket.emit('get_online_users');
     });

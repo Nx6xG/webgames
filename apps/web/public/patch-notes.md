@@ -1,5 +1,15 @@
 # Patch Notes
 
+## 2026-03-12
+
+- **Profil-Showcase** — Stelle dein Mini-Profil zusammen: Lieblingsspiel, 3 Stats und 3 Achievements, sichtbar für alle in der Online-Liste
+- **Auto-Showcase** — Wer sein Showcase nicht konfiguriert hat, bekommt automatisch die besten Stats angezeigt
+- **Reconnect-System** — Verbesserte Reconnect-Erkennung: Countdown-Banner bei Gegner-Disconnect, Overlay bei eigenem Verbindungsverlust
+- **Achievement-Fix** — Kein doppeltes XP mehr bei Seiten-Neuladen während einer Runde
+- **Curve Fever: Bugfix** — Kritischen Kollisions-Bug behoben, der Spieler zufällig explodieren ließ
+
+---
+
 ## 2026-03-05
 
 - **Kosmetik-System** — Discord-inspiriertes Anpassungssystem: Avatar, Rahmen, Kopf, Portal, Aura, Banner, Kartenfarbe, Namensfarbe und Abzeichen

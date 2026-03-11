@@ -4,8 +4,6 @@ import { useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { useI18n } from '@/components/providers/LanguageProvider';
 import { getCosmeticsBySlot, type CosmeticSlot, type CosmeticDef, type CosmeticRarity } from '@/lib/cosmetics';
-import { isCosmeticUnlocked } from '@/lib/achievements/store';
-import { getAchievementById } from '@/lib/achievements';
 
 // ── Rarity colors ────────────────────────────────────────────────────────────
 
@@ -34,17 +32,11 @@ const RARITY_RING: Record<CosmeticRarity, string> = {
 
 function InfoPanel({
   cosmetic,
-  locked,
   t,
 }: {
   cosmetic: CosmeticDef;
-  locked: boolean;
   t: (key: string) => string;
 }) {
-  const achDef = cosmetic.requiredAchievement
-    ? getAchievementById(cosmetic.requiredAchievement)
-    : null;
-
   return (
     <div className="flex items-center gap-2.5 min-h-[36px]">
       <span className="text-lg shrink-0">{cosmetic.emoji}</span>
@@ -57,15 +49,6 @@ function InfoPanel({
             {t(`cosmetics.rarity.${cosmetic.rarity}`)}
           </span>
         </div>
-        {locked && achDef ? (
-          <p className="text-[10px] text-rose-400/80 truncate">
-            {cosmetic.unlockHintKey ? t(cosmetic.unlockHintKey) : `${t('cosmetic.info.lockedNeed')}${t(achDef.nameKey)}`}
-          </p>
-        ) : achDef ? (
-          <p className="text-[10px] text-emerald-400/80 truncate">
-            {t('cosmetic.info.unlocked')}
-          </p>
-        ) : null}
       </div>
     </div>
   );
@@ -111,12 +94,7 @@ export function CosmeticsPicker({ slot, currentId, onSelect, onClose }: Cosmetic
   // Auto-focus panel
   useEffect(() => { panelRef.current?.focus(); }, []);
 
-  function isUnlocked(c: CosmeticDef): boolean {
-    return !c.requiredAchievement || isCosmeticUnlocked(c.slot, c.id);
-  }
-
   function handleSelect(c: CosmeticDef) {
-    if (!isUnlocked(c)) return;
     onSelect(c.id === currentId ? undefined : c.id);
     onClose();
   }
@@ -183,34 +161,25 @@ export function CosmeticsPicker({ slot, currentId, onSelect, onClose }: Cosmetic
           {/* Cosmetic tiles */}
           <div className="grid grid-cols-4 gap-2">
             {items.map((c) => {
-              const locked = !isUnlocked(c);
               const selected = currentId === c.id;
               return (
                 <button
                   key={c.id}
                   onClick={() => handleSelect(c)}
-                  aria-disabled={locked}
                   onMouseEnter={() => setHoveredCosmetic(c)}
                   onFocus={() => setHoveredCosmetic(c)}
                   onMouseLeave={() => setHoveredCosmetic(null)}
                   onBlur={() => setHoveredCosmetic(null)}
                   className={`relative w-full aspect-square rounded-xl flex flex-col items-center justify-center text-xl transition-all focus:outline-none focus-visible:ring-2 focus-visible:ring-indigo-400 ${
-                    locked
-                      ? 'bg-zinc-800/60 opacity-40 cursor-not-allowed'
-                      : selected
-                        ? `${RARITY_BG[c.rarity]} ring-2 ${RARITY_RING[c.rarity]} shadow-lg`
-                        : `${RARITY_BG[c.rarity]} hover:scale-105`
+                    selected
+                      ? `${RARITY_BG[c.rarity]} ring-2 ${RARITY_RING[c.rarity]} shadow-lg`
+                      : `${RARITY_BG[c.rarity]} hover:scale-105`
                   }`}
                 >
                   <span>{c.emoji}</span>
                   <span className={`text-[8px] mt-0.5 font-semibold uppercase leading-none ${RARITY_COLORS[c.rarity]}`}>
                     {t(`cosmetics.rarity.${c.rarity}`).charAt(0)}
                   </span>
-                  {locked && (
-                    <span className="absolute bottom-0 right-0 w-4 h-4 flex items-center justify-center rounded-tl-md bg-zinc-900/90 text-[9px] leading-none pointer-events-none">
-                      🔒
-                    </span>
-                  )}
                 </button>
               );
             })}
@@ -220,7 +189,7 @@ export function CosmeticsPicker({ slot, currentId, onSelect, onClose }: Cosmetic
         {/* Info panel */}
         <div className="px-4 py-2.5 border-t border-zinc-800 shrink-0 bg-zinc-900/80">
           {infoDef ? (
-            <InfoPanel cosmetic={infoDef} locked={!isUnlocked(infoDef)} t={t} />
+            <InfoPanel cosmetic={infoDef} t={t} />
           ) : (
             <div className="min-h-[36px] flex items-center">
               <p className="text-[10px] text-zinc-600">{t('cosmetic.hoverHint')}</p>

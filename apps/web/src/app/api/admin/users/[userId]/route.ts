@@ -234,6 +234,81 @@ export async function PATCH(
       return NextResponse.json({ ok: true, progression: updated });
     }
 
+    case 'bulk_grant_achievements': {
+      const { achievementIds } = body as { achievementIds: string[] };
+      if (!Array.isArray(achievementIds) || achievementIds.length === 0) {
+        return NextResponse.json({ error: 'Missing achievementIds' }, { status: 400 });
+      }
+      const { data } = await sb.from('user_achievements').select('unlocked').eq('user_id', userId).single();
+      const current: string[] = data?.unlocked ?? [];
+      const merged = [...new Set([...current, ...achievementIds])];
+      await sb.from('user_achievements').upsert({ user_id: userId, unlocked: merged });
+      await auditLog(sb, admin.userId, 'bulk_grant_achievements', userId, {
+        count: achievementIds.length,
+        added: merged.length - current.length,
+      });
+      return NextResponse.json({ ok: true });
+    }
+
+    case 'bulk_revoke_achievements': {
+      const { achievementIds } = body as { achievementIds: string[] };
+      if (!Array.isArray(achievementIds) || achievementIds.length === 0) {
+        return NextResponse.json({ error: 'Missing achievementIds' }, { status: 400 });
+      }
+      const { data } = await sb.from('user_achievements').select('unlocked').eq('user_id', userId).single();
+      const current: string[] = data?.unlocked ?? [];
+      const revokeSet = new Set(achievementIds);
+      const filtered = current.filter((a) => !revokeSet.has(a));
+      await sb.from('user_achievements').upsert({ user_id: userId, unlocked: filtered });
+      await auditLog(sb, admin.userId, 'bulk_revoke_achievements', userId, {
+        count: achievementIds.length,
+        removed: current.length - filtered.length,
+      });
+      return NextResponse.json({ ok: true });
+    }
+
+    case 'bulk_grant_cosmetics': {
+      const { cosmetics } = body as { cosmetics: { slot: string; id: string }[] };
+      if (!Array.isArray(cosmetics) || cosmetics.length === 0) {
+        return NextResponse.json({ error: 'Missing cosmetics' }, { status: 400 });
+      }
+      const { data } = await sb.from('user_unlocked_cosmetics').select('data').eq('user_id', userId).single();
+      const current = (data?.data ?? {}) as Record<string, string[]>;
+      let added = 0;
+      for (const c of cosmetics) {
+        const slotArr = current[c.slot] ?? [];
+        if (!slotArr.includes(c.id)) {
+          current[c.slot] = [...slotArr, c.id];
+          added++;
+        }
+      }
+      await sb.from('user_unlocked_cosmetics').upsert({ user_id: userId, data: current });
+      await auditLog(sb, admin.userId, 'bulk_grant_cosmetics', userId, { count: cosmetics.length, added });
+      return NextResponse.json({ ok: true });
+    }
+
+    case 'bulk_revoke_cosmetics': {
+      const { cosmetics } = body as { cosmetics: { slot: string; id: string }[] };
+      if (!Array.isArray(cosmetics) || cosmetics.length === 0) {
+        return NextResponse.json({ error: 'Missing cosmetics' }, { status: 400 });
+      }
+      const { data } = await sb.from('user_unlocked_cosmetics').select('data').eq('user_id', userId).single();
+      const current = (data?.data ?? {}) as Record<string, string[]>;
+      let removed = 0;
+      for (const c of cosmetics) {
+        const slotArr = current[c.slot] ?? [];
+        const idx = slotArr.indexOf(c.id);
+        if (idx !== -1) {
+          slotArr.splice(idx, 1);
+          current[c.slot] = slotArr;
+          removed++;
+        }
+      }
+      await sb.from('user_unlocked_cosmetics').upsert({ user_id: userId, data: current });
+      await auditLog(sb, admin.userId, 'bulk_revoke_cosmetics', userId, { count: cosmetics.length, removed });
+      return NextResponse.json({ ok: true });
+    }
+
     default:
       return NextResponse.json({ error: 'Unknown action' }, { status: 400 });
   }

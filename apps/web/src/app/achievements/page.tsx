@@ -2,11 +2,10 @@
 
 import { useEffect, useMemo, useRef, useState } from 'react';
 import Link from 'next/link';
-import { ACHIEVEMENTS, CATEGORY_ORDER } from '@/lib/achievements';
-import type { AchievementDefinition, AchievementCategory, AchievementStats } from '@/lib/achievements';
-import { loadStats, loadUnlocked } from '@/lib/achievements/store';
+import { ACHIEVEMENTS, CATEGORY_ORDER, TIER_XP, TIER_TOKENS } from '@/lib/achievements';
+import type { AchievementDefinition, AchievementCategory, AchievementStats, AchievementTier } from '@/lib/achievements';
+import { loadStats, loadUnlocked, unlock } from '@/lib/achievements/store';
 import { getRecentUnlockIds } from '@/components/ui/AchievementToasts';
-import { getAvatarForAchievement } from '@/lib/avatars';
 import { useI18n } from '@/components/providers/LanguageProvider';
 
 // ── Types ─────────────────────────────────────────────────────────────────────
@@ -16,7 +15,6 @@ type FilterStatus = 'all' | 'unlocked' | 'locked';
 interface AchievementVM {
   def: AchievementDefinition;
   unlocked: boolean;
-  isHidden: boolean;
   progress: { current: number; target: number } | null;
   pct: number;
   recentlyUnlocked: boolean;
@@ -46,7 +44,13 @@ export default function AchievementsPage() {
   const [recentIds, setRecentIds] = useState<Set<string>>(new Set());
 
   useEffect(() => {
-    setStats(loadStats());
+    const s = loadStats();
+    // Catch-up: persist unlocks for achievements whose conditions are already met
+    // (e.g. stats earned before new achievement definitions were added)
+    for (const def of ACHIEVEMENTS) {
+      if (def.condition(s)) unlock(def.id);
+    }
+    setStats(s);
     setUnlockedSet(loadUnlocked());
     setRecentIds(getRecentUnlockIds());
   }, []);
@@ -59,7 +63,6 @@ export default function AchievementsPage() {
     if (!stats || !unlockedSet) return [];
     return ACHIEVEMENTS.map((def) => {
       const unlocked = unlockedSet.has(def.id);
-      const isHidden = !!def.hidden && !unlocked;
       const progress = unlocked
         ? (def.getProgress ? { current: def.getProgress(stats).target, target: def.getProgress(stats).target } : null)
         : def.getProgress
@@ -69,7 +72,7 @@ export default function AchievementsPage() {
         ? progress.target > 0 ? Math.round((progress.current / progress.target) * 100) : 0
         : unlocked ? 100 : 0;
       const recentlyUnlocked = unlocked && recentIds.has(def.id);
-      return { def, unlocked, isHidden, progress, pct, recentlyUnlocked };
+      return { def, unlocked, progress, pct, recentlyUnlocked };
     });
   }, [stats, unlockedSet, recentIds]);
 
@@ -220,6 +223,15 @@ export default function AchievementsPage() {
   );
 }
 
+// ── Tier styling ──────────────────────────────────────────────────────────────
+
+const TIER_COLORS: Record<AchievementTier, string> = {
+  easy:   'text-emerald-400 bg-emerald-500/10 border-emerald-500/20',
+  medium: 'text-blue-400 bg-blue-500/10 border-blue-500/20',
+  hard:   'text-orange-400 bg-orange-500/10 border-orange-500/20',
+  epic:   'text-purple-400 bg-purple-500/10 border-purple-500/20',
+};
+
 // ── Achievement Card ──────────────────────────────────────────────────────────
 
 function AchievementCard({ vm }: { vm: AchievementVM }) {
@@ -236,13 +248,12 @@ function AchievementCard({ vm }: { vm: AchievementVM }) {
     return () => el.removeEventListener('animationend', handler);
   }, [vm.recentlyUnlocked]);
 
-  // Hidden masking
-  const icon = vm.isHidden ? '🔒' : vm.def.icon;
-  const name = vm.isHidden ? t('achievements.hidden.title') : t(vm.def.nameKey);
-  const subName = vm.isHidden ? t('achievements.hidden.name') : null;
-  const desc = vm.isHidden ? t('achievements.hidden.desc') : t(vm.def.descKey);
-
-  const avatarDef = getAvatarForAchievement(vm.def.id);
+  const icon = vm.def.icon;
+  const name = t(vm.def.nameKey);
+  const desc = t(vm.def.descKey);
+  const tier = vm.def.tier;
+  const xpReward = TIER_XP[tier];
+  const tokenReward = TIER_TOKENS[tier];
 
   return (
     <div
@@ -257,8 +268,8 @@ function AchievementCard({ vm }: { vm: AchievementVM }) {
         {/* Icon */}
         <div
           className={`text-2xl shrink-0 w-10 h-10 flex items-center justify-center rounded-lg ${
-            vm.unlocked ? 'bg-yellow-500/10' : 'bg-zinc-700/30'
-          } ${!vm.unlocked && !vm.isHidden ? 'grayscale opacity-60' : ''}`}
+            vm.unlocked ? 'bg-yellow-500/10' : 'bg-zinc-700/30 grayscale opacity-60'
+          }`}
         >
           {icon}
         </div>
@@ -266,7 +277,7 @@ function AchievementCard({ vm }: { vm: AchievementVM }) {
         {/* Content */}
         <div className="min-w-0 flex-1">
           <div className="flex items-center gap-2">
-            <p className={`text-sm font-semibold truncate ${vm.unlocked ? 'text-yellow-400' : vm.isHidden ? 'text-zinc-500' : 'text-zinc-300'}`}>
+            <p className={`text-sm font-semibold truncate ${vm.unlocked ? 'text-yellow-400' : 'text-zinc-300'}`}>
               {name}
             </p>
             {vm.unlocked && (
@@ -276,38 +287,36 @@ function AchievementCard({ vm }: { vm: AchievementVM }) {
             )}
           </div>
 
-          {/* Secondary name line for hidden */}
-          {subName && (
-            <p className="text-xs text-zinc-600 italic">{subName}</p>
-          )}
-
           <p className="text-xs text-zinc-500 mt-0.5">{desc}</p>
 
-          {/* Avatar reward badge */}
-          {avatarDef && !vm.isHidden && (
-            <div className="mt-1.5">
-              <span className={`inline-flex items-center gap-1.5 text-[10px] font-medium rounded-md px-2 py-0.5 ${
-                vm.unlocked
-                  ? 'bg-indigo-500/10 text-indigo-400 border border-indigo-500/20'
-                  : 'bg-zinc-700/40 text-zinc-500 border border-zinc-700/60'
-              }`}>
-                <span className="text-sm leading-none">{avatarDef.emoji}</span>
-                {vm.unlocked ? t('achievements.avatarUnlocked') : t('achievements.unlocksAvatar')}
+          {/* Tier + Reward badges */}
+          <div className="flex items-center gap-1.5 mt-2 flex-wrap">
+            <span className={`inline-flex items-center text-[10px] font-semibold uppercase tracking-wider rounded-md px-2 py-0.5 border ${TIER_COLORS[tier]}`}>
+              {t(`achievements.tier.${tier}`)}
+            </span>
+            {xpReward > 0 && (
+              <span className="inline-flex items-center gap-0.5 text-[10px] font-semibold text-amber-400/80 bg-amber-500/10 rounded-md px-2 py-0.5">
+                +{xpReward} XP
               </span>
-            </div>
-          )}
+            )}
+            {tokenReward > 0 && (
+              <span className="inline-flex items-center gap-0.5 text-[10px] font-semibold text-purple-400/80 bg-purple-500/10 rounded-md px-2 py-0.5">
+                +{tokenReward} Token
+              </span>
+            )}
+          </div>
 
-          {/* Unlocked badge (replaces progress) */}
+          {/* Unlocked badge */}
           {vm.unlocked && (
-            <div className="mt-2">
+            <div className="mt-1.5">
               <span className="inline-flex items-center gap-1 text-[10px] font-semibold uppercase tracking-wider text-yellow-500/80 bg-yellow-500/10 rounded-md px-2 py-0.5">
                 {t('achievements.unlocked')}
               </span>
             </div>
           )}
 
-          {/* Progress bar (locked only, not hidden) */}
-          {!vm.unlocked && !vm.isHidden && vm.progress && (
+          {/* Progress bar (locked only) */}
+          {!vm.unlocked && vm.progress && (
             <div className="mt-2">
               <div className="flex items-center gap-2 mb-1">
                 <span className="text-xs text-zinc-500">

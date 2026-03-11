@@ -4,6 +4,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { useI18n } from '@/components/providers/LanguageProvider';
 import { useAchievements } from '@/hooks/useAchievements';
 import { usePersonalScores } from '@/hooks/usePersonalScores';
+import { useVisibilityPause } from '@/hooks/useVisibilityPause';
 import { ScoreboardPanel } from '@/components/ui/ScoreboardPanel';
 import { useAuth } from '@/components/providers/AuthProvider';
 import { useNickname } from '@/components/providers/NicknameProvider';
@@ -100,6 +101,12 @@ export function FlappyGame() {
     if (phase === 'playing') ach.trackPlay();
     if (phase === 'idle') ach.reset();
   }, [phase]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Achievement flag tracking
+  useEffect(() => {
+    if (phase !== 'playing') return;
+    if (score >= 50) ach.trackEvent({ type: 'flag', key: 'flappy_score_50' });
+  }, [score, phase]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Load persisted data
   useEffect(() => {
@@ -326,6 +333,9 @@ export function FlappyGame() {
       setPhase('playing');
     }
   }, []);
+
+  // ── Auto-pause on tab switch ──────────────────────────────────────────
+  useVisibilityPause(phase === 'playing', togglePause);
 
   // ── Input ──────────────────────────────────────────────────────────────
   useEffect(() => {

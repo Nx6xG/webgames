@@ -6,6 +6,7 @@ import { useAchievements } from '@/hooks/useAchievements';
 import { loadStats, saveStats, updateStats } from './stats';
 import type { PongStats } from './stats';
 import * as sfx from './sound';
+import { useVisibilityPause } from '@/hooks/useVisibilityPause';
 
 // ── Constants ────────────────────────────────────────────────────────────────
 
@@ -181,6 +182,9 @@ export function PongGame() {
     };
   }, []);
 
+  // ── Auto-pause on tab switch ──────────────────────────────────────────
+  useVisibilityPause(phase === 'playing', useCallback(() => setPhase('paused'), []));
+
   // ── Achievement tracking ───────────────────────────────────────────────
 
   useEffect(() => {
@@ -194,6 +198,7 @@ export function PongGame() {
     const won = winner === 'player';
     if (won) {
       ach.trackWin();
+      ach.trackEvent({ type: 'flag', key: `pong_win_${diffRef.current}` });
       sfx.winSound();
     } else {
       sfx.loseSound();

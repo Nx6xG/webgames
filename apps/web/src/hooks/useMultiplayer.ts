@@ -18,7 +18,11 @@ import type {
   CosmeticsSelection,
   OnlineUser,
 } from 'shared';
+import { trackAchievementEvent } from '@/lib/achievements/engine';
+import { useAchievementToasts } from '@/components/ui/AchievementToasts';
 import { loadCosmetics, saveCosmetics, mergeCosmetics } from '@/lib/cosmetics';
+import { loadProgression } from '@/lib/progression';
+import { loadShowcaseConfig, buildShowcase } from '@/lib/showcase';
 
 type GameSocket = Socket<ServerToClientEvents, ClientToServerEvents>;
 
@@ -70,6 +74,12 @@ export interface MultiplayerState<TState extends AnyGameState = AnyGameState> {
   onlineUsers: OnlineUser[];
   /** Accumulated game state snapshots for replay (one per game_state event). */
   stateHistory: TState[];
+  /** Non-null when an opponent has disconnected and the grace period is running. */
+  opponentDisconnectedAt: number | null;
+  /** Duration (ms) of the reconnect grace period for the disconnected opponent. */
+  opponentGracePeriodMs: number;
+  /** Player index of the disconnected opponent (for display). */
+  disconnectedPlayerIndex: number | null;
 }
 
 export interface MultiplayerActions {
@@ -124,6 +134,9 @@ function makeLobbyState<TState extends AnyGameState>(): MultiplayerState<TState>
     chatError: null,
     onlineUsers: [],
     stateHistory: [],
+    opponentDisconnectedAt: null,
+    opponentGracePeriodMs: 0,
+    disconnectedPlayerIndex: null,
   };
 }
 
@@ -170,6 +183,11 @@ export function useMultiplayer<TState extends AnyGameState = AnyGameState>(
   const cosmeticsRef = useRef<CosmeticsSelection>({ slots: {} });
   const gameIdRef = useRef<GameId>(gameId);
   const cdTimersRef = useRef<ReturnType<typeof setTimeout>[]>([]);
+  const achToasts = useAchievementToasts();
+  const fireAch = useCallback((ev: Parameters<typeof trackAchievementEvent>[0]) => {
+    const ids = trackAchievementEvent(ev);
+    if (ids.length > 0) achToasts.push(ids);
+  }, [achToasts]);
 
   const [s, set] = useState<MultiplayerState<TState>>(() => makeLobbyState<TState>());
 
@@ -199,7 +217,9 @@ export function useMultiplayer<TState extends AnyGameState = AnyGameState>(
     socket.on('connect', () => {
       const c = cosmeticsRef.current;
       set((prev) => ({ ...prev, connection: 'connected', error: null, myNickname: nicknameRef.current, myAvatarId: c.avatarId || '' }));
-      socket.emit('identify', { playerToken: tokenRef.current, nickname: nicknameRef.current, avatarId: c.avatarId || undefined, nameColor: c.nameColor || undefined, avatarFrame: c.slots?.frame || undefined, cosmetics: c });
+      const prog = loadProgression();
+      const showcase = buildShowcase(loadShowcaseConfig());
+      socket.emit('identify', { playerToken: tokenRef.current, nickname: nicknameRef.current, avatarId: c.avatarId || undefined, nameColor: c.nameColor || undefined, avatarFrame: c.slots?.frame || undefined, cosmetics: c, level: prog.level, showcase });
       socket.emit('presence_update', { activity: { kind: 'game', gameId: gameIdRef.current } });
       socket.emit('get_stats', { gameId: gameIdRef.current });
       socket.emit('get_history');
@@ -220,7 +240,8 @@ export function useMultiplayer<TState extends AnyGameState = AnyGameState>(
     );
 
     // ── Room events ────────────────────────────────────────────────────────
-    socket.on('room_created', ({ roomCode, playerIndex, players, maxPlayers }) =>
+    socket.on('room_created', ({ roomCode, playerIndex, players, maxPlayers }) => {
+      fireAch({ type: 'lobby_hosted' });
       set((prev) => ({
         ...prev,
         roomCode,
@@ -233,8 +254,8 @@ export function useMultiplayer<TState extends AnyGameState = AnyGameState>(
         players,
         roomReady: false,
         error: null,
-      })),
-    );
+      }));
+    });
 
     socket.on('room_joined', ({ roomCode, playerIndex, isSpectator, playerCount, maxPlayers, spectatorCount, state, players }) =>
       set((prev) => ({
@@ -289,9 +310,21 @@ export function useMultiplayer<TState extends AnyGameState = AnyGameState>(
     );
 
     socket.on('player_rejoined', ({ playerCount, players }) =>
-      set((prev) => ({ ...prev, playerCount, players, error: null })),
+      set((prev) => ({ ...prev, playerCount, players, error: null, opponentDisconnectedAt: null, disconnectedPlayerIndex: null })),
     );
 
+    // Transient network disconnect — opponent may reconnect within grace period
+    socket.on('player_disconnected', ({ playerIndex, playerCount, gracePeriodMs }) =>
+      set((prev) => ({
+        ...prev,
+        playerCount,
+        opponentDisconnectedAt: Date.now(),
+        opponentGracePeriodMs: gracePeriodMs,
+        disconnectedPlayerIndex: playerIndex,
+      })),
+    );
+
+    // Permanent leave (explicit leave_room or eviction after grace period expired)
     socket.on('player_left', ({ playerIndex, playerCount }) =>
       set((prev) => {
         const nick = prev.players.find((p) => p.index === playerIndex)?.nickname ?? `Player ${playerIndex + 1}`;
@@ -299,7 +332,7 @@ export function useMultiplayer<TState extends AnyGameState = AnyGameState>(
         // before their game socket could claim the session), stay in waiting phase so the
         // reconnect flow can restore the room without showing a spurious "game ended" screen.
         if (!prev.roomReady) {
-          return { ...prev, playerCount, roomReady: false };
+          return { ...prev, playerCount, roomReady: false, opponentDisconnectedAt: null, disconnectedPlayerIndex: null };
         }
         return {
           ...prev,
@@ -308,6 +341,8 @@ export function useMultiplayer<TState extends AnyGameState = AnyGameState>(
           roomReady: false,
           rematchVotes: 0,
           myVotedRematch: false,
+          opponentDisconnectedAt: null,
+          disconnectedPlayerIndex: null,
           error: `${nick} disconnected.`,
         };
       }),
@@ -520,6 +555,7 @@ export function useMultiplayer<TState extends AnyGameState = AnyGameState>(
       playerToken: tokenRef.current,
       nickname: nicknameRef.current,
     });
+    fireAch({ type: 'public_game_joined' });
   }, []);
 
   const clearError = useCallback(() => set((prev) => ({ ...prev, error: null })), []);
@@ -532,6 +568,7 @@ export function useMultiplayer<TState extends AnyGameState = AnyGameState>(
       roomCode: roomCodeRef.current ?? undefined,
       message: trimmed,
     });
+    fireAch({ type: 'message_sent' });
   }, []);
 
   const emitCosmetics = useCallback(() => {

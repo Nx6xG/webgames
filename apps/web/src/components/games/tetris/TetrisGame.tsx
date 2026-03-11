@@ -21,6 +21,7 @@ import { ScoreboardPanel } from '@/components/ui/ScoreboardPanel';
 import { useAuth } from '@/components/providers/AuthProvider';
 import { useNickname } from '@/components/providers/NicknameProvider';
 import * as sfx from './sound';
+import { useVisibilityPause } from '@/hooks/useVisibilityPause';
 
 // ── Constants ─────────────────────────────────────────────────────────────────
 
@@ -236,6 +237,9 @@ export function TetrisGame() {
       savedRef.current = false;
     }
   }, [state.status, state.score, state.lines, state.level]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // ── Auto-pause on tab switch ────────────────────────────────────────────────
+  useVisibilityPause(state.status === 'running', useCallback(() => dispatch({ type: 'togglePause' }), [dispatch]));
 
   // ── Keyboard ────────────────────────────────────────────────────────────────
 

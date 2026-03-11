@@ -2,7 +2,7 @@ import { createServer, type IncomingMessage, type ServerResponse } from 'node:ht
 import { randomUUID } from 'node:crypto';
 import { Server } from 'socket.io';
 import type { ServerToClientEvents, ClientToServerEvents } from 'shared';
-import { roomManager } from './rooms.js';
+import { roomManager, PLAYER_RECONNECT_MS } from './rooms.js';
 import { engineRegistry } from './engineRegistry.js';
 import { rateLimiter } from './rateLimiter.js';
 import { getStats, getAllStats, recordResult } from './stats.js';
@@ -39,7 +39,10 @@ function roomPlayers(room: Room): RoomPlayerInfo[] {
   return room.players
     .slice()
     .sort((a, b) => a.index - b.index)
-    .map((p) => ({ index: p.index, nickname: p.nickname, avatarId: p.avatarId, nameColor: p.nameColor, avatarFrame: p.avatarFrame, cosmetics: buildCosmetics(p) }));
+    .map((p) => {
+      const pres = presence.get(p.playerToken);
+      return { index: p.index, nickname: p.nickname, avatarId: p.avatarId, nameColor: p.nameColor, avatarFrame: p.avatarFrame, cosmetics: buildCosmetics(p), level: pres?.level };
+    });
 }
 
 const COUNTDOWN_MS = 3000;
@@ -96,7 +99,7 @@ const nicknameMap = new Map<string, string>();
 // ── Presence (online users) ───────────────────────────────────────────────────
 
 /** playerToken → { nickname, avatarId, nameColor, sockets: Set of active socketIds } */
-const presence = new Map<string, { nickname: string; avatarId?: string; nameColor?: string; avatarFrame?: string; banner?: string; cardColor?: string; badges?: string[]; userId?: string; sockets: Set<string> }>();
+const presence = new Map<string, { nickname: string; avatarId?: string; nameColor?: string; avatarFrame?: string; banner?: string; cardColor?: string; badges?: string[]; userId?: string; level?: number; showcase?: import('shared').ProfileShowcase; sockets: Set<string> }>();
 
 /** socketId → current activity for that socket */
 const socketActivity = new Map<string, PresenceActivity>();
@@ -116,7 +119,7 @@ function bestActivity(sockets: Set<string>): PresenceActivity | undefined {
 
 function buildPresenceList() {
   return [...presence.entries()]
-    .map(([playerToken, { nickname, avatarId, nameColor, avatarFrame, banner, cardColor, badges, userId, sockets }]) => ({
+    .map(([playerToken, { nickname, avatarId, nameColor, avatarFrame, banner, cardColor, badges, userId, level, showcase, sockets }]) => ({
       playerToken,
       nickname,
       connections: sockets.size,
@@ -126,6 +129,8 @@ function buildPresenceList() {
       avatarFrame,
       cosmetics: buildCosmetics({ avatarId, nameColor, avatarFrame, banner, cardColor, badges }),
       userId,
+      level,
+      showcase,
     }))
     .sort((a, b) => a.nickname.localeCompare(b.nickname, undefined, { sensitivity: 'base' }));
 }
@@ -533,7 +538,7 @@ io.on('connection', (socket) => {
   // ── identify ──────────────────────────────────────────────────────────────
   // Sent by the client immediately after connecting.
   // Restores the player's seat if their token matches a live session.
-  socket.on('identify', ({ playerToken, nickname, avatarId, nameColor, avatarFrame, cosmetics, userId }) => {
+  socket.on('identify', ({ playerToken, nickname, avatarId, nameColor, avatarFrame, cosmetics, userId, level, showcase }) => {
     identifiedTokens.set(socket.id, playerToken);
     nicknameMap.set(socket.id, nickname);
     // Initialise profile from the stored nickname if no profile exists yet
@@ -547,7 +552,7 @@ io.on('connection', (socket) => {
     // Apply unified cosmetics (overwrites individual fields if present)
     applyCosmetics(profiles.get(playerToken)!, cosmetics);
     const profile = profiles.get(playerToken)!;
-    socket.emit('session_info', { token: playerToken, nickname, avatarId: profile.avatarId, nameColor: profile.nameColor, avatarFrame: profile.avatarFrame, cosmetics: buildCosmetics(profile) });
+    socket.emit('session_info', { token: playerToken, nickname, avatarId: profile.avatarId, nameColor: profile.nameColor, avatarFrame: profile.avatarFrame, cosmetics: buildCosmetics(profile), level });
 
     // Update presence
     const presEntry = presence.get(playerToken);
@@ -561,8 +566,10 @@ io.on('connection', (socket) => {
       if (profile.cardColor !== undefined) presEntry.cardColor = profile.cardColor;
       if (profile.badges !== undefined) presEntry.badges = profile.badges;
       if (userId !== undefined) presEntry.userId = userId;
+      if (level !== undefined) presEntry.level = level;
+      if (showcase !== undefined) presEntry.showcase = showcase;
     } else {
-      presence.set(playerToken, { nickname, avatarId: profile.avatarId, nameColor: profile.nameColor, avatarFrame: profile.avatarFrame, banner: profile.banner, cardColor: profile.cardColor, badges: profile.badges, userId, sockets: new Set([socket.id]) });
+      presence.set(playerToken, { nickname, avatarId: profile.avatarId, nameColor: profile.nameColor, avatarFrame: profile.avatarFrame, banner: profile.banner, cardColor: profile.cardColor, badges: profile.badges, userId, level, showcase, sockets: new Set([socket.id]) });
     }
     broadcastPresence();
 
@@ -1299,7 +1306,7 @@ io.on('connection', (socket) => {
 
   // ── leave_room ────────────────────────────────────────────────────────────
   socket.on('leave_room', ({ roomCode }) => {
-    handleLeave(roomCode.toUpperCase().trim());
+    handleLeave(true);
   });
 
   // ── set_nickname ──────────────────────────────────────────────────────────
@@ -1370,6 +1377,7 @@ io.on('connection', (socket) => {
     const profile = profiles.get(token);
     const nickname = profile?.nickname ?? nicknameMap.get(socket.id) ?? 'Unknown';
 
+    const presEntry = presence.get(token);
     const msg: ChatMessage = {
       id: randomUUID(),
       scope,
@@ -1381,6 +1389,7 @@ io.on('connection', (socket) => {
       nameColor: profile?.nameColor,
       avatarFrame: profile?.avatarFrame,
       cosmetics: profile ? buildCosmetics(profile) : undefined,
+      level: presEntry?.level,
     };
 
     if (scope === 'global') {
@@ -1811,10 +1820,10 @@ io.on('connection', (socket) => {
     }
 
     identifiedTokens.delete(socket.id);
-    handleLeave();
+    handleLeave(false);
   });
 
-  function handleLeave(explicitCode?: string) {
+  function handleLeave(explicit = false) {
     const result = roomManager.removeSocket(socket.id);
     if (!result) return;
 
@@ -1832,12 +1841,24 @@ io.on('connection', (socket) => {
       // Update game-socket presence before broadcasting
       removePresence(room.code, result.player.index, socket.id);
       emitRoomReady(room);
-      // Broadcast immediately; eviction callback will fire again after 30 s if they don't return
-      io.to(room.code).emit('player_left', {
-        playerId: socket.id,
-        playerIndex: result.player.index,
-        playerCount: room.players.length,
-      });
+
+      if (explicit) {
+        // Player intentionally left — cancel their reconnect grace period
+        roomManager.cancelEviction(result.player.playerToken);
+        io.to(room.code).emit('player_left', {
+          playerId: socket.id,
+          playerIndex: result.player.index,
+          playerCount: room.players.length,
+        });
+      } else {
+        // Network disconnect — give them time to reconnect
+        io.to(room.code).emit('player_disconnected', {
+          playerIndex: result.player.index,
+          playerCount: room.players.length,
+          gracePeriodMs: PLAYER_RECONNECT_MS,
+        });
+      }
+
       // Remove from quick-play queue if this was the waiting room and it's now empty
       if (room.players.length === 0) {
         for (const [gid, entry] of quickPlayQueue) {
@@ -1851,7 +1872,7 @@ io.on('connection', (socket) => {
       io.to(room.code).emit('spectator_count_changed', { spectatorCount: room.spectators.size });
     }
 
-    console.log(`[room] ${socket.id} left ${room.code} (${result.type})`);
+    console.log(`[room] ${socket.id} ${explicit ? 'left' : 'disconnected from'} ${room.code} (${result.type})`);
   }
 });
 

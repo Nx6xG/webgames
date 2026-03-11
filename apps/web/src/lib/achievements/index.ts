@@ -1,7 +1,7 @@
 export { trackAchievementEvent, consumeCompletedDaily, consumeLastLevelUps } from './engine';
 export type { AchievementEvent } from './engine';
-export { ACHIEVEMENTS, CATEGORY_ORDER } from './definitions';
-export type { AchievementId, AchievementDefinition, AchievementStats, AchievementProgress, AchievementCategory } from './definitions';
+export { ACHIEVEMENTS, CATEGORY_ORDER, TIER_XP, TIER_TOKENS } from './definitions';
+export type { AchievementId, AchievementDefinition, AchievementStats, AchievementProgress, AchievementCategory, AchievementTier } from './definitions';
 export { loadUnlockedFrames, unlockFrame } from './store';
 
 import { ACHIEVEMENTS as _ACH } from './definitions';

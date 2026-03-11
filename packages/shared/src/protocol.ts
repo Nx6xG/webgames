@@ -59,6 +59,25 @@ export type PresenceActivity =
   | { kind: 'game'; gameId: GameId }
   | { kind: 'room'; gameId: GameId; roomCode: string; isPublic?: boolean };
 
+// ─── Profile Showcase ─────────────────────────────────────────────────────────
+
+/** A single stat line for the profile showcase (pre-computed client-side). */
+export interface ShowcaseStat {
+  /** e.g. 'chess', 'total' */
+  gameId: string;
+  /** Stat type key, e.g. 'winRate', 'wins', 'bestScore' */
+  statKey: string;
+  /** Pre-computed display value, e.g. '95%', '150', '42' */
+  value: string;
+}
+
+/** User-configured profile showcase, transmitted via presence. */
+export interface ProfileShowcase {
+  favoriteGameId?: string;
+  stats?: ShowcaseStat[];           // max 3
+  achievements?: string[];          // max 3 achievement IDs
+}
+
 /** A user currently online (at least one active socket for their token). */
 export interface OnlineUser {
   playerToken: string;
@@ -73,6 +92,10 @@ export interface OnlineUser {
   cosmetics?: CosmeticsSelection;
   /** Supabase account id (present only for logged-in users). */
   userId?: string;
+  /** Player level from the progression system. */
+  level?: number;
+  /** User-curated profile showcase (favorite game, stats, achievements). */
+  showcase?: ProfileShowcase;
 }
 
 // ─── Nickname / players ───────────────────────────────────────────────────────
@@ -85,6 +108,8 @@ export interface RoomPlayerInfo {
   nameColor?: string;
   avatarFrame?: string;
   cosmetics?: CosmeticsSelection;
+  /** Player level from the progression system. */
+  level?: number;
 }
 
 /** A completed match stored in personal history */
@@ -143,6 +168,8 @@ export interface ChatMessage {
   nameColor?: string;
   avatarFrame?: string;
   cosmetics?: CosmeticsSelection;
+  /** Player level from the progression system. */
+  level?: number;
 }
 
 // ─── Stats ───────────────────────────────────────────────────────────────────
@@ -298,6 +325,13 @@ export interface ServerToClientEvents {
     players: RoomPlayerInfo[];
   }) => void;
 
+  /** Broadcast when a player's network connection drops (grace period starts) */
+  player_disconnected: (data: {
+    playerIndex: number;
+    playerCount: number;
+    gracePeriodMs: number;
+  }) => void;
+
   /** Broadcast when a player's reconnect window expires or they explicitly leave */
   player_left: (data: {
     playerId: string;
@@ -343,13 +377,13 @@ export interface ServerToClientEvents {
   match_starting: (data: { startsInMs: number }) => void;
 
   /** Emitted to the socket after identify — echoes back the stable token */
-  session_info: (data: { token: string; nickname: string; avatarId?: string; nameColor?: string; avatarFrame?: string; cosmetics?: CosmeticsSelection }) => void;
+  session_info: (data: { token: string; nickname: string; avatarId?: string; nameColor?: string; avatarFrame?: string; cosmetics?: CosmeticsSelection; level?: number }) => void;
 
   /** Emitted to the sender after a successful set_nickname */
-  nickname_set: (data: { nickname: string; avatarId?: string; nameColor?: string; avatarFrame?: string; cosmetics?: CosmeticsSelection }) => void;
+  nickname_set: (data: { nickname: string; avatarId?: string; nameColor?: string; avatarFrame?: string; cosmetics?: CosmeticsSelection; level?: number }) => void;
 
   /** Broadcast to a room when a player's profile (nickname/avatar/color) changes */
-  room_profile: (data: { playerToken: string; nickname: string; avatarId?: string; nameColor?: string; avatarFrame?: string; cosmetics?: CosmeticsSelection }) => void;
+  room_profile: (data: { playerToken: string; nickname: string; avatarId?: string; nameColor?: string; avatarFrame?: string; cosmetics?: CosmeticsSelection; level?: number }) => void;
 
   /** A single new chat message broadcast to scope members */
   chat_message: (data: { message: ChatMessage }) => void;
@@ -401,7 +435,7 @@ export interface ClientToServerEvents {
    * Sent immediately after connecting. If the server has a live session for
    * this token the socket will receive room_rejoined; otherwise nothing happens.
    */
-  identify: (data: { playerToken: string; nickname: string; avatarId?: string; nameColor?: string; avatarFrame?: string; cosmetics?: CosmeticsSelection; userId?: string }) => void;
+  identify: (data: { playerToken: string; nickname: string; avatarId?: string; nameColor?: string; avatarFrame?: string; cosmetics?: CosmeticsSelection; userId?: string; level?: number; showcase?: ProfileShowcase }) => void;
 
   /** playerToken is stored server-side so the seat can survive a refresh */
   create_room: (data: { playerToken: string; gameId?: GameId; nickname: string; visibility?: RoomVisibility; roomName?: string; rpsConfig?: { mode: string; bestOf?: number }; ldConfig?: { mode: string }; battleshipConfig?: { fleetPreset: string }; cfConfig?: { bestOf?: number }; unoConfig?: { targetScore?: number; stackDraw2?: boolean; stackDraw4?: boolean; allowDraw2OnDraw4?: boolean; allowDraw4OnDraw2?: boolean; playDrawnCardImmediately?: boolean }; maxPlayers?: number }) => void;

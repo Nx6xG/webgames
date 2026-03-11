@@ -1,10 +1,6 @@
 /**
  * Tracks which cosmetics the user has "seen" in the studio,
- * so we can show "NEW" badges on freshly unlocked items.
- *
- * An item is "new" if: it has a requiredAchievement, that achievement
- * is unlocked, AND the item is NOT in the seen list.
- * Free items (no achievement gate) are never "new".
+ * so we can show "NEW" badges on items the user hasn't viewed yet.
  */
 
 const SEEN_KEY = 'wg_cosmetics_seen_v1';

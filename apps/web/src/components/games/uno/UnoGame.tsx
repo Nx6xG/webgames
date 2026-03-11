@@ -12,6 +12,7 @@ import { NicknameEditor } from '@/components/NicknameEditor';
 import { useI18n } from '@/components/providers/LanguageProvider';
 import { useAchievements } from '@/hooks/useAchievements';
 import { SpectatorBanner } from '@/components/ui/SpectatorBanner';
+import { ReconnectBanner } from '@/components/ui/ReconnectBanner';
 
 // ── Compact viewport ────────────────────────────────────────────────────────
 
@@ -611,7 +612,7 @@ export function UnoGame({ wsUrl, gameId, initialRoomCode, quickPlay: isQuickPlay
   const { t } = useI18n();
   const router = useRouter();
   const compact = useCompact();
-  const ach = useAchievements('uno');
+  const ach = useAchievements('uno', mp.roomCode);
 
   // ── Lobby state ───────────────────────────────────────────────────────────
   const [roomVisibility, setRoomVisibility] = useState<RoomVisibility>('private');
@@ -660,6 +661,12 @@ export function UnoGame({ wsUrl, gameId, initialRoomCode, quickPlay: isQuickPlay
   }, [mp.roomCode, isQuickPlay, router]);
 
   // ── Achievement tracking ──────────────────────────────────────────────────
+  const prevPhaseRef = useRef(mp.phase);
+  useEffect(() => {
+    if (prevPhaseRef.current === 'ended' && mp.phase !== 'ended') ach.reset();
+    prevPhaseRef.current = mp.phase;
+  }, [mp.phase, ach]);
+
   useEffect(() => {
     if (mp.phase === 'playing' && !mp.isSpectator && mp.gameState?.status === 'ongoing') ach.trackPlay();
   }, [mp.phase, mp.isSpectator, ach, mp.gameState?.status]);
@@ -682,6 +689,7 @@ export function UnoGame({ wsUrl, gameId, initialRoomCode, quickPlay: isQuickPlay
     const kind = gs?.phase === 'match_end' ? 'match_end' : 'round_end';
     setEndOverlay({ kind, iWon: !!iWon, winnerNick: winnerPlayer?.nickname ?? null, points: gs?.roundPoints ?? 0 });
     if (iWon && kind === 'match_end') ach.trackWin();
+    if (!iWon && kind === 'match_end') ach.trackLoss();
   }, [finishKey, gs, myIdx, ach]);
 
   // ── Chat unread tracking ─────────────────────────────────────────────────
@@ -786,6 +794,7 @@ export function UnoGame({ wsUrl, gameId, initialRoomCode, quickPlay: isQuickPlay
       <div className={`grid ${gapMain} lg:grid-cols-[1fr_340px] w-full items-start`}>
         {/* ── Main game area ──────────────────────────────────────────── */}
         <div className={`relative min-w-0 flex flex-col items-center ${gapMain} max-w-3xl mx-auto w-full`}>
+          <ReconnectBanner mp={mp} />
           <WaitingForConnectionOverlay
             show={mp.phase === 'waiting' && mp.playerCount < (mp.roomMaxPlayers ?? 2) && !mp.gameState}
             label={t('game.status.waiting')}

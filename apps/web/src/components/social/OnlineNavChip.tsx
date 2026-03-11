@@ -163,12 +163,12 @@ export function OnlineNavChip({ wsUrl = '' }: { wsUrl?: string }) {
       setProfileLoading(false);
       return;
     }
-    setViewedProfile(resolveOtherProfile(onlineUser.playerToken, onlineUser.nickname, onlineUser.cosmetics));
+    setViewedProfile(resolveOtherProfile(onlineUser.playerToken, onlineUser.nickname, onlineUser.cosmetics, onlineUser.showcase));
     setProfileUserId(onlineUser.userId);
     if (onlineUser.userId) {
       setProfileLoading(true);
       resolveCloudProfile(onlineUser.userId, onlineUser.nickname, onlineUser.cosmetics)
-        .then((cloud) => setViewedProfile(cloud))
+        .then((cloud) => { cloud.showcase = onlineUser.showcase; setViewedProfile(cloud); })
         .finally(() => setProfileLoading(false));
     }
   }

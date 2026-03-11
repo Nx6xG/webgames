@@ -1,6 +1,5 @@
 import type { AchievementStats } from './definitions';
 import type { CosmeticSlot } from '@/lib/cosmetics';
-import { getCosmeticDef } from '@/lib/cosmetics';
 
 const STATS_KEY = 'webgames_stats_v1';
 const UNLOCKED_KEY = 'webgames_achievements_v1';
@@ -15,9 +14,21 @@ function defaultStats(): AchievementStats {
   return {
     playsTotal: 0,
     winsTotal: 0,
+    lossesTotal: 0,
     invitesTotal: 0,
+    lobbiesHosted: 0,
+    publicGamesJoined: 0,
+    messagesSent: 0,
+    profileCustomized: false,
+    currentWinStreak: 0,
+    maxWinStreak: 0,
+    tttCurrentWinStreak: 0,
+    tttMaxWinStreak: 0,
+    level: 0,
+    totalUnlocked: 0,
     playsByGame: {},
     winsByGame: {},
+    flags: {},
   };
 }
 
@@ -137,16 +148,7 @@ export function saveUnlockedCosmetics(map: UnlockedCosmeticsMap): void {
 
 export function isCosmeticUnlocked(slot: CosmeticSlot, id: string): boolean {
   const map = loadUnlockedCosmetics();
-  if ((map[slot] ?? []).includes(id)) return true;
-  // Fallback: check if the cosmetic's required achievement is unlocked.
-  // This handles cosmetics that aren't granted as explicit achievement rewards
-  // but are still gated by requiredAchievement in the registry.
-  const def = getCosmeticDef(id, slot);
-  if (def?.requiredAchievement) {
-    const unlocked = loadUnlocked();
-    return unlocked.has(def.requiredAchievement);
-  }
-  return false;
+  return (map[slot] ?? []).includes(id);
 }
 
 export function unlockCosmetic(slot: CosmeticSlot, id: string): boolean {

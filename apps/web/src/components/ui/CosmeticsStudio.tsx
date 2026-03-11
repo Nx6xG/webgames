@@ -20,8 +20,6 @@ import {
 import { NAME_COLOR_PALETTE } from '@/lib/nameColors';
 import { AVATAR_REGISTRY } from '@/lib/avatars';
 import { SvgAvatar, hasSvgAvatar } from '@/components/ui/SvgAvatars';
-import { isCosmeticUnlocked, loadUnlocked } from '@/lib/achievements/store';
-import { getAchievementById } from '@/lib/achievements';
 import { isCosmeticSeen, markSlotAllSeen } from '@/lib/cosmeticsSeen';
 import { Tooltip } from '@/components/ui/Tooltip';
 
@@ -68,18 +66,9 @@ export interface CosmeticsStudioProps {
 
 // ── Helpers ─────────────────────────────────────────────────────────────────
 
-function isItemUnlocked(slot: CosmeticSlot, id: string): boolean {
-  const def = getCosmeticDef(id, slot);
-  if (!def?.requiredAchievement) return true;
-  return isCosmeticUnlocked(slot, id);
-}
-
 function hasNewItems(slot: CosmeticSlot): boolean {
   const items = getCosmeticsBySlot(slot);
-  const unlocked = loadUnlocked();
   for (const item of items) {
-    if (!item.requiredAchievement) continue;
-    if (!unlocked.has(item.requiredAchievement)) continue;
     if (!isCosmeticSeen(slot, item.id)) return true;
   }
   return false;
@@ -96,8 +85,7 @@ const RARITY_HOVER_GLOW: Record<CosmeticRarity, string> = {
 
 // ── Info panel for hovered item ─────────────────────────────────────────────
 
-function ItemInfo({ cosmetic, locked, t }: { cosmetic: CosmeticDef; locked: boolean; t: (k: string) => string }) {
-  const achDef = cosmetic.requiredAchievement ? getAchievementById(cosmetic.requiredAchievement) : null;
+function ItemInfo({ cosmetic, t }: { cosmetic: CosmeticDef; t: (k: string) => string }) {
   return (
     <div className="rounded-lg border border-zinc-800 bg-zinc-900/80 p-3 space-y-1.5">
       <div className="flex items-center gap-2">
@@ -112,21 +100,6 @@ function ItemInfo({ cosmetic, locked, t }: { cosmetic: CosmeticDef; locked: bool
       {cosmetic.descriptionKey && (
         <p className="text-[10px] text-zinc-400">{t(cosmetic.descriptionKey)}</p>
       )}
-      {locked && achDef ? (
-        <div className="flex items-center gap-1.5 text-[10px] text-rose-400/80">
-          <svg className="w-3 h-3 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-            <rect x="3" y="11" width="18" height="11" rx="2" /><path d="M7 11V7a5 5 0 0110 0v4" />
-          </svg>
-          <span className="truncate">{cosmetic.unlockHintKey ? t(cosmetic.unlockHintKey) : `${t('cosmetic.info.lockedNeed')}${t(achDef.nameKey)}`}</span>
-        </div>
-      ) : achDef ? (
-        <div className="flex items-center gap-1.5 text-[10px] text-emerald-400/80">
-          <svg className="w-3 h-3 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-            <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
-          </svg>
-          <span>{t('cosmetic.info.unlocked')}</span>
-        </div>
-      ) : null}
     </div>
   );
 }
@@ -169,11 +142,8 @@ export function CosmeticsStudio({ initialCosmetics, nickname, onSave, onClose }:
     if (tab === 'avatar' || tab === 'colors') return;
     const slot = tab as CosmeticSlot;
     const items = getCosmeticsBySlot(slot);
-    const unlocked = loadUnlocked();
-    const unlockedIds = items
-      .filter((c) => c.requiredAchievement && unlocked.has(c.requiredAchievement))
-      .map((c) => c.id);
-    if (unlockedIds.length > 0) markSlotAllSeen(slot, unlockedIds);
+    const ids = items.map((c) => c.id);
+    if (ids.length > 0) markSlotAllSeen(slot, ids);
   }, [tab]);
 
   const updateSlot = useCallback((slot: string, value: string | undefined) => {
@@ -249,7 +219,7 @@ export function CosmeticsStudio({ initialCosmetics, nickname, onSave, onClose }:
           <div className="w-[300px] max-sm:w-full shrink-0 border-r max-sm:border-r-0 max-sm:border-b border-zinc-800/40 p-5 flex flex-col gap-4 overflow-y-auto scrollbar-thin bg-[#08090d]">
             <ProfileCard nickname={nickname} cosmetics={previewCosmetics} />
             {hoveredItem ? (
-              <ItemInfo cosmetic={hoveredItem} locked={!isItemUnlocked(hoveredItem.slot, hoveredItem.id)} t={t} />
+              <ItemInfo cosmetic={hoveredItem} t={t} />
             ) : (
               <div className="text-center py-4">
                 <p className="text-[10px] text-zinc-600">{t('cosmetic.hoverHint')}</p>
@@ -320,25 +290,20 @@ export function CosmeticsStudio({ initialCosmetics, nickname, onSave, onClose }:
 
 function AvatarGrid({ draft, setDraft, onHoverPreview }: { draft: CosmeticsSelection; setDraft: React.Dispatch<React.SetStateAction<CosmeticsSelection>>; onHoverPreview: (avatarId: string | null) => void }) {
   const { t } = useI18n();
-  const unlocked = loadUnlocked();
   return (
     <div className="grid grid-cols-6 max-sm:grid-cols-4 gap-2">
       {AVATAR_REGISTRY.map((av) => {
-        const locked = !!av.requiredAchievement && !unlocked.has(av.requiredAchievement);
         const selected = draft.avatarId === av.id;
         return (
           <button
             key={av.id}
-            onClick={() => !locked && setDraft((p) => ({ ...p, avatarId: av.id }))}
-            aria-disabled={locked}
+            onClick={() => setDraft((p) => ({ ...p, avatarId: av.id }))}
             onMouseEnter={() => onHoverPreview(av.id)}
             onMouseLeave={() => onHoverPreview(null)}
             className={`relative aspect-square rounded-xl flex items-center justify-center text-xl transition-all ${
-              locked
-                ? 'bg-zinc-800/40 opacity-30 cursor-not-allowed grayscale'
-                : selected
-                  ? 'bg-indigo-600/20 ring-2 ring-indigo-500 shadow-lg shadow-indigo-500/10'
-                  : 'bg-zinc-800/60 hover:bg-zinc-800 hover:scale-105'
+              selected
+                ? 'bg-indigo-600/20 ring-2 ring-indigo-500 shadow-lg shadow-indigo-500/10'
+                : 'bg-zinc-800/60 hover:bg-zinc-800 hover:scale-105'
             }`}
             title={t(av.nameKey)}
           >
@@ -407,7 +372,6 @@ function SlotGrid({
   t: (k: string) => string;
 }) {
   const items = getCosmeticsBySlot(slot);
-  const unlocked = loadUnlocked();
 
   // Group items by set (items without set go into 'none' group)
   const setGroups: { setId: CosmeticSet | null; items: CosmeticDef[] }[] = [];
@@ -454,27 +418,20 @@ function SlotGrid({
 
           <div className="grid grid-cols-2 max-sm:grid-cols-1 gap-1.5">
             {group.items.map((c) => {
-              const locked = !!c.requiredAchievement && !unlocked.has(c.requiredAchievement) && !isCosmeticUnlocked(slot, c.id);
               const selected = currentId === c.id;
-              const isNew = !locked && c.requiredAchievement && !isCosmeticSeen(slot, c.id);
+              const isNew = !isCosmeticSeen(slot, c.id);
               return (
                 <button
                   key={c.id}
-                  onClick={() => {
-                    if (locked) return;
-                    onSelect(c.id === currentId ? undefined : c.id);
-                  }}
-                  aria-disabled={locked}
+                  onClick={() => onSelect(c.id === currentId ? undefined : c.id)}
                   onMouseEnter={() => { onHover(c); onHoverPreview(slot, c.id); }}
                   onFocus={() => { onHover(c); onHoverPreview(slot, c.id); }}
                   onMouseLeave={() => { onHover(null); onHoverPreview(slot, undefined); }}
                   onBlur={() => { onHover(null); onHoverPreview(slot, undefined); }}
                   className={`relative w-full rounded-lg px-2.5 py-2 flex items-center gap-2 text-left transition-all ${
-                    locked
-                      ? 'bg-zinc-800/30 opacity-35 cursor-not-allowed'
-                      : selected
-                        ? `${RARITY_BG[c.rarity]} ring-2 ${RARITY_RING[c.rarity]}`
-                        : `bg-zinc-800/40 hover:bg-zinc-800/70 ${RARITY_HOVER_GLOW[c.rarity]}`
+                    selected
+                      ? `${RARITY_BG[c.rarity]} ring-2 ${RARITY_RING[c.rarity]}`
+                      : `bg-zinc-800/40 hover:bg-zinc-800/70 ${RARITY_HOVER_GLOW[c.rarity]}`
                   }`}
                 >
                   <span className="text-base shrink-0">{c.emoji}</span>
@@ -489,11 +446,6 @@ function SlotGrid({
                       </span>
                     </div>
                   </div>
-                  {locked && (
-                    <svg className="w-3 h-3 text-zinc-600 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                      <rect x="3" y="11" width="18" height="11" rx="2" /><path d="M7 11V7a5 5 0 0110 0v4" />
-                    </svg>
-                  )}
                   {isNew && (
                     <span className="absolute top-1 right-1 w-1.5 h-1.5 rounded-full bg-indigo-500" />
                   )}
@@ -522,7 +474,6 @@ function BadgeGrid({
 }) {
   const items = getCosmeticsBySlot('badge');
   const selectedBadges = draft.badges ?? [];
-  const unlocked = loadUnlocked();
 
   const RARITY_ACCENT: Record<CosmeticRarity, string> = {
     common:    'border-zinc-700/50',
@@ -544,32 +495,25 @@ function BadgeGrid({
       </p>
       <div className="grid grid-cols-3 max-sm:grid-cols-2 gap-2.5">
         {items.map((c) => {
-          const locked = !!c.requiredAchievement && !unlocked.has(c.requiredAchievement) && !isCosmeticUnlocked('badge', c.id);
           const selected = selectedBadges.includes(c.id);
-          const isNew = !locked && c.requiredAchievement && !isCosmeticSeen('badge', c.id);
-          const tooltipContent = (
+          const isNew = !isCosmeticSeen('badge', c.id);
+          const tooltipContent = c.descriptionKey ? (
             <div className="space-y-1">
-              {c.descriptionKey && <p className="text-[10px] text-zinc-400">{t(c.descriptionKey)}</p>}
-              {c.unlockHintKey && (
-                <p className="text-[10px] text-zinc-500">{locked ? '🔒 ' : '✓ '}{t(c.unlockHintKey)}</p>
-              )}
+              <p className="text-[10px] text-zinc-400">{t(c.descriptionKey)}</p>
             </div>
-          );
+          ) : null;
           return (
             <Tooltip key={c.id} content={tooltipContent} placement="bottom">
               <button
-                onClick={() => !locked && toggleBadge(c.id)}
-                aria-disabled={locked}
+                onClick={() => toggleBadge(c.id)}
                 onMouseEnter={() => { onHover(c); onHoverPreview(c.id); }}
                 onFocus={() => { onHover(c); onHoverPreview(c.id); }}
                 onMouseLeave={() => { onHover(null); onHoverPreview(null); }}
                 onBlur={() => { onHover(null); onHoverPreview(null); }}
                 className={`relative flex items-center gap-2.5 px-3 py-2.5 rounded-lg border transition-all ${
-                  locked
-                    ? 'border-zinc-800/40 opacity-30 cursor-not-allowed grayscale'
-                    : selected
-                      ? `ring-2 ${RARITY_SELECTED[c.rarity]} border-transparent`
-                      : `${RARITY_ACCENT[c.rarity]} bg-zinc-900/40 hover:bg-zinc-800/60 hover:border-zinc-600/50`
+                  selected
+                    ? `ring-2 ${RARITY_SELECTED[c.rarity]} border-transparent`
+                    : `${RARITY_ACCENT[c.rarity]} bg-zinc-900/40 hover:bg-zinc-800/60 hover:border-zinc-600/50`
                 }`}
               >
                 {/* Badge icon container */}
@@ -591,13 +535,6 @@ function BadgeGrid({
                 {selected && (
                   <span className="absolute top-1 right-1 w-4 h-4 flex items-center justify-center rounded-full bg-indigo-600 text-[8px] text-white font-bold leading-none ring-1 ring-zinc-900">
                     ✓
-                  </span>
-                )}
-                {locked && (
-                  <span className="absolute inset-0 flex items-center justify-center rounded-lg">
-                    <svg className="w-4 h-4 text-zinc-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                      <rect x="3" y="11" width="18" height="11" rx="2" /><path d="M7 11V7a5 5 0 0110 0v4" />
-                    </svg>
                   </span>
                 )}
               </button>

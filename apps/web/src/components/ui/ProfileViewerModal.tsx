@@ -11,6 +11,8 @@ import { BadgeIcon } from '@/components/ui/BadgeIcon';
 import { getNameColorClass } from '@/lib/nameColors';
 import { useI18n } from '@/components/providers/LanguageProvider';
 import { isFriend, addFriend, removeFriend } from '@/lib/friends';
+import { getAchievementById } from '@/lib/achievements';
+import type { ProfileShowcase, ShowcaseStat } from 'shared';
 
 export interface ProfileViewerModalProps {
   profile: ProfileData;
@@ -59,7 +61,7 @@ export function ProfileViewerModal({ profile, onClose, loading, userId }: Profil
 
   if (!mounted) return null;
 
-  const { cosmetics, stats } = profile;
+  const { cosmetics, stats, showcase } = profile;
   const banner = cosmetics.slots?.banner;
   const bannerClass = `wg-banner-${banner || 'default'}`;
   const cardColorId = cosmetics.slots?.cardColor;
@@ -79,7 +81,7 @@ export function ProfileViewerModal({ profile, onClose, loading, userId }: Profil
       <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" />
 
       <div className="relative w-[min(92vw,420px)] rounded-xl border border-zinc-700 bg-zinc-900 shadow-2xl overflow-hidden max-sm:w-full max-sm:mx-3">
-        {/* Close button — pinned to top-right of the modal card */}
+        {/* Close button */}
         <button
           onClick={onClose}
           aria-label="Close profile"
@@ -140,7 +142,7 @@ export function ProfileViewerModal({ profile, onClose, loading, userId }: Profil
             </div>
           )}
 
-          {/* Stats */}
+          {/* Full stats (self / cloud user) */}
           {!loading && stats ? (
             <div className="mt-4 space-y-3">
               <div className="grid grid-cols-3 gap-2">
@@ -150,13 +152,7 @@ export function ProfileViewerModal({ profile, onClose, loading, userId }: Profil
               </div>
 
               {stats.favoriteGameId && (
-                <div className="flex items-center gap-2 px-3 py-2 rounded-lg bg-zinc-800/50 border border-zinc-700/30">
-                  <span className="text-base">{GAME_EMOJI[stats.favoriteGameId] ?? '🎮'}</span>
-                  <div>
-                    <p className="text-[10px] text-zinc-500">{t('profilePage.favoriteGame')}</p>
-                    <p className="text-xs font-semibold text-zinc-200">{t(`game.name.${stats.favoriteGameId}`)}</p>
-                  </div>
-                </div>
+                <FavoriteGameRow gameId={stats.favoriteGameId} t={t} />
               )}
 
               {stats.achievementsTotal > 0 && (
@@ -173,7 +169,15 @@ export function ProfileViewerModal({ profile, onClose, loading, userId }: Profil
                   </div>
                 </div>
               )}
+
+              {/* Showcase achievements (even for users with full stats) */}
+              {showcase?.achievements && showcase.achievements.length > 0 && (
+                <ShowcaseAchievements ids={showcase.achievements} t={t} />
+              )}
             </div>
+          ) : !loading && showcase && hasShowcaseContent(showcase) ? (
+            /* Showcase for users without full stats */
+            <ShowcaseSection showcase={showcase} t={t} />
           ) : !loading ? (
             <div className="mt-4 px-3 py-4 rounded-lg bg-zinc-800/30 border border-zinc-700/30 text-center">
               <p className="text-xs text-zinc-500">{t('profileViewer.noStats')}</p>
@@ -202,11 +206,84 @@ export function ProfileViewerModal({ profile, onClose, loading, userId }: Profil
   return createPortal(modal, document.body);
 }
 
+// ── Subcomponents ─────────────────────────────────────────────────────────────
+
 function MiniStat({ label, value }: { label: string; value: string | number }) {
   return (
     <div className="rounded-lg bg-zinc-800/50 border border-zinc-700/30 px-2.5 py-2 text-center">
       <p className="text-[9px] text-zinc-500 uppercase tracking-wider">{label}</p>
       <p className="text-sm font-bold text-zinc-100 mt-0.5">{value}</p>
+    </div>
+  );
+}
+
+function FavoriteGameRow({ gameId, t }: { gameId: string; t: (k: string) => string }) {
+  return (
+    <div className="flex items-center gap-2 px-3 py-2 rounded-lg bg-zinc-800/50 border border-zinc-700/30">
+      <span className="text-base">{GAME_EMOJI[gameId] ?? '🎮'}</span>
+      <div>
+        <p className="text-[10px] text-zinc-500">{t('profilePage.favoriteGame')}</p>
+        <p className="text-xs font-semibold text-zinc-200">{t(`game.name.${gameId}`)}</p>
+      </div>
+    </div>
+  );
+}
+
+function hasShowcaseContent(sc: ProfileShowcase): boolean {
+  return !!(sc.favoriteGameId || (sc.stats && sc.stats.length > 0) || (sc.achievements && sc.achievements.length > 0));
+}
+
+/** Stat type label (translated). */
+function statLabel(statKey: string, gameId: string, t: (k: string) => string): string {
+  const gameName = gameId === 'total' ? t('showcase.total') : t(`game.name.${gameId}`);
+  const typeLabel = t(`showcase.stat.${statKey}`);
+  return `${gameName} · ${typeLabel}`;
+}
+
+function ShowcaseSection({ showcase, t }: { showcase: ProfileShowcase; t: (k: string) => string }) {
+  return (
+    <div className="mt-4 space-y-3">
+      {/* Favorite game */}
+      {showcase.favoriteGameId && (
+        <FavoriteGameRow gameId={showcase.favoriteGameId} t={t} />
+      )}
+
+      {/* Featured stats */}
+      {showcase.stats && showcase.stats.length > 0 && (
+        <div className={`grid gap-2 ${showcase.stats.length === 1 ? 'grid-cols-1' : showcase.stats.length === 2 ? 'grid-cols-2' : 'grid-cols-3'}`}>
+          {showcase.stats.map((ss, i) => (
+            <MiniStat key={i} label={statLabel(ss.statKey, ss.gameId, t)} value={ss.value} />
+          ))}
+        </div>
+      )}
+
+      {/* Featured achievements */}
+      {showcase.achievements && showcase.achievements.length > 0 && (
+        <ShowcaseAchievements ids={showcase.achievements} t={t} />
+      )}
+    </div>
+  );
+}
+
+function ShowcaseAchievements({ ids, t }: { ids: string[]; t: (k: string) => string }) {
+  const defs = ids.map((id) => getAchievementById(id)).filter(Boolean);
+  if (defs.length === 0) return null;
+
+  return (
+    <div className="px-3 py-2.5 rounded-lg bg-zinc-800/50 border border-zinc-700/30">
+      <p className="text-[10px] text-zinc-500 uppercase tracking-wider font-semibold mb-2">{t('profilePage.achievements')}</p>
+      <div className="flex gap-2">
+        {defs.map((def) => (
+          <div
+            key={def!.id}
+            className="flex items-center gap-1.5 px-2 py-1 rounded-md bg-zinc-700/30 border border-zinc-600/20"
+            title={t(def!.nameKey)}
+          >
+            <span className="text-sm">{def!.icon}</span>
+            <span className="text-[11px] font-medium text-zinc-300 truncate max-w-[80px]">{t(def!.nameKey)}</span>
+          </div>
+        ))}
+      </div>
     </div>
   );
 }

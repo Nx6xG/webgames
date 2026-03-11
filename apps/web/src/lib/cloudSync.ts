@@ -78,9 +78,21 @@ export async function fetchCloudStats(
   return {
     playsTotal: data.plays_total ?? 0,
     winsTotal: data.wins_total ?? 0,
+    lossesTotal: (data as Record<string, unknown>).losses_total as number ?? 0,
     invitesTotal: data.invites_total ?? 0,
+    lobbiesHosted: (data as Record<string, unknown>).lobbies_hosted as number ?? 0,
+    publicGamesJoined: (data as Record<string, unknown>).public_games_joined as number ?? 0,
+    messagesSent: (data as Record<string, unknown>).messages_sent as number ?? 0,
+    profileCustomized: (data as Record<string, unknown>).profile_customized as boolean ?? false,
+    currentWinStreak: (data as Record<string, unknown>).current_win_streak as number ?? 0,
+    maxWinStreak: (data as Record<string, unknown>).max_win_streak as number ?? 0,
+    tttCurrentWinStreak: (data as Record<string, unknown>).ttt_current_win_streak as number ?? 0,
+    tttMaxWinStreak: (data as Record<string, unknown>).ttt_max_win_streak as number ?? 0,
+    level: (data as Record<string, unknown>).level as number ?? 0,
+    totalUnlocked: (data as Record<string, unknown>).total_unlocked as number ?? 0,
     playsByGame: (data.plays_by_game as Record<string, number>) ?? {},
     winsByGame: (data.wins_by_game as Record<string, number>) ?? {},
+    flags: (data as Record<string, unknown>).flags as Record<string, boolean> ?? {},
   };
 }
 
@@ -301,7 +313,18 @@ export async function runInitialSync(
   const mergedStats: AchievementStats = {
     playsTotal: Math.max(localStats.playsTotal, cloudStats?.playsTotal ?? 0),
     winsTotal: Math.max(localStats.winsTotal, cloudStats?.winsTotal ?? 0),
+    lossesTotal: Math.max(localStats.lossesTotal, cloudStats?.lossesTotal ?? 0),
     invitesTotal: Math.max(localStats.invitesTotal, cloudStats?.invitesTotal ?? 0),
+    lobbiesHosted: Math.max(localStats.lobbiesHosted, cloudStats?.lobbiesHosted ?? 0),
+    publicGamesJoined: Math.max(localStats.publicGamesJoined, cloudStats?.publicGamesJoined ?? 0),
+    messagesSent: Math.max(localStats.messagesSent, cloudStats?.messagesSent ?? 0),
+    profileCustomized: localStats.profileCustomized || (cloudStats?.profileCustomized ?? false),
+    currentWinStreak: Math.max(localStats.currentWinStreak, cloudStats?.currentWinStreak ?? 0),
+    maxWinStreak: Math.max(localStats.maxWinStreak, cloudStats?.maxWinStreak ?? 0),
+    tttCurrentWinStreak: Math.max(localStats.tttCurrentWinStreak, cloudStats?.tttCurrentWinStreak ?? 0),
+    tttMaxWinStreak: Math.max(localStats.tttMaxWinStreak, cloudStats?.tttMaxWinStreak ?? 0),
+    level: Math.max(localStats.level, cloudStats?.level ?? 0),
+    totalUnlocked: Math.max(localStats.totalUnlocked, cloudStats?.totalUnlocked ?? 0),
     playsByGame: mergeMaxRecord(
       localStats.playsByGame,
       cloudStats?.playsByGame ?? {},
@@ -310,6 +333,7 @@ export async function runInitialSync(
       localStats.winsByGame,
       cloudStats?.winsByGame ?? {},
     ),
+    flags: { ...(cloudStats?.flags ?? {}), ...localStats.flags },
   };
 
   // Merge unlocked cosmetics (union per slot)

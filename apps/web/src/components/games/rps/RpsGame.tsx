@@ -17,6 +17,7 @@ import { getNameColorClass } from '@/lib/nameColors';
 import { RoomInviteButton } from '@/components/social/RoomInviteButton';
 import { useAchievements } from '@/hooks/useAchievements';
 import { SpectatorBanner } from '@/components/ui/SpectatorBanner';
+import { ReconnectBanner } from '@/components/ui/ReconnectBanner';
 
 const PICKS: RpsPick[] = ['rock', 'paper', 'scissors'];
 
@@ -32,7 +33,7 @@ export function RpsGame({ wsUrl, gameId, initialRoomCode, quickPlay: isQuickPlay
   const router = useRouter();
   const mp = useMultiplayer<RpsState>(wsUrl, gameId);
   const { t } = useI18n();
-  const ach = useAchievements('rps');
+  const ach = useAchievements('rps', mp.roomCode);
   const [joinInput, setJoinInput]         = useState(initialRoomCode ?? '');
   const [copied, setCopied]               = useState(false);
   const [roomVisibility, setRoomVisibility] = useState<'private' | 'public'>('private');
@@ -80,6 +81,12 @@ export function RpsGame({ wsUrl, gameId, initialRoomCode, quickPlay: isQuickPlay
   }, [mp.roomMessages.length, mp.globalMessages.length]);
 
   // ── Achievement tracking ──────────────────────────────────────────────────
+  const prevPhaseRef = useRef(mp.phase);
+  useEffect(() => {
+    if (prevPhaseRef.current === 'ended' && mp.phase !== 'ended') ach.reset();
+    prevPhaseRef.current = mp.phase;
+  }, [mp.phase, ach]);
+
   useEffect(() => {
     if (mp.phase === 'playing' && !mp.isSpectator && mp.gameState?.status === 'ongoing') ach.trackPlay();
   }, [mp.phase, mp.gameState?.status]); // eslint-disable-line react-hooks/exhaustive-deps
@@ -88,6 +95,13 @@ export function RpsGame({ wsUrl, gameId, initialRoomCode, quickPlay: isQuickPlay
     const gs = mp.gameState;
     if (gs?.status === 'win' && mp.playerIndex !== null && gs.winner === gs.players[mp.playerIndex]?.id) {
       ach.trackWin();
+    }
+  }, [mp.gameState?.status]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  useEffect(() => {
+    const gs = mp.gameState;
+    if (gs?.status === 'win' && mp.playerIndex !== null && gs.winner !== gs.players[mp.playerIndex]?.id) {
+      ach.trackLoss();
     }
   }, [mp.gameState?.status]); // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -470,6 +484,7 @@ export function RpsGame({ wsUrl, gameId, initialRoomCode, quickPlay: isQuickPlay
           show={mp.phase === 'playing' && !mp.roomReady && !mp.isSpectator}
           label={t('game.ready.waiting')}
         />
+        <ReconnectBanner mp={mp} />
 
         {/* Score + round info */}
         {gs && mp.phase !== 'lobby' && (

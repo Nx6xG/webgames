@@ -185,6 +185,8 @@ export type {
   LeaderboardMode,
   LeaderboardEntry,
   OnlineUser,
+  ShowcaseStat,
+  ProfileShowcase,
   PresenceActivity,
   InvitePayload,
   CosmeticsSlots,

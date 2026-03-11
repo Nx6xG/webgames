@@ -6,8 +6,6 @@ export interface AvatarDef {
   id: string;
   emoji: string;
   category: 'default' | 'achievement';
-  /** Achievement ID required to unlock this avatar (only for category='achievement') */
-  requiredAchievement?: string;
   nameKey: string;
 }
 
@@ -32,7 +30,6 @@ const ACHIEVEMENT_AVATARS: AvatarDef[] = ACHIEVEMENTS.map((ach) => ({
   id: `ach_${ach.id}`,
   emoji: ach.icon,
   category: 'achievement' as const,
-  requiredAchievement: ach.id,
   nameKey: ach.nameKey,
 }));
 
@@ -45,9 +42,9 @@ export function getAvatarById(id: string): AvatarDef | undefined {
   return avatarMap.get(id);
 }
 
-/** Returns the avatar unlocked by a given achievement, or null. */
+/** Returns the avatar associated with a given achievement, or null. */
 export function getAvatarForAchievement(achievementId: string): AvatarDef | null {
-  return AVATAR_REGISTRY.find((a) => a.requiredAchievement === achievementId) ?? null;
+  return AVATAR_REGISTRY.find((a) => a.id === `ach_${achievementId}`) ?? null;
 }
 
 export function getAvatarEmoji(id?: string): string {

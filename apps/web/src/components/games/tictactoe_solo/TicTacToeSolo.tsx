@@ -69,13 +69,18 @@ export function TicTacToeSolo() {
 
   // ── Achievement tracking ──────────────────────────────────────────────────
   useEffect(() => {
-    if (config) ach.trackPlay();
+    if (config) {
+      ach.trackPlay();
+      if (config.mode === 'pvp') ach.trackEvent({ type: 'flag', key: 'ttt_offline_local' });
+      if (config.mode === 'ai') ach.trackEvent({ type: 'flag', key: 'ttt_offline_ai' });
+    }
     if (!config) ach.reset();
   }, [config]); // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
     if (status.kind === 'won' && config?.mode === 'ai' && status.winner === config.humanMark) {
       ach.trackWin();
+      ach.trackEvent({ type: 'flag', key: `ttt_offline_ai_${config.difficulty}_win` });
     }
     if (status.kind === 'won' && config?.mode === 'pvp') {
       ach.trackWin();

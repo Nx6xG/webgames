@@ -17,6 +17,7 @@ import { getNameColorClass } from '@/lib/nameColors';
 import { RoomInviteButton } from '@/components/social/RoomInviteButton';
 import { useAchievements } from '@/hooks/useAchievements';
 import { SpectatorBanner } from '@/components/ui/SpectatorBanner';
+import { ReconnectBanner } from '@/components/ui/ReconnectBanner';
 import { ReplayControls } from '@/components/ui/ReplayControls';
 
 const ROWS = 6;
@@ -32,7 +33,7 @@ export function Connect4Game({ wsUrl, gameId, initialRoomCode, quickPlay: isQuic
   const router = useRouter();
   const mp = useMultiplayer<Connect4State>(wsUrl, gameId);
   const { t } = useI18n();
-  const ach = useAchievements('connect4');
+  const ach = useAchievements('connect4', mp.roomCode);
   const [joinInput, setJoinInput] = useState(initialRoomCode ?? '');
   const [copied, setCopied] = useState(false);
   const [roomVisibility, setRoomVisibility] = useState<'private' | 'public'>('private');
@@ -85,6 +86,12 @@ export function Connect4Game({ wsUrl, gameId, initialRoomCode, quickPlay: isQuic
   }, [mp.roomMessages.length, mp.globalMessages.length]);
 
   // ── Achievement tracking ──────────────────────────────────────────────────
+  const prevPhaseRef = useRef(mp.phase);
+  useEffect(() => {
+    if (prevPhaseRef.current === 'ended' && mp.phase !== 'ended') ach.reset();
+    prevPhaseRef.current = mp.phase;
+  }, [mp.phase, ach]);
+
   useEffect(() => {
     if (mp.phase === 'playing' && !mp.isSpectator && mp.gameState?.status === 'ongoing') ach.trackPlay();
   }, [mp.phase, mp.gameState?.status]); // eslint-disable-line react-hooks/exhaustive-deps
@@ -93,6 +100,13 @@ export function Connect4Game({ wsUrl, gameId, initialRoomCode, quickPlay: isQuic
     const gs = mp.gameState;
     if (gs?.status === 'win' && mp.playerIndex !== null && gs.winner === gs.players[mp.playerIndex]?.id) {
       ach.trackWin();
+    }
+  }, [mp.gameState?.status]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  useEffect(() => {
+    const gs = mp.gameState;
+    if (gs?.status === 'win' && mp.playerIndex !== null && gs.winner !== gs.players[mp.playerIndex]?.id) {
+      ach.trackLoss();
     }
   }, [mp.gameState?.status]); // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -236,6 +250,7 @@ export function Connect4Game({ wsUrl, gameId, initialRoomCode, quickPlay: isQuic
           show={mp.phase === 'playing' && !mp.roomReady && !mp.isSpectator}
           label={t('game.ready.waiting')}
         />
+        <ReconnectBanner mp={mp} />
         <StatusBanner />
 
         <div

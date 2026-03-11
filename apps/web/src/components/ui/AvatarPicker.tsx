@@ -1,27 +1,19 @@
 'use client';
 
-import { useEffect, useRef, useState, useCallback } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { AVATAR_REGISTRY, getAvatarById, getRecentAvatarUnlocks, type AvatarDef } from '@/lib/avatars';
-import { loadUnlocked } from '@/lib/achievements/store';
-import { getAchievementById } from '@/lib/achievements';
 import { useI18n } from '@/components/providers/LanguageProvider';
 
 // ── Info panel helper ────────────────────────────────────────────────────────
 
 function InfoPanel({
   avatar,
-  locked,
   t,
 }: {
   avatar: AvatarDef;
-  locked: boolean;
   t: (key: string) => string;
 }) {
-  const achDef = avatar.requiredAchievement
-    ? getAchievementById(avatar.requiredAchievement)
-    : null;
-
   return (
     <div className="flex items-center gap-2.5 min-h-[36px]">
       <span className="text-lg shrink-0">{avatar.emoji}</span>
@@ -29,19 +21,11 @@ function InfoPanel({
         <p className="text-xs font-semibold text-zinc-200 truncate">
           {t(avatar.nameKey)}
         </p>
-        {avatar.category === 'default' ? (
+        {avatar.category === 'default' && (
           <p className="text-[10px] text-zinc-500 truncate">
             {t('avatar.info.default')}
           </p>
-        ) : locked && achDef ? (
-          <p className="text-[10px] text-rose-400/80 truncate">
-            {t('avatar.info.lockedNeed')}{t(achDef.nameKey)}
-          </p>
-        ) : achDef ? (
-          <p className="text-[10px] text-emerald-400/80 truncate">
-            {t('avatar.info.unlockedBy')}{t(achDef.nameKey)}
-          </p>
-        ) : null}
+        )}
       </div>
     </div>
   );
@@ -59,7 +43,6 @@ export function AvatarPicker({ currentAvatarId, onSelect, onClose }: AvatarPicke
   const { t } = useI18n();
   const backdropRef = useRef<HTMLDivElement>(null);
   const panelRef = useRef<HTMLDivElement>(null);
-  const unlocked = loadUnlocked();
   const [mounted, setMounted] = useState(false);
   const [hoveredAvatar, setHoveredAvatar] = useState<AvatarDef | null>(null);
 
@@ -90,20 +73,13 @@ export function AvatarPicker({ currentAvatarId, onSelect, onClose }: AvatarPicke
   const defaults = AVATAR_REGISTRY.filter((a) => a.category === 'default');
   const achievements = AVATAR_REGISTRY.filter((a) => a.category === 'achievement');
 
-  // Recent avatar unlocks: only achievement avatars that are currently unlocked
+  // Recent avatar unlocks
   const recentAvatarIds = getRecentAvatarUnlocks();
   const recentAvatars = recentAvatarIds
     .map((id) => getAvatarById(id))
-    .filter((a): a is AvatarDef => !!a && a.category === 'achievement' && !!a.requiredAchievement && unlocked.has(a.requiredAchievement));
-  const recentSet = new Set(recentAvatars.map((a) => a.id));
-
-  const isUnlocked = useCallback((a: AvatarDef): boolean => {
-    if (a.category === 'default') return true;
-    return a.requiredAchievement ? unlocked.has(a.requiredAchievement) : true;
-  }, [unlocked]);
+    .filter((a): a is AvatarDef => !!a && a.category === 'achievement');
 
   function handleSelect(a: AvatarDef) {
-    if (!isUnlocked(a)) return;
     onSelect(a.id);
     onClose();
   }
@@ -111,35 +87,25 @@ export function AvatarPicker({ currentAvatarId, onSelect, onClose }: AvatarPicke
   // The avatar shown in the info panel: hovered > current selection
   const currentAvatarDef = AVATAR_REGISTRY.find((a) => a.id === currentAvatarId) ?? AVATAR_REGISTRY[0];
   const infoAvatar = hoveredAvatar ?? currentAvatarDef;
-  const infoLocked = !isUnlocked(infoAvatar);
 
   function renderTile(a: AvatarDef, showNewBadge = false, keyPrefix = '') {
-    const locked = !isUnlocked(a);
     const selected = currentAvatarId === a.id;
-    const badge = showNewBadge && !locked && a.category === 'achievement';
+    const badge = showNewBadge && a.category === 'achievement';
     return (
       <button
         key={keyPrefix + a.id}
         onClick={() => handleSelect(a)}
-        aria-disabled={locked}
         onMouseEnter={() => setHoveredAvatar(a)}
         onFocus={() => setHoveredAvatar(a)}
         onMouseLeave={() => setHoveredAvatar(null)}
         onBlur={() => setHoveredAvatar(null)}
         className={`group relative w-12 h-12 rounded-xl flex items-center justify-center text-xl transition-all focus:outline-none focus-visible:ring-2 focus-visible:ring-indigo-400 ${
-          locked
-            ? 'bg-zinc-800/60 opacity-40 cursor-not-allowed'
-            : selected
-              ? 'bg-indigo-600/30 ring-2 ring-indigo-500 shadow-[0_0_12px_rgba(99,102,241,0.25)]'
-              : 'bg-zinc-800 hover:bg-zinc-700 hover:scale-105'
+          selected
+            ? 'bg-indigo-600/30 ring-2 ring-indigo-500 shadow-[0_0_12px_rgba(99,102,241,0.25)]'
+            : 'bg-zinc-800 hover:bg-zinc-700 hover:scale-105'
         }`}
       >
         {a.emoji}
-        {locked && (
-          <span className="absolute bottom-0 right-0 w-4 h-4 flex items-center justify-center rounded-tl-md bg-zinc-900/90 text-[9px] leading-none pointer-events-none">
-            🔒
-          </span>
-        )}
         {badge && (
           <span className="absolute -top-1.5 -right-1.5 text-[8px] font-bold uppercase leading-none px-1 py-0.5 rounded bg-emerald-600 text-white pointer-events-none">
             {t('avatar.newBadge')}
@@ -221,7 +187,7 @@ export function AvatarPicker({ currentAvatarId, onSelect, onClose }: AvatarPicke
 
         {/* Persistent info panel */}
         <div className="px-4 py-2.5 border-t border-zinc-800 shrink-0 bg-zinc-900/80">
-          <InfoPanel avatar={infoAvatar} locked={infoLocked} t={t} />
+          <InfoPanel avatar={infoAvatar} t={t} />
         </div>
       </div>
     </div>

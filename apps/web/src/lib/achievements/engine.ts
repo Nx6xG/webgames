@@ -1,22 +1,29 @@
-import { ACHIEVEMENTS } from './definitions';
+import { ACHIEVEMENTS, TIER_XP, TIER_TOKENS } from './definitions';
 import type { AchievementId } from './definitions';
-import { loadStats, saveStats, unlock, unlockFrame, unlockCosmetic } from './store';
-import { getDailyChallenges, getTodayStr, incrementProgress } from '@/lib/dailyChallenges';
+import { loadStats, saveStats, unlock, loadUnlocked } from './store';
+import { getDailyChallenges, getTodayStr, incrementProgress, loadProgress as loadDailyProgress } from '@/lib/dailyChallenges';
 import { recordPlay } from '@/lib/playStreak';
 import { recordRecentGame } from '@/lib/recentlyPlayed';
 import type { PlayerProgression, LevelUpResult } from '@/lib/progression';
 import {
   loadProgression, saveProgression, queueLevelUps,
   resetDailyCapIfNeeded, applyDailyCap, applyXp,
-  isGotdBonusAvailable, claimGotdBonus,
+  isGotdBonusAvailable, claimGotdBonus, getGotdId,
   getMatchXpReward, MULTIPLAYER_GAME_IDS, XP_REWARDS,
   incrementWinStreak, checkStreakReset, getStreakBonus,
 } from '@/lib/progression';
 
 export type AchievementEvent =
   | { type: 'game_played'; gameId: string }
-  | { type: 'game_won'; gameId: string }
-  | { type: 'invite_link_copied' };
+  | { type: 'game_won'; gameId: string; meta?: Record<string, unknown> }
+  | { type: 'game_lost'; gameId: string }
+  | { type: 'invite_link_copied' }
+  | { type: 'lobby_hosted' }
+  | { type: 'profile_customized' }
+  | { type: 'public_game_joined' }
+  | { type: 'message_sent' }
+  | { type: 'gotd_played' }
+  | { type: 'flag'; key: string };
 
 /** templateIds of daily challenges completed during this call (consumed by useAchievements). */
 let _lastCompletedDaily: string[] = [];
@@ -53,18 +60,74 @@ export function trackAchievementEvent(
     case 'game_won':
       stats.winsTotal++;
       stats.winsByGame[ev.gameId] = (stats.winsByGame[ev.gameId] ?? 0) + 1;
+      // Win streak (general)
+      stats.currentWinStreak++;
+      if (stats.currentWinStreak > stats.maxWinStreak) stats.maxWinStreak = stats.currentWinStreak;
+      // TTT win streak
+      if (ev.gameId === 'tictactoe') {
+        stats.tttCurrentWinStreak++;
+        if (stats.tttCurrentWinStreak > stats.tttMaxWinStreak) stats.tttMaxWinStreak = stats.tttCurrentWinStreak;
+      }
+      // Game-specific flags from meta
+      if (ev.meta) {
+        if (ev.meta.battleshipFlawless) stats.flags['battleship_flawless'] = true;
+        if (ev.meta.liarsbarHonest) stats.flags['liarsbar_honest'] = true;
+        if (ev.meta.unoWildDraw4Finish) stats.flags['uno_wild_draw4_finish'] = true;
+      }
+      break;
+    case 'game_lost':
+      stats.lossesTotal++;
+      // Reset win streaks
+      stats.currentWinStreak = 0;
+      if (ev.gameId === 'tictactoe') stats.tttCurrentWinStreak = 0;
       break;
     case 'invite_link_copied':
       stats.invitesTotal++;
       break;
+    case 'lobby_hosted':
+      stats.lobbiesHosted++;
+      break;
+    case 'profile_customized':
+      stats.profileCustomized = true;
+      break;
+    case 'public_game_joined':
+      stats.publicGamesJoined++;
+      break;
+    case 'message_sent':
+      stats.messagesSent++;
+      break;
+    case 'gotd_played':
+      stats.flags['gotd_played'] = true;
+      break;
+    case 'flag':
+      stats.flags[ev.key] = true;
+      break;
   }
+
+  // Sync level from progression
+  try {
+    const prog = loadProgression();
+    stats.level = prog.level;
+  } catch { /* ignore */ }
+
+  // Sync totalUnlocked
+  stats.totalUnlocked = loadUnlocked().size;
 
   saveStats(stats);
 
   // ── Play streak + recently played ──────────────────────────────────────────
   if (ev.type === 'game_played') {
-    recordPlay();
+    const streakData = recordPlay();
     recordRecentGame(ev.gameId);
+    // Set gotd_played flag if this is today's Game of the Day
+    if (ev.gameId === getGotdId()) {
+      stats.flags['gotd_played'] = true;
+    }
+    // Set daily_week_streak flag if play streak reaches 7
+    if (streakData.currentStreak >= 7) {
+      stats.flags['daily_week_streak'] = true;
+    }
+    saveStats(stats);
   }
 
   // ── Daily challenge tracking ────────────────────────────────────────────────
@@ -82,6 +145,15 @@ export function trackAchievementEvent(
         if (justCompleted) _lastCompletedDaily.push(ch.templateId);
       }
     }
+    // Check if ALL dailies for today are now complete → set flag
+    if (challenges.length > 0) {
+      const dp = loadDailyProgress(today);
+      const allComplete = challenges.every((ch) => dp.completed.includes(ch.templateId));
+      if (allComplete && !stats.flags['all_dailies_completed']) {
+        stats.flags['all_dailies_completed'] = true;
+        saveStats(stats);
+      }
+    }
   }
 
   // ── Achievement evaluation ──────────────────────────────────────────────────
@@ -90,9 +162,20 @@ export function trackAchievementEvent(
     if (def.condition(stats)) {
       if (unlock(def.id)) {
         newlyUnlocked.push(def.id);
-        if (def.frameReward) unlockFrame(def.frameReward);
-        const rewards = Array.isArray(def.cosmeticReward) ? def.cosmeticReward : def.cosmeticReward ? [def.cosmeticReward] : [];
-        for (const reward of rewards) unlockCosmetic(reward.slot, reward.id);
+      }
+    }
+  }
+
+  // Update totalUnlocked after potential new unlocks (for "all_unlocked" meta-achievement)
+  if (newlyUnlocked.length > 0) {
+    stats.totalUnlocked = loadUnlocked().size;
+    saveStats(stats);
+    // Re-evaluate "all_unlocked" after new unlocks
+    for (const def of ACHIEVEMENTS) {
+      if (def.id === 'general.all_unlocked' && def.condition(stats)) {
+        if (unlock(def.id)) {
+          newlyUnlocked.push(def.id);
+        }
       }
     }
   }
@@ -102,7 +185,7 @@ export function trackAchievementEvent(
   resetDailyCapIfNeeded(prog);
   let totalXp = 0;
 
-  const gameId = ev.type === 'invite_link_copied' ? null : ev.gameId;
+  const gameId = (ev.type === 'game_played' || ev.type === 'game_won' || ev.type === 'game_lost') ? ev.gameId : null;
   const isMultiplayer = gameId != null && MULTIPLAYER_GAME_IDS.has(gameId);
 
   if (ev.type === 'game_won') {
@@ -137,8 +220,17 @@ export function trackAchievementEvent(
   // Uncapped XP for completed daily challenges
   totalXp += _lastCompletedDaily.length * XP_REWARDS.DAILY_CHALLENGE_COMPLETION;
 
-  // Uncapped XP for newly unlocked achievements
-  totalXp += newlyUnlocked.length * XP_REWARDS.ACHIEVEMENT_UNLOCK;
+  // Tier-based XP + tokens for newly unlocked achievements
+  let achTokens = 0;
+  for (const id of newlyUnlocked) {
+    const def = ACHIEVEMENTS.find((a) => a.id === id);
+    if (!def) continue;
+    totalXp += TIER_XP[def.tier];
+    achTokens += TIER_TOKENS[def.tier];
+  }
+  if (achTokens > 0) {
+    prog.tokens += achTokens;
+  }
 
   _lastLevelUps = [];
   if (totalXp > 0) {
@@ -148,6 +240,10 @@ export function trackAchievementEvent(
       _lastLevelUps = levelUps; // in-memory for toast (does not consume localStorage queue)
     }
   }
+
+  // Sync level back to stats after XP application
+  stats.level = prog.level;
+  saveStats(stats);
 
   saveProgression(prog);
   onProgressionUpdated?.(prog);

@@ -248,6 +248,11 @@ export function ChatPanel({
                             >
                               {msg.nickname}
                             </button>
+                            {msg.level != null && msg.level > 0 && (
+                              <span className="inline-flex items-center px-1 py-px rounded text-[8px] font-bold bg-indigo-500/15 text-indigo-400 border border-indigo-500/20 leading-none shrink-0">
+                                {msg.level}
+                              </span>
+                            )}
                             <BadgePills badges={msg.cosmetics?.badges} />
                             <span className="text-[10px] text-zinc-600 shrink-0">{formatTime(msg.ts)}</span>
                           </div>
@@ -344,6 +349,11 @@ export function ChatPanel({
                     >
                       {msg.nickname}
                     </button>
+                    {msg.level != null && msg.level > 0 && (
+                      <span className="inline-flex items-center px-1 py-px rounded text-[8px] font-bold bg-indigo-500/15 text-indigo-400 border border-indigo-500/20 leading-none shrink-0">
+                        {msg.level}
+                      </span>
+                    )}
                     <BadgePills badges={msg.cosmetics?.badges} />
                     <span className="text-[10px] text-zinc-600 shrink-0">{formatTime(msg.ts)}</span>
                   </div>
