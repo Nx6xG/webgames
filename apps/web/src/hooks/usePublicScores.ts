@@ -9,19 +9,16 @@ import { getSupabase } from '@/lib/supabaseClient';
 export function usePublicScores(gameId: string) {
   const [scores, setScores] = useState<PublicScoreEntry[]>([]);
   const [loading, setLoading] = useState(false);
-  const [available, setAvailable] = useState(false);
+  // Check Supabase availability eagerly so the tab switcher renders immediately
+  const [available] = useState(() => !!getSupabase() && !!getScoreConfig(gameId));
   const fetchedRef = useRef<string | null>(null);
 
   const load = useCallback(async () => {
     const sb = getSupabase();
-    if (!sb) {
-      setAvailable(false);
-      return;
-    }
+    if (!sb) return;
     const config = getScoreConfig(gameId);
     if (!config) return;
 
-    setAvailable(true);
     setLoading(true);
     try {
       const entries = await fetchPublicLeaderboard(sb, gameId, config.publicMaxEntries);

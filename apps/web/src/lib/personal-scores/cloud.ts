@@ -26,9 +26,24 @@ function rowToEntry(row: ScoreRow): PublicScoreEntry {
   };
 }
 
+/**
+ * Keep only the best entry per user_id.
+ * The input MUST already be sorted by score (best first).
+ */
+function bestPerUser(rows: ScoreRow[]): ScoreRow[] {
+  const seen = new Set<string>();
+  const result: ScoreRow[] = [];
+  for (const row of rows) {
+    if (seen.has(row.user_id)) continue;
+    seen.add(row.user_id);
+    result.push(row);
+  }
+  return result;
+}
+
 // ── Queries ─────────────────────────────────────────────────────────────────
 
-/** Fetch the public leaderboard for a game. */
+/** Fetch the public leaderboard for a game (best score per user). */
 export async function fetchPublicLeaderboard(
   sb: SupabaseClient,
   gameId: string,
@@ -39,15 +54,24 @@ export async function fetchPublicLeaderboard(
 
   const ascending = config.sortDirection === 'asc';
 
+  // Over-fetch to ensure enough unique users after dedup
   const { data, error } = await sb
     .from('singleplayer_scores')
     .select('*')
     .eq('game_id', gameId)
     .order('score', { ascending })
-    .limit(limit);
+    .limit(limit * 4);
 
-  if (error || !data) return [];
-  return (data as ScoreRow[]).map(rowToEntry);
+  if (error) {
+    if (process.env.NODE_ENV === 'development') {
+      console.warn('[cloud] fetchPublicLeaderboard error:', error.message, error.code);
+    }
+    return [];
+  }
+  if (!data) return [];
+
+  // Deduplicate: keep only the best score per user, then trim to requested limit
+  return bestPerUser(data as ScoreRow[]).slice(0, limit).map(rowToEntry);
 }
 
 /** Submit a score to the public leaderboard. Only for logged-in users. */
@@ -62,13 +86,16 @@ export async function submitPublicScore(
   const config = getScoreConfig(gameId);
   if (!config || !config.shouldStore(score, meta)) return;
 
-  await sb.from('singleplayer_scores').insert({
+  const { error } = await sb.from('singleplayer_scores').insert({
     user_id: userId,
     nickname,
     game_id: gameId,
     score,
     meta: meta ?? null,
   });
+  if (error && process.env.NODE_ENV === 'development') {
+    console.warn('[cloud] submitPublicScore error:', error.message, error.code);
+  }
 }
 
 /** Get the current user's best public entry for a game (for rank highlight). */

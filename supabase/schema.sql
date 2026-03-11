@@ -160,3 +160,4 @@ create policy "Anyone can read scores"
 
 create policy "Users can insert own scores"
   on singleplayer_scores for insert with check (auth.uid() = user_id);
+

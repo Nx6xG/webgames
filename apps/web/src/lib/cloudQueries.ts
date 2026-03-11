@@ -308,6 +308,7 @@ interface SpScoreRow {
 
 /**
  * Fetch the public singleplayer leaderboard for a given gameId.
+ * Returns only the best score per user.
  */
 export async function getSingleplayerLeaderboard(
   gameId: string,
@@ -321,22 +322,32 @@ export async function getSingleplayerLeaderboard(
 
   const ascending = config.sortDirection === 'asc';
 
+  // Over-fetch so we have enough unique users after deduplication
   const { data, error } = await sb
     .from('singleplayer_scores')
     .select('*')
     .eq('game_id', gameId)
     .order('score', { ascending })
-    .limit(limit);
+    .limit(limit * 4);
 
   if (error || !data) return [];
 
-  return (data as SpScoreRow[]).map((row) => ({
-    id: row.id,
-    userId: row.user_id,
-    nickname: row.nickname,
-    gameId: row.game_id,
-    score: row.score,
-    createdAt: row.created_at,
-    meta: row.meta ?? undefined,
-  }));
+  // Deduplicate: keep only the best score per user (first seen = best, since sorted)
+  const seen = new Set<string>();
+  const result: PublicScoreEntry[] = [];
+  for (const row of data as SpScoreRow[]) {
+    if (seen.has(row.user_id)) continue;
+    seen.add(row.user_id);
+    result.push({
+      id: row.id,
+      userId: row.user_id,
+      nickname: row.nickname,
+      gameId: row.game_id,
+      score: row.score,
+      createdAt: row.created_at,
+      meta: row.meta ?? undefined,
+    });
+    if (result.length >= limit) break;
+  }
+  return result;
 }

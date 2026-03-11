@@ -310,7 +310,16 @@ function canChat(token: string): boolean {
 // ─────────────────────────────────────────────────────────────────────────────
 
 const PORT = Number(process.env.PORT ?? 3001);
-const WS_CORS_ORIGIN = process.env.WS_CORS_ORIGIN ?? process.env.WEB_ORIGIN ?? 'http://localhost:3000';
+// Support multiple CORS origins via comma-separated WS_CORS_ORIGIN.
+// In production: WS_CORS_ORIGIN="https://games.nico-grim.me"
+// Locally the default is http://localhost:3000.
+// Always allow localhost:3000 so local dev works even when a prod origin is set.
+const RAW_CORS = process.env.WS_CORS_ORIGIN ?? process.env.WEB_ORIGIN ?? 'http://localhost:3000';
+const CORS_ORIGINS = RAW_CORS.split(',').map((s) => s.trim()).filter(Boolean);
+if (!CORS_ORIGINS.includes('http://localhost:3000')) {
+  CORS_ORIGINS.push('http://localhost:3000');
+}
+const WS_CORS_ORIGIN: string | string[] = CORS_ORIGINS.length === 1 ? CORS_ORIGINS[0] : CORS_ORIGINS;
 
 const ADMIN_API_SECRET = process.env.ADMIN_API_SECRET ?? '';
 

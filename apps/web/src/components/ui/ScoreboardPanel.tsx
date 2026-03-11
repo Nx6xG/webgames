@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useI18n } from '@/components/providers/LanguageProvider';
 import { useAuth } from '@/components/providers/AuthProvider';
 import { usePublicScores } from '@/hooks/usePublicScores';
@@ -46,6 +46,18 @@ export function ScoreboardPanel({ gameId, scores, lastInsertId, isNewBest, onCle
   const config = getScoreConfig(gameId);
 
   const [mode, setMode] = useState<LeaderboardMode>('personal');
+  const prevInsertRef = useRef(lastInsertId);
+
+  // Auto-refresh public leaderboard when a new score is submitted
+  useEffect(() => {
+    if (lastInsertId && lastInsertId !== prevInsertRef.current && pub.available) {
+      // Small delay to let the cloud insert settle
+      const timer = setTimeout(() => pub.refresh(), 1500);
+      prevInsertRef.current = lastInsertId;
+      return () => clearTimeout(timer);
+    }
+    prevInsertRef.current = lastInsertId;
+  }, [lastInsertId, pub.available, pub.refresh]);
 
   if (!config) return null;
 
