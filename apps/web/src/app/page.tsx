@@ -8,6 +8,7 @@ import { loadLocalProfile } from '@/lib/localStats';
 import type { GameStat } from '@/lib/localStats';
 import { ACHIEVEMENTS } from '@/lib/achievements/definitions';
 import { loadUnlocked } from '@/lib/achievements/store';
+import { loadScores } from '@/lib/personal-scores/storage';
 
 // ── Singleplayer card metadata ───────────────────────────────────────────────
 const SINGLEPLAYER_GAMES = [
@@ -317,6 +318,13 @@ function SingleplayerCard({
   const [bestScore, setBestScore] = useState<number | null>(null);
 
   useEffect(() => {
+    // Try new personal-scores system first
+    const pbEntries = loadScores(game.id);
+    if (pbEntries.length > 0 && pbEntries[0].score > 0) {
+      setBestScore(pbEntries[0].score);
+      return;
+    }
+    // Fallback: legacy format
     if (!game.bestScoreKey) return;
     try {
       const raw = localStorage.getItem(game.bestScoreKey);
@@ -325,7 +333,7 @@ function SingleplayerCard({
       const best = entries.reduce((m, e) => Math.max(m, e.score), 0);
       if (best > 0) setBestScore(best);
     } catch {}
-  }, [game.bestScoreKey]);
+  }, [game.id, game.bestScoreKey]);
 
   return (
     <div
@@ -337,14 +345,14 @@ function SingleplayerCard({
         {game.emoji}
       </div>
       <h3 className="font-bold text-lg mb-1">{t(game.titleKey)}</h3>
-      <p className={`text-sm leading-relaxed text-zinc-400 ${game.bestScoreKey ? 'mb-3' : 'mb-4'}`}>
+      <p className={`text-sm leading-relaxed text-zinc-400 ${bestScore !== null ? 'mb-3' : 'mb-4'}`}>
         {t(game.descKey)}
       </p>
-      {game.bestScoreKey && (
+      {bestScore !== null && (
         <p className="text-xs text-zinc-500 mb-4">
           Best:{' '}
-          <span className={`font-semibold tabular-nums ${bestScore !== null ? 'text-zinc-300' : 'text-zinc-600'}`}>
-            {bestScore !== null ? bestScore.toLocaleString() : '—'}
+          <span className="font-semibold tabular-nums text-zinc-300">
+            {bestScore.toLocaleString()}
           </span>
         </p>
       )}
@@ -587,6 +595,9 @@ export default function HomePage() {
             <Link href="/rooms" className="text-sm text-zinc-400 hover:text-zinc-100 transition-colors">
               {t('nav.rooms')}
             </Link>
+            <Link href="/leaderboards" className="text-sm text-zinc-400 hover:text-zinc-100 transition-colors">
+              {t('nav.leaderboard')}
+            </Link>
             <div className="w-px h-4 bg-zinc-700/60 shrink-0" aria-hidden />
             <TokenHeaderChip />
             <div className="w-px h-4 bg-zinc-700/60 shrink-0" aria-hidden />
@@ -690,7 +701,7 @@ export default function HomePage() {
         <div className="max-w-5xl mx-auto px-6 flex items-center justify-between text-xs text-zinc-600">
           <span>Web Games</span>
           <a
-            href="https://buymeacoffee.com/nx6xg?status=1"
+            href="https://ko-fi.com/nicogrim"
             target="_blank"
             rel="noopener noreferrer"
             className="text-zinc-500 hover:text-zinc-300 transition-colors flex items-center gap-1.5"

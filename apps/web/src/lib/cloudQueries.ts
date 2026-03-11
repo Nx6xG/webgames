@@ -1,5 +1,7 @@
 import type { CosmeticsSelection } from 'shared';
 import { getSupabase } from '@/lib/supabaseClient';
+import type { PublicScoreEntry } from '@/lib/personal-scores/types';
+import { getScoreConfig } from '@/lib/personal-scores/config';
 
 // ── Types ────────────────────────────────────────────────────────────────────
 
@@ -290,4 +292,51 @@ export async function getPublicProfileByUserId(
     statsByGame,
     badges: cosmetics?.badges?.slice(0, 3) ?? [],
   };
+}
+
+// ── Singleplayer public leaderboard ──────────────────────────────────────────
+
+interface SpScoreRow {
+  id: string;
+  user_id: string;
+  nickname: string;
+  game_id: string;
+  score: number;
+  created_at: string;
+  meta: Record<string, number | string | boolean> | null;
+}
+
+/**
+ * Fetch the public singleplayer leaderboard for a given gameId.
+ */
+export async function getSingleplayerLeaderboard(
+  gameId: string,
+  limit = 25,
+): Promise<PublicScoreEntry[]> {
+  const sb = getSupabase();
+  if (!sb) return [];
+
+  const config = getScoreConfig(gameId);
+  if (!config) return [];
+
+  const ascending = config.sortDirection === 'asc';
+
+  const { data, error } = await sb
+    .from('singleplayer_scores')
+    .select('*')
+    .eq('game_id', gameId)
+    .order('score', { ascending })
+    .limit(limit);
+
+  if (error || !data) return [];
+
+  return (data as SpScoreRow[]).map((row) => ({
+    id: row.id,
+    userId: row.user_id,
+    nickname: row.nickname,
+    gameId: row.game_id,
+    score: row.score,
+    createdAt: row.created_at,
+    meta: row.meta ?? undefined,
+  }));
 }

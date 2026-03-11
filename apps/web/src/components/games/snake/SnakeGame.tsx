@@ -2,10 +2,13 @@
 
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { createInitialState, changeDirection, step, GRID_SIZE, TICK_MS } from './engine';
-import type { Direction, GameState, SnakeHighscoreEntry } from './types';
+import type { Direction, GameState } from './types';
 import { useAchievements } from '@/hooks/useAchievements';
 import { useI18n } from '@/components/providers/LanguageProvider';
-import { HighscoreTable } from '@/components/ui/HighscoreTable';
+import { usePersonalScores } from '@/hooks/usePersonalScores';
+import { ScoreboardPanel } from '@/components/ui/ScoreboardPanel';
+import { useAuth } from '@/components/providers/AuthProvider';
+import { useNickname } from '@/components/providers/NicknameProvider';
 import { useSwipe } from '@/hooks/useSwipe';
 
 // ── Best-score persistence ─────────────────────────────────────────────────────
@@ -19,30 +22,6 @@ function loadBest(): number {
 
 function saveBest(score: number) {
   try { localStorage.setItem(BEST_KEY, String(score)); } catch {}
-}
-
-// ── Highscore persistence ──────────────────────────────────────────────────────
-
-const HS_KEY = 'webgames.snake.highscores';
-
-function loadHighscores(): SnakeHighscoreEntry[] {
-  try {
-    const raw = localStorage.getItem(HS_KEY);
-    return raw ? (JSON.parse(raw) as SnakeHighscoreEntry[]) : [];
-  } catch { return []; }
-}
-
-/** Inserts an entry, re-sorts by score descending, trims to top 50, saves. */
-function addHighscore(entry: SnakeHighscoreEntry): SnakeHighscoreEntry[] {
-  const next = [...loadHighscores(), entry]
-    .sort((a, b) => b.score - a.score)
-    .slice(0, 50);
-  try { localStorage.setItem(HS_KEY, JSON.stringify(next)); } catch {}
-  return next;
-}
-
-function deleteHighscores() {
-  try { localStorage.removeItem(HS_KEY); } catch {}
 }
 
 // ── Phase ──────────────────────────────────────────────────────────────────────
@@ -111,12 +90,13 @@ function FoodVisual() {
 
 export function SnakeGame() {
   const { t } = useI18n();
+  const { user } = useAuth();
+  const { nickname } = useNickname();
   const ach = useAchievements('snake');
+  const pb = usePersonalScores('snake', user ? { userId: user.id, nickname } : undefined);
   const [state, setState]           = useState<GameState>(() => createInitialState(0));
   const [phase, setPhase]           = useState<Phase>('countdown');
   const [cdNum, setCdNum]           = useState(3); // 3 → 2 → 1 → 0 (displayed as "GO")
-  const [highscores, setHighscores] = useState<SnakeHighscoreEntry[]>([]);
-  const [lastRun, setLastRun]       = useState<LastRun | null>(null);
 
   // Stable ref so the keyboard handler (registered once) always reads current phase
   const phaseRef    = useRef<Phase>('countdown');
@@ -132,7 +112,6 @@ export function SnakeGame() {
   useEffect(() => {
     const saved = loadBest();
     if (saved > 0) setState(prev => ({ ...prev, best: Math.max(prev.best, saved) }));
-    setHighscores(loadHighscores());
   }, []);
 
   // ── Persist best ─────────────────────────────────────────────────────────────
@@ -177,22 +156,13 @@ export function SnakeGame() {
     }
   }, [state.status]);
 
-  // ── Save highscore when game ends ─────────────────────────────────────────────
+  // ── Save score when game ends ────────────────────────────────────────────────
   useEffect(() => {
     if (phase !== 'over' || savedRef.current) return;
     savedRef.current = true;
     const durationSec = Math.round((Date.now() - startTimeRef.current) / 1000);
-    const entry: SnakeHighscoreEntry = {
-      id:          Date.now().toString(),
-      score:       state.score,
-      date:        Date.now(),
-      moves:       state.moves,
-      durationSec,
-      grid:        `${GRID_SIZE}x${GRID_SIZE}`,
-    };
-    setLastRun({ score: state.score, moves: state.moves, durationSec });
-    setHighscores(addHighscore(entry));
-  }, [phase, state.score, state.moves]);
+    pb.submit(state.score, { moves: state.moves, durationSec });
+  }, [phase, state.score, state.moves]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // ── Keyboard (registered once; reads phaseRef to avoid stale closures) ────────
   useEffect(() => {
@@ -227,14 +197,6 @@ export function SnakeGame() {
     setCdNum(3);
     setPhase('countdown');
     savedRef.current = false;
-  }, []);
-
-  // ── Clear highscores ──────────────────────────────────────────────────────────
-  const handleClearHighscores = useCallback(() => {
-    if (!confirm(t('game.clearConfirm'))) return;
-    deleteHighscores();
-    setHighscores([]);
-    setLastRun(null);
   }, []);
 
   // ── Build cell map ─────────────────────────────────────────────────────────────
@@ -333,11 +295,13 @@ export function SnakeGame() {
         {t('snake.controls')}
       </p>
 
-      {/* ── Highscores ───────────────────────────────────────────────── */}
-      <HighscoreTable
-        entries={highscores}
-        lastRun={lastRun}
-        onClear={handleClearHighscores}
+      {/* ── Personal best list ───────────────────────────────────────── */}
+      <ScoreboardPanel
+        gameId="snake"
+        scores={pb.scores}
+        lastInsertId={pb.lastInsertId}
+        isNewBest={pb.isNewBest}
+        onClear={pb.clear}
       />
 
     </div>

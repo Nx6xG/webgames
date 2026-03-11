@@ -3,6 +3,10 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useI18n } from '@/components/providers/LanguageProvider';
 import { useAchievements } from '@/hooks/useAchievements';
+import { usePersonalScores } from '@/hooks/usePersonalScores';
+import { ScoreboardPanel } from '@/components/ui/ScoreboardPanel';
+import { useAuth } from '@/components/providers/AuthProvider';
+import { useNickname } from '@/components/providers/NicknameProvider';
 
 // ── Constants ────────────────────────────────────────────────────────────────
 
@@ -31,7 +35,6 @@ const PIPE_MAX_BOTTOM = 60;
 const GROUND_H = 40;
 
 const BEST_KEY = 'webgames.flappy.bestScore';
-const HS_KEY = 'webgames.flappy.highscores';
 
 // ── Types ────────────────────────────────────────────────────────────────────
 
@@ -56,35 +59,14 @@ function saveBest(score: number) {
   localStorage.setItem(BEST_KEY, String(score));
 }
 
-interface HighscoreEntry {
-  id: string;
-  score: number;
-  date: number;
-}
-
-function loadHighscores(): HighscoreEntry[] {
-  if (typeof window === 'undefined') return [];
-  try {
-    const raw = localStorage.getItem(HS_KEY);
-    if (!raw) return [];
-    return JSON.parse(raw) as HighscoreEntry[];
-  } catch { return []; }
-}
-
-function addHighscore(score: number): HighscoreEntry[] {
-  const list = loadHighscores();
-  list.push({ id: Date.now().toString(), score, date: Date.now() });
-  list.sort((a, b) => b.score - a.score);
-  const trimmed = list.slice(0, 10);
-  localStorage.setItem(HS_KEY, JSON.stringify(trimmed));
-  return trimmed;
-}
-
 // ── Component ────────────────────────────────────────────────────────────────
 
 export function FlappyGame() {
   const { t } = useI18n();
+  const { user } = useAuth();
+  const { nickname } = useNickname();
   const ach = useAchievements('flappy');
+  const pb = usePersonalScores('flappy', user ? { userId: user.id, nickname } : undefined);
 
   // ── State ────────────────────────────────────────────────────────────────
   const [phase, setPhase] = useState<Phase>('idle');
@@ -226,7 +208,7 @@ export function FlappyGame() {
       }
       if (!savedRef.current) {
         savedRef.current = true;
-        addHighscore(newScore);
+        pb.submit(newScore);
       }
       return;
     }
@@ -577,6 +559,17 @@ export function FlappyGame() {
         <span>{t('flappy.controls.flap')}</span>
         <span>{t('flappy.controls.pause')}</span>
         <span>{t('flappy.controls.restart')}</span>
+      </div>
+
+      {/* Personal best list */}
+      <div className="shrink-0 w-full flex justify-center pb-4">
+        <ScoreboardPanel
+          gameId="flappy"
+          scores={pb.scores}
+          lastInsertId={pb.lastInsertId}
+          isNewBest={pb.isNewBest}
+          onClear={pb.clear}
+        />
       </div>
     </div>
   );

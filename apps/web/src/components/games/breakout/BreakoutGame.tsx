@@ -3,6 +3,10 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useI18n } from '@/components/providers/LanguageProvider';
 import { useAchievements } from '@/hooks/useAchievements';
+import { usePersonalScores } from '@/hooks/usePersonalScores';
+import { ScoreboardPanel } from '@/components/ui/ScoreboardPanel';
+import { useAuth } from '@/components/providers/AuthProvider';
+import { useNickname } from '@/components/providers/NicknameProvider';
 import { loadStats, saveStats, updateStats } from './stats';
 import type { BreakoutStats } from './stats';
 import * as sfx from './sound';
@@ -366,7 +370,10 @@ function getTotalClassicLevels(): number {
 
 export function BreakoutGame() {
   const { t } = useI18n();
+  const { user } = useAuth();
+  const { nickname } = useNickname();
   const ach = useAchievements('breakout');
+  const pb = usePersonalScores('breakout', user ? { userId: user.id, nickname } : undefined);
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const wrapperRef = useRef<HTMLDivElement>(null);
   const rafRef = useRef<number>(0);
@@ -703,7 +710,8 @@ export function BreakoutGame() {
     });
     ach.trackPlay();
     if (won) { ach.trackWin(); sfx.winSound(); } else { sfx.loseSound(); }
-  }, [ach]);
+    pb.submit(g.score, { level: g.level + 1 });
+  }, [ach]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // ── Keyboard ────────────────────────────────────────────────────────────────
 
@@ -1572,6 +1580,15 @@ export function BreakoutGame() {
           {muted ? t('breakout.unmute') : t('breakout.mute')}
         </button>
       </div>
+
+      {/* Personal best list */}
+      <ScoreboardPanel
+        gameId="breakout"
+        scores={pb.scores}
+        lastInsertId={pb.lastInsertId}
+        isNewBest={pb.isNewBest}
+        onClear={pb.clear}
+      />
     </div>
   );
 }

@@ -15,6 +15,8 @@
 
 import { loadStats, loadUnlocked } from '@/lib/achievements/store';
 import { ACHIEVEMENTS } from '@/lib/achievements/definitions';
+import { loadScores } from '@/lib/personal-scores/storage';
+import { getScoreConfig } from '@/lib/personal-scores/config';
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -59,7 +61,7 @@ export interface LocalProfile {
 
 // ── All known game IDs (display order) ────────────────────────────────────────
 
-export const MULTIPLAYER_GAME_IDS = ['tictactoe', 'connect4', 'rps', 'chess', 'battleship', 'liarsbar'] as const;
+export const MULTIPLAYER_GAME_IDS = ['tictactoe', 'connect4', 'rps', 'chess', 'battleship', 'liarsbar', 'curvefever', 'uno'] as const;
 export const SINGLEPLAYER_GAME_IDS = ['2048', 'snake', 'tetris', 'flappy', 'sudoku', 'tictactoe-solo', 'pong', 'breakout', 'minesweeper'] as const;
 export const ALL_GAME_IDS = [...MULTIPLAYER_GAME_IDS, ...SINGLEPLAYER_GAME_IDS] as const;
 
@@ -70,6 +72,8 @@ export const GAME_EMOJI: Record<string, string> = {
   chess: '♟️',
   battleship: '🚢',
   liarsbar: '🃏',
+  curvefever: '🐍',
+  uno: '🎴',
   '2048': '🔢',
   snake: '🐍',
   tetris: '🧱',
@@ -97,11 +101,31 @@ function parseJSON<T>(raw: string | null): T | null {
   try { return JSON.parse(raw) as T; } catch { return null; }
 }
 
+// ── Personal-scores helper (reads from webgames.pb.* keys) ──────────────────
+
+function loadPbBestScore(gameId: string): number | null {
+  const entries = loadScores(gameId);
+  if (entries.length === 0) return null;
+  const config = getScoreConfig(gameId);
+  if (!config) return entries[0]?.score ?? null;
+  return entries[0]?.score ?? null;
+}
+
+function loadPbTopRuns(gameId: string, extraFn?: (meta?: Record<string, unknown>) => string | undefined): HighscoreRun[] {
+  return loadScores(gameId).map((e) => ({
+    score: e.score,
+    date: e.createdAt,
+    extra: extraFn ? extraFn(e.meta as Record<string, unknown> | undefined) : undefined,
+  }));
+}
+
 // ── Snake ─────────────────────────────────────────────────────────────────────
 
-interface SnakeEntry { score: number; date: number; moves?: number; durationSec?: number }
-
 function loadSnakeData(): { bestScore: number | null; topRuns: HighscoreRun[] } {
+  const pbBest = loadPbBestScore('snake');
+  if (pbBest !== null) return { bestScore: pbBest, topRuns: loadPbTopRuns('snake') };
+  // Fallback: legacy format
+  interface SnakeEntry { score: number; date: number }
   const entries = parseJSON<SnakeEntry[]>(safeGet('webgames.snake.highscores'));
   if (!entries || entries.length === 0) return { bestScore: null, topRuns: [] };
   const sorted = [...entries].sort((a, b) => b.score - a.score);
@@ -113,10 +137,24 @@ function loadSnakeData(): { bestScore: number | null; topRuns: HighscoreRun[] } 
 
 // ── Tetris ────────────────────────────────────────────────────────────────────
 
-interface TetrisRun { score: number; lines: number; level: number; date: number }
-interface TetrisStats { bestScore: number; bestLines: number; gamesPlayed: number; top10: TetrisRun[] }
-
 function loadTetrisData(): { bestScore: number | null; bestLines: number | null; topRuns: HighscoreRun[] } {
+  const pbBest = loadPbBestScore('tetris');
+  if (pbBest !== null) {
+    const runs = loadPbTopRuns('tetris', (m) => {
+      if (!m) return undefined;
+      return `Lvl ${m.level ?? '?'} · ${m.lines ?? '?'} lines`;
+    });
+    // bestLines from pb meta
+    const pbEntries = loadScores('tetris');
+    const bestLines = pbEntries.reduce((mx, e) => {
+      const l = (e.meta?.lines as number) ?? 0;
+      return l > mx ? l : mx;
+    }, 0);
+    return { bestScore: pbBest, bestLines: bestLines > 0 ? bestLines : null, topRuns: runs };
+  }
+  // Fallback: legacy format
+  interface TetrisRun { score: number; lines: number; level: number; date: number }
+  interface TetrisStats { bestScore: number; bestLines: number; gamesPlayed: number; top10: TetrisRun[] }
   const stats = parseJSON<TetrisStats>(safeGet('webgames.tetris.stats'));
   if (!stats) return { bestScore: null, bestLines: null, topRuns: [] };
   return {
@@ -132,9 +170,19 @@ function loadTetrisData(): { bestScore: number | null; bestLines: number | null;
 
 // ── 2048 ──────────────────────────────────────────────────────────────────────
 
-interface Entry2048 { score: number; maxTile: number; date: string; moves?: number; duration?: number }
-
 function load2048Data(): { bestScore: number | null; bestTile: number | null; topRuns: HighscoreRun[] } {
+  const pbBest = loadPbBestScore('2048');
+  if (pbBest !== null) {
+    const pbEntries = loadScores('2048');
+    const bestTile = pbEntries.reduce((mx, e) => {
+      const tile = (e.meta?.maxTile as number) ?? 0;
+      return tile > mx ? tile : mx;
+    }, 0);
+    const runs = loadPbTopRuns('2048', (m) => m?.maxTile ? `${m.maxTile} tile` : undefined);
+    return { bestScore: pbBest, bestTile: bestTile > 0 ? bestTile : null, topRuns: runs };
+  }
+  // Fallback: legacy format
+  interface Entry2048 { score: number; maxTile: number; date: string }
   const entries = parseJSON<Entry2048[]>(safeGet('webgames.2048.highscores'));
   if (!entries || entries.length === 0) return { bestScore: null, bestTile: null, topRuns: [] };
   const sorted = [...entries].sort((a, b) => b.score - a.score);
@@ -151,9 +199,11 @@ function load2048Data(): { bestScore: number | null; bestTile: number | null; to
 
 // ── Flappy ────────────────────────────────────────────────────────────────────
 
-interface FlappyEntry { score: number; date: number }
-
 function loadFlappyData(): { bestScore: number | null; topRuns: HighscoreRun[] } {
+  const pbBest = loadPbBestScore('flappy');
+  if (pbBest !== null) return { bestScore: pbBest, topRuns: loadPbTopRuns('flappy') };
+  // Fallback: legacy format
+  interface FlappyEntry { score: number; date: number }
   const entries = parseJSON<FlappyEntry[]>(safeGet('webgames.flappy.highscores'));
   if (!entries || entries.length === 0) return { bestScore: null, topRuns: [] };
   const sorted = [...entries].sort((a, b) => b.score - a.score);

@@ -499,7 +499,7 @@ export function ProfileMenu() {
             <div className="h-px bg-zinc-800 mx-1.5" />
             <div className="px-1 py-0.5">
               <a
-                href="https://buymeacoffee.com/nx6xg?status=1"
+                href="https://ko-fi.com/nicogrim"
                 target="_blank"
                 rel="noopener noreferrer"
                 className="flex items-center gap-2 px-2.5 py-1.5 rounded-lg hover:bg-zinc-800 transition-colors w-full"

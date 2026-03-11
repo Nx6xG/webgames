@@ -11,11 +11,15 @@ import {
   reducer,
   spawnKind,
 } from './engine';
-import { getStats, recordRun, clearStats } from './stats';
+import { getStats, recordRun } from './stats';
 import type { TetrisStats } from './stats';
 import type { TetrisState, TetrisAction, TetrominoKind, Piece } from './types';
 import { useI18n } from '@/components/providers/LanguageProvider';
 import { useAchievements } from '@/hooks/useAchievements';
+import { usePersonalScores } from '@/hooks/usePersonalScores';
+import { ScoreboardPanel } from '@/components/ui/ScoreboardPanel';
+import { useAuth } from '@/components/providers/AuthProvider';
+import { useNickname } from '@/components/providers/NicknameProvider';
 import * as sfx from './sound';
 
 // ── Constants ─────────────────────────────────────────────────────────────────
@@ -116,11 +120,13 @@ function getGhostPiece(board: TetrisState['board'], active: Piece): Piece {
 
 export function TetrisGame() {
   const { t } = useI18n();
+  const { user } = useAuth();
+  const { nickname } = useNickname();
   const ach = useAchievements('tetris');
+  const pb = usePersonalScores('tetris', user ? { userId: user.id, nickname } : undefined);
   const [state, setState] = useState<TetrisState>(createInitialState);
   const [countdown, setCountdown] = useState(3);
   const [stats, setStats] = useState<TetrisStats | null>(null);
-  const [confirmClear, setConfirmClear] = useState(false);
   const tickRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const countdownRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
@@ -224,11 +230,12 @@ export function TetrisGame() {
         date: Date.now(),
       });
       setStats(updated);
+      pb.submit(state.score, { lines: state.lines, level: state.level });
     }
     if (state.status === 'countdown') {
       savedRef.current = false;
     }
-  }, [state.status, state.score, state.lines, state.level]);
+  }, [state.status, state.score, state.lines, state.level]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // ── Keyboard ────────────────────────────────────────────────────────────────
 
@@ -257,11 +264,6 @@ export function TetrisGame() {
   const handleRestart = useCallback(() => {
     dispatch({ type: 'restart' });
   }, [dispatch]);
-
-  const handleClearStats = useCallback(() => {
-    setStats(clearStats());
-    setConfirmClear(false);
-  }, []);
 
   // ── Derived rendering data ──────────────────────────────────────────────────
 
@@ -455,83 +457,16 @@ export function TetrisGame() {
         </div>
       </div>
 
-      {/* ── Highscores — below the viewport-fitted game area ────── */}
-      {stats && (
-        <div className="w-full max-w-[420px] bg-zinc-900 border border-zinc-800 rounded-lg p-4 space-y-4">
-          {/* Summary row */}
-          <div className="flex gap-4 text-center">
-            <div className="flex-1">
-              <div className="text-[10px] uppercase tracking-widest text-zinc-500">{t('tetris.best')}</div>
-              <div className="text-sm font-bold text-white tabular-nums">{stats.bestScore.toLocaleString()}</div>
-            </div>
-            <div className="flex-1">
-              <div className="text-[10px] uppercase tracking-widest text-zinc-500">{t('tetris.bestLines')}</div>
-              <div className="text-sm font-bold text-white tabular-nums">{stats.bestLines}</div>
-            </div>
-            <div className="flex-1">
-              <div className="text-[10px] uppercase tracking-widest text-zinc-500">{t('tetris.games')}</div>
-              <div className="text-sm font-bold text-white tabular-nums">{stats.gamesPlayed}</div>
-            </div>
-          </div>
-
-          {/* Top 10 table */}
-          <div>
-            <div className="text-[10px] uppercase tracking-widest text-zinc-500 mb-2">{t('tetris.highscores')}</div>
-            {stats.top10.length === 0 ? (
-              <p className="text-xs text-zinc-600">{t('tetris.emptyHighscores')}</p>
-            ) : (
-              <table className="w-full text-xs">
-                <thead>
-                  <tr className="text-zinc-500 text-left">
-                    <th className="pr-2 font-medium">#</th>
-                    <th className="pr-2 font-medium">{t('game.score')}</th>
-                    <th className="pr-2 font-medium">{t('tetris.lines')}</th>
-                    <th className="font-medium">{t('tetris.level')}</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {stats.top10.map((run, i) => (
-                    <tr key={i} className="text-zinc-300">
-                      <td className="pr-2 tabular-nums text-zinc-500">{i + 1}</td>
-                      <td className="pr-2 tabular-nums font-semibold">{run.score.toLocaleString()}</td>
-                      <td className="pr-2 tabular-nums">{run.lines}</td>
-                      <td className="tabular-nums">{run.level}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            )}
-          </div>
-
-          {/* Clear stats */}
-          <div className="flex justify-end">
-            {confirmClear ? (
-              <div className="flex items-center gap-2">
-                <span className="text-xs text-zinc-400">{t('tetris.clearStatsConfirm')}</span>
-                <button
-                  onClick={handleClearStats}
-                  className="text-xs px-2 py-1 bg-red-600 hover:bg-red-500 text-white rounded transition-colors"
-                >
-                  {t('tetris.clearStats')}
-                </button>
-                <button
-                  onClick={() => setConfirmClear(false)}
-                  className="text-xs px-2 py-1 bg-zinc-700 hover:bg-zinc-600 text-zinc-300 rounded transition-colors"
-                >
-                  ✕
-                </button>
-              </div>
-            ) : (
-              <button
-                onClick={() => setConfirmClear(true)}
-                className="text-xs text-zinc-600 hover:text-zinc-400 transition-colors"
-              >
-                {t('tetris.clearStats')}
-              </button>
-            )}
-          </div>
-        </div>
-      )}
+      {/* ── Personal best list — below the viewport-fitted game area ── */}
+      <div className="w-full flex justify-center">
+        <ScoreboardPanel
+          gameId="tetris"
+          scores={pb.scores}
+          lastInsertId={pb.lastInsertId}
+          isNewBest={pb.isNewBest}
+          onClear={pb.clear}
+        />
+      </div>
     </div>
   );
 }

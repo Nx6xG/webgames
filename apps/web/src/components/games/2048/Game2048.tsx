@@ -7,10 +7,13 @@ import {
   move,
   keepPlaying as engineKeepPlaying,
 } from './engine';
-import type { Direction, GameState, HighscoreEntry, Tile } from './types';
+import type { Direction, GameState, Tile } from './types';
 import { useAchievements } from '@/hooks/useAchievements';
 import { useI18n } from '@/components/providers/LanguageProvider';
-import { HighscoreTable } from '@/components/ui/HighscoreTable';
+import { usePersonalScores } from '@/hooks/usePersonalScores';
+import { ScoreboardPanel } from '@/components/ui/ScoreboardPanel';
+import { useAuth } from '@/components/providers/AuthProvider';
+import { useNickname } from '@/components/providers/NicknameProvider';
 import { useSwipe } from '@/hooks/useSwipe';
 
 // ── Best-score persistence ────────────────────────────────────────────────────
@@ -24,30 +27,6 @@ function loadBest(): number {
 
 function saveBest(score: number) {
   try { localStorage.setItem(BEST_KEY, String(score)); } catch {}
-}
-
-// ── Highscore persistence ─────────────────────────────────────────────────────
-
-const HS_KEY = 'webgames.2048.highscores';
-
-function loadHighscores(): HighscoreEntry[] {
-  try {
-    const raw = localStorage.getItem(HS_KEY);
-    return raw ? (JSON.parse(raw) as HighscoreEntry[]) : [];
-  } catch { return []; }
-}
-
-/** Inserts an entry, re-sorts by score descending, trims to top 10, saves. */
-function addHighscore(entry: HighscoreEntry): HighscoreEntry[] {
-  const next = [...loadHighscores(), entry]
-    .sort((a, b) => b.score - a.score)
-    .slice(0, 10);
-  try { localStorage.setItem(HS_KEY, JSON.stringify(next)); } catch {}
-  return next;
-}
-
-function deleteHighscores() {
-  try { localStorage.removeItem(HS_KEY); } catch {}
 }
 
 // ── Tile visual helpers ───────────────────────────────────────────────────────
@@ -118,12 +97,14 @@ function TileView({ tile }: { tile: Tile }) {
 
 export function Game2048() {
   const { t } = useI18n();
+  const { user } = useAuth();
+  const { nickname } = useNickname();
   const ach = useAchievements('2048');
+  const pb = usePersonalScores('2048', user ? { userId: user.id, nickname } : undefined);
 
   // Initialise with best=0 to avoid SSR/hydration mismatch;
   // the real persisted value is loaded after first mount.
-  const [state, setState]           = useState<GameState>(() => createInitialState(0));
-  const [highscores, setHighscores] = useState<HighscoreEntry[]>([]);
+  const [state, setState] = useState<GameState>(() => createInitialState(0));
 
   // Timing / dedup refs
   const startTimeRef = useRef<number>(Date.now());
@@ -135,7 +116,6 @@ export function Game2048() {
     if (savedBest > 0) {
       setState((prev) => ({ ...prev, best: Math.max(prev.best, savedBest) }));
     }
-    setHighscores(loadHighscores());
   }, []);
 
   // ── Persist best whenever it improves ───────────────────────────────────────
@@ -149,22 +129,13 @@ export function Game2048() {
     if (state.status === 'won') ach.trackWin();
   }, [state.moves, state.status]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // ── Save highscore when the game ends ───────────────────────────────────────
+  // ── Save score when the game ends ───────────────────────────────────────────
   useEffect(() => {
     if (state.status === 'over' && !savedRef.current) {
       savedRef.current = true;
-      const duration = Math.round((Date.now() - startTimeRef.current) / 1000);
-      const entry: HighscoreEntry = {
-        id:       Date.now().toString(),
-        date:     new Date().toISOString().split('T')[0],
-        score:    state.score,
-        maxTile:  maxTile(state.grid),
-        moves:    state.moves,
-        duration,
-      };
-      setHighscores(addHighscore(entry));
+      pb.submit(state.score, { maxTile: maxTile(state.grid), moves: state.moves });
     }
-  }, [state.status, state.score, state.moves, state.grid]);
+  }, [state.status, state.score, state.moves, state.grid]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // ── Actions ─────────────────────────────────────────────────────────────────
   const handleMove = useCallback((dir: Direction) => {
@@ -177,11 +148,6 @@ export function Game2048() {
     setState((prev) => createInitialState(prev.best));
     ach.reset();
   }, [ach]);
-
-  const handleClearHighscores = useCallback(() => {
-    deleteHighscores();
-    setHighscores([]);
-  }, []);
 
   // ── Keyboard controls ────────────────────────────────────────────────────────
   useEffect(() => {
@@ -279,10 +245,13 @@ export function Game2048() {
         {t('2048.controls')}
       </p>
 
-      {/* ── Highscores ───────────────────────────────────────────────── */}
-      <HighscoreTable
-        entries={highscores}
-        onClear={handleClearHighscores}
+      {/* ── Personal best list ───────────────────────────────────────── */}
+      <ScoreboardPanel
+        gameId="2048"
+        scores={pb.scores}
+        lastInsertId={pb.lastInsertId}
+        isNewBest={pb.isNewBest}
+        onClear={pb.clear}
       />
 
     </div>

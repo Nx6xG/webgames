@@ -3,6 +3,10 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useI18n } from '@/components/providers/LanguageProvider';
 import { useAchievements } from '@/hooks/useAchievements';
+import { usePersonalScores } from '@/hooks/usePersonalScores';
+import { ScoreboardPanel } from '@/components/ui/ScoreboardPanel';
+import { useAuth } from '@/components/providers/AuthProvider';
+import { useNickname } from '@/components/providers/NicknameProvider';
 import { loadStats, saveStats, updateStats } from './stats';
 import type { MinesweeperStats } from './stats';
 import * as sfx from './sound';
@@ -186,7 +190,13 @@ function getCellSize(diff: Difficulty): number {
 
 export function MinesweeperGame() {
   const { t } = useI18n();
+  const { user } = useAuth();
+  const { nickname } = useNickname();
   const ach = useAchievements('minesweeper');
+  const cloudCtx = user ? { userId: user.id, nickname } : undefined;
+  const pbEasy = usePersonalScores('minesweeper-easy', cloudCtx);
+  const pbMedium = usePersonalScores('minesweeper-medium', cloudCtx);
+  const pbHard = usePersonalScores('minesweeper-hard', cloudCtx);
 
   const [phase, setPhase] = useState<Phase>('menu');
   const [difficulty, setDifficulty] = useState<Difficulty>('medium');
@@ -222,6 +232,8 @@ export function MinesweeperGame() {
     };
   }, [phase, firstClick]);
 
+  const pbMap = { easy: pbEasy, medium: pbMedium, hard: pbHard };
+
   const saveResult = useCallback((won: boolean, diff: Difficulty, timeSec: number) => {
     if (savedRef.current) return;
     savedRef.current = true;
@@ -232,8 +244,11 @@ export function MinesweeperGame() {
       return next;
     });
     ach.trackPlay();
-    if (won) ach.trackWin();
-  }, [ach]);
+    if (won) {
+      ach.trackWin();
+      pbMap[diff].submit(timeSec, { won: true });
+    }
+  }, [ach, pbMap]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const startGame = useCallback((diff: Difficulty, seed?: string) => {
     const cfg = DIFF_CONFIG[diff];
@@ -574,6 +589,15 @@ export function MinesweeperGame() {
           <div className="text-xs text-zinc-600">
             {t('minesweeper.controlsHint')}
           </div>
+
+          {/* Personal best list for current difficulty */}
+          <ScoreboardPanel
+            gameId={`minesweeper-${difficulty}`}
+            scores={pbMap[difficulty].scores}
+            lastInsertId={pbMap[difficulty].lastInsertId}
+            isNewBest={pbMap[difficulty].isNewBest}
+            onClear={pbMap[difficulty].clear}
+          />
         </div>
       )}
     </div>

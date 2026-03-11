@@ -134,3 +134,29 @@ create policy "Users can insert own progression"
 
 create policy "Users can update own progression"
   on user_progression for update using (auth.uid() = user_id);
+
+-- ── Singleplayer scores (public leaderboard) ─────────────────────────────────
+
+create table if not exists singleplayer_scores (
+  id         uuid primary key default gen_random_uuid(),
+  user_id    uuid not null references auth.users on delete cascade,
+  nickname   text not null,
+  game_id    text not null,
+  score      double precision not null,
+  meta       jsonb,
+  created_at timestamptz default now()
+);
+
+create index if not exists idx_sp_scores_game_score
+  on singleplayer_scores (game_id, score);
+
+create index if not exists idx_sp_scores_user_game
+  on singleplayer_scores (user_id, game_id);
+
+alter table singleplayer_scores enable row level security;
+
+create policy "Anyone can read scores"
+  on singleplayer_scores for select using (true);
+
+create policy "Users can insert own scores"
+  on singleplayer_scores for insert with check (auth.uid() = user_id);
