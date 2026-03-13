@@ -740,7 +740,9 @@ export function BattleshipGame({ wsUrl, gameId, initialRoomCode, quickPlay: isQu
     const gs = mp.gameState;
     const mySlotAch: BsSlot | null = mp.playerIndex !== null ? (mp.playerIndex === 0 ? 'A' : 'B') : null;
     if (gs?.phase === 'finished' && mySlotAch !== null && gs.winner === mySlotAch) {
-      ach.trackWin();
+      const myShips = gs.players[mp.playerIndex!].ships;
+      const flawless = myShips.every(s => !s.sunk);
+      ach.trackWin(flawless ? { battleshipFlawless: true } : undefined);
     }
   }, [mp.gameState?.phase]); // eslint-disable-line react-hooks/exhaustive-deps
 

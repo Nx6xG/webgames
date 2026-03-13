@@ -249,8 +249,9 @@ function buildReplayBoard(moves: ChessState['moves'], steps: number): (ChessPiec
 
 function buildPGN(gs: ChessState, p0nick: string, p1nick: string): string {
   const date   = new Date().toISOString().slice(0, 10).replace(/-/g, '.');
+  const whiteId = gs.players[gs.whiteIndex].id;
   const result = gs.status === 'win'
-    ? (gs.winner === gs.players[0].id ? '1-0' : '0-1')
+    ? (gs.winner === whiteId ? '1-0' : '0-1')
     : gs.status === 'draw' ? '1/2-1/2' : '*';
   const header = [
     `[Event "WebGames Chess"]`,
@@ -288,6 +289,21 @@ export function ChessGame({ wsUrl, gameId, initialRoomCode, quickPlay: isQuickPl
   const [pendingPromotion, setPendingPromotion] = useState<{ from: number; to: number } | null>(null);
   const [replayMode, setReplayMode]             = useState(false);
   const [replayStep, setReplayStep]             = useState(0);
+  const [timePreset, setTimePreset]             = useState<string>('none');
+
+  // ── Chess clock presets ────────────────────────────────────────────────────
+  const TIME_PRESETS: { key: string; label: string; time: number; inc: number }[] = [
+    { key: 'none', label: t('chess.noLimit'),  time: 0,   inc: 0 },
+    { key: '1+0',  label: '1+0',              time: 60,  inc: 0 },
+    { key: '2+1',  label: '2+1',              time: 120, inc: 1 },
+    { key: '3+0',  label: '3+0',              time: 180, inc: 0 },
+    { key: '3+2',  label: '3+2',              time: 180, inc: 2 },
+    { key: '5+0',  label: '5+0',              time: 300, inc: 0 },
+    { key: '5+3',  label: '5+3',              time: 300, inc: 3 },
+    { key: '10+0', label: '10+0',             time: 600, inc: 0 },
+    { key: '15+10',label: '15+10',            time: 900, inc: 10 },
+  ];
+  const selectedPreset = TIME_PRESETS.find(p => p.key === timePreset) ?? TIME_PRESETS[0];
 
   const prevTotalRef    = useRef<number | null>(null);
   const autoJoined      = useRef(false);
@@ -392,11 +408,17 @@ export function ChessGame({ wsUrl, gameId, initialRoomCode, quickPlay: isQuickPl
 
   const gs      = mp.gameState;
   const myIdx   = mp.playerIndex;
-  const myColor: ChessColor | null = myIdx === null ? null : myIdx === 0 ? 'w' : 'b';
+  // whiteIndex tells us which seat plays White; derive our color from it
+  const myColor: ChessColor | null = gs && myIdx !== null
+    ? (myIdx === gs.whiteIndex ? 'w' : 'b')
+    : null;
   const flipped = myColor === 'b';
 
-  const p0nick  = mp.players.find((p) => p.index === 0)?.nickname ?? t('chess.white');
-  const p1nick  = mp.players.find((p) => p.index === 1)?.nickname ?? t('chess.black');
+  // Nicknames by color: find which seat is White/Black
+  const whiteNick = mp.players.find((p) => p.index === (gs?.whiteIndex ?? 0))?.nickname ?? t('chess.white');
+  const blackNick = mp.players.find((p) => p.index === (gs ? 1 - gs.whiteIndex : 1))?.nickname ?? t('chess.black');
+  const p0nick  = whiteNick;
+  const p1nick  = blackNick;
   const myNick  = myIdx !== null ? (mp.players.find((p) => p.index === myIdx)?.nickname  ?? `Player ${myIdx + 1}`) : null;
   const oppNick = myIdx !== null ? (mp.players.find((p) => p.index !== myIdx)?.nickname ?? t('game.common.opponent')) : null;
 
@@ -669,10 +691,41 @@ export function ChessGame({ wsUrl, gameId, initialRoomCode, quickPlay: isQuickPl
 
   // ── Player label with captured pieces + material advantage ───────────────────
 
+  // ── Client-side chess clock ───────────────────────────────────────────────
+  const [clockNow, setClockNow] = useState(Date.now());
+  useEffect(() => {
+    if (!gs?.timed || gs.status !== 'ongoing') return;
+    const id = setInterval(() => setClockNow(Date.now()), 100);
+    return () => clearInterval(id);
+  }, [gs?.timed, gs?.status]);
+
+  function getClockMs(color: ChessColor): number | null {
+    if (!gs?.timed || !gs.clockMs || !gs.lastMoveAt) return null;
+    const idx = color === 'w' ? 0 : 1;
+    if (gs.turn === color && gs.status === 'ongoing') {
+      const elapsed = Math.max(0, clockNow - gs.lastMoveAt);
+      return Math.max(0, gs.clockMs[idx] - elapsed);
+    }
+    return gs.clockMs[idx];
+  }
+
+  function formatClock(ms: number): string {
+    const totalSec = Math.max(0, Math.ceil(ms / 1000));
+    const min = Math.floor(totalSec / 60);
+    const sec = totalSec % 60;
+    if (ms < 10000) {
+      // Show tenths when under 10 seconds
+      const tenths = Math.max(0, Math.floor(ms / 100) % 10);
+      return `${min}:${String(sec).padStart(2, '0')}.${tenths}`;
+    }
+    return `${min}:${String(sec).padStart(2, '0')}`;
+  }
+
   function PlayerLabel({ color }: { color: ChessColor }) {
     const nick    = color === 'w' ? p0nick : p1nick;
     const isMe    = myColor === color;
     const isTurn  = !replayMode && gs?.turn === color && gs?.status === 'ongoing';
+    const clockRemaining = getClockMs(color);
 
     // Pieces this player has captured (they belong to the opponent)
     const captures     = color === 'w' ? capturedByWhite : capturedByBlack;
@@ -697,6 +750,21 @@ export function ChessGame({ wsUrl, gameId, initialRoomCode, quickPlay: isQuickPl
           {myAdvantage > 0 && (
             <span className="text-xs font-semibold text-emerald-400 shrink-0" aria-label={`+${myAdvantage} material`}>
               +{myAdvantage}
+            </span>
+          )}
+          {clockRemaining !== null && (
+            <span className={`ml-auto font-mono text-sm font-bold px-2 py-0.5 rounded shrink-0 ${
+              clockRemaining <= 0
+                ? 'bg-red-900/60 text-red-300'
+                : clockRemaining < 10000
+                  ? 'bg-red-900/40 text-red-400 animate-pulse'
+                  : clockRemaining < 30000
+                    ? 'bg-amber-900/30 text-amber-400'
+                    : isTurn
+                      ? 'bg-zinc-800 text-zinc-200'
+                      : 'bg-zinc-800/50 text-zinc-400'
+            }`}>
+              {formatClock(clockRemaining)}
             </span>
           )}
         </div>
@@ -875,7 +943,7 @@ export function ChessGame({ wsUrl, gameId, initialRoomCode, quickPlay: isQuickPl
       if (gs.status === 'win') {
         const winColor = gs.players[0].id === gs.winner ? 'w' : 'b';
         const winName  = winColor === 'w' ? p0nick : p1nick;
-        const reason   = gs.termination === 'checkmate' ? ` ${t('chess.byCheckmate')}` : gs.termination === 'resigned' ? ` ${t('chess.byResignation')}` : '';
+        const reason   = gs.termination === 'checkmate' ? ` ${t('chess.byCheckmate')}` : gs.termination === 'resigned' ? ` ${t('chess.byResignation')}` : gs.termination === 'timeout' ? ` ${t('chess.byTimeout')}` : '';
         return <p className="text-lg font-bold text-center text-yellow-400">{winName} {t('chess.winsVerb')}{reason}!</p>;
       }
       if (gs.status === 'draw') {
@@ -903,7 +971,7 @@ export function ChessGame({ wsUrl, gameId, initialRoomCode, quickPlay: isQuickPl
     if (!gs) return null;
     if (gs.status === 'win') {
       const iWon   = myIdx !== null && gs.winner === gs.players[myIdx]?.id;
-      const reason = gs.termination === 'checkmate' ? ` (${t('chess.byCheckmate')})` : gs.termination === 'resigned' ? ` (${t('chess.byResignation')})` : '';
+      const reason = gs.termination === 'checkmate' ? ` (${t('chess.byCheckmate')})` : gs.termination === 'resigned' ? ` (${t('chess.byResignation')})` : gs.termination === 'timeout' ? ` (${t('chess.byTimeout')})` : '';
       return (
         <p className={`text-lg font-black text-center ${iWon ? 'text-yellow-400' : 'text-zinc-400'}`}>
           {iWon ? `🏆 ${myNick} ${t('chess.winsVerb')}${reason}!` : `${oppNick} ${t('chess.winsVerb')}${reason}.`}
@@ -1058,8 +1126,31 @@ export function ChessGame({ wsUrl, gameId, initialRoomCode, quickPlay: isQuickPl
                 className="bg-zinc-800 border border-zinc-700 rounded-lg px-3 py-2 text-sm text-zinc-100 placeholder-zinc-500 focus:outline-none focus:border-indigo-500"
               />
             )}
+            {/* Time control selector */}
+            <div>
+              <p className="text-xs text-zinc-500 uppercase tracking-wider font-semibold mb-1.5">{t('chess.timeControl')}</p>
+              <div className="flex flex-wrap gap-1.5">
+                {TIME_PRESETS.map((p) => (
+                  <button
+                    key={p.key}
+                    onClick={() => setTimePreset(p.key)}
+                    className={`px-2.5 py-1.5 rounded-md text-xs font-medium transition-colors ${
+                      timePreset === p.key ? 'bg-indigo-600 text-white' : 'bg-zinc-800 text-zinc-400 hover:bg-zinc-700 hover:text-zinc-200'
+                    }`}
+                  >
+                    {p.label}
+                  </button>
+                ))}
+              </div>
+            </div>
             <button
-              onClick={() => mp.createRoom({ visibility: roomVisibility, roomName: roomName.trim() || undefined })}
+              onClick={() => mp.createRoom({
+                visibility: roomVisibility,
+                roomName: roomName.trim() || undefined,
+                chessConfig: selectedPreset.time > 0
+                  ? { timeSeconds: selectedPreset.time, incrementSeconds: selectedPreset.inc }
+                  : undefined,
+              })}
               disabled={mp.connection !== 'connected'}
               className="w-full py-2.5 rounded-lg bg-indigo-600 hover:bg-indigo-500 disabled:opacity-40 disabled:cursor-not-allowed text-white font-semibold text-sm transition-colors"
             >
@@ -1095,6 +1186,13 @@ export function ChessGame({ wsUrl, gameId, initialRoomCode, quickPlay: isQuickPl
                 <span className="text-xs text-zinc-600 ml-1">{mp.spectatorCount} {t('game.room.watching')}</span>
               )}
             </div>
+            {gs?.timed && gs.clockMs && (
+              <div className="text-xs text-zinc-400 bg-zinc-800/50 px-2.5 py-1 rounded-md flex items-center gap-1.5">
+                <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><circle cx="12" cy="12" r="10" /><path d="M12 6v6l4 2" /></svg>
+                {formatClock(gs.clockMs[0])}
+                {gs.incrementMs ? ` +${gs.incrementMs / 1000}s` : ''}
+              </div>
+            )}
             <button
               onClick={copyInvite}
               className="w-full py-2 rounded-lg border border-zinc-700 hover:border-indigo-600 text-sm text-zinc-300 hover:text-indigo-300 transition-colors flex items-center justify-center gap-2"

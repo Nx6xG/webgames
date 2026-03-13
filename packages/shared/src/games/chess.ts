@@ -26,6 +26,14 @@ export interface ChessMoveRecord {
   captured?: ChessPiece;
   /** Standard Algebraic Notation */
   san: string;
+  /** Remaining clock time (ms) for the moving player after this move. Only present in timed games. */
+  clockAfterMs?: number;
+}
+
+/** Chess clock configuration. timeSeconds=0 means unlimited (no clock). */
+export interface ChessClockConfig {
+  timeSeconds: number;
+  incrementSeconds: number;
 }
 
 /**
@@ -37,8 +45,10 @@ export interface ChessState {
   board: (ChessPiece | null)[];
   /** Color whose turn it is */
   turn: ChessColor;
-  /** players[0] = White (playerToken), players[1] = Black */
+  /** players[] in seat order (matching mp.playerIndex) */
   players: [{ id: string }, { id: string }];
+  /** Which seat index plays White (0 or 1). Used to determine color on client. */
+  whiteIndex: 0 | 1;
   /** 'ongoing' while game is in progress, 'win' on checkmate/resign, 'draw' otherwise */
   status: 'ongoing' | 'win' | 'draw';
   /** True when the side-to-move king is currently in check */
@@ -46,7 +56,7 @@ export interface ChessState {
   /** playerToken of the winner (only set when status === 'win') */
   winner?: string;
   /** How the game ended (for display purposes) */
-  termination?: 'checkmate' | 'stalemate' | 'resigned' | 'fifty_move' | 'threefold';
+  termination?: 'checkmate' | 'stalemate' | 'resigned' | 'fifty_move' | 'threefold' | 'timeout';
   /** Squares of the last move (for highlighting) */
   lastMove?: { from: number; to: number; piece: ChessPiece; captured?: ChessPiece };
   /**
@@ -82,6 +92,17 @@ export interface ChessState {
 
   /** Full move history (SAN + metadata) for PGN export and client-side replay. */
   moves: ChessMoveRecord[];
+
+  // ── Clock fields (only present in timed games) ────────────────────────────
+
+  /** True when the game uses a chess clock. */
+  timed?: boolean;
+  /** Remaining time in ms per player: [white, black]. */
+  clockMs?: [number, number];
+  /** Server timestamp (Date.now()) when the current player's clock started ticking. */
+  lastMoveAt?: number;
+  /** Increment per move in ms. */
+  incrementMs?: number;
 }
 
 export interface ChessMoveAction {

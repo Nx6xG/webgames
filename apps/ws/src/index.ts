@@ -77,8 +77,11 @@ function startTickLoop(roomCode: string) {
     const r = roomManager.getRoom(roomCode);
     if (!r?.state) { stopTickLoop(roomCode); return; }
     const newState = engine.tick!(r.state);
-    r.state = newState;
-    emitGameState(r, newState);
+    // Skip emit if state reference didn't change (no timeout occurred)
+    if (newState !== r.state) {
+      r.state = newState;
+      emitGameState(r, newState);
+    }
     const st = engine.getStatus(newState);
     if (st.status !== 'ongoing') {
       stopTickLoop(roomCode);
@@ -640,7 +643,7 @@ io.on('connection', (socket) => {
   });
 
   // ── create_room ───────────────────────────────────────────────────────────
-  socket.on('create_room', ({ playerToken, gameId = 'tictactoe', nickname, visibility = 'private', roomName, rpsConfig, ldConfig, battleshipConfig, cfConfig, unoConfig, maxPlayers: requestedMax }) => {
+  socket.on('create_room', ({ playerToken, gameId = 'tictactoe', nickname, visibility = 'private', roomName, rpsConfig, ldConfig, battleshipConfig, cfConfig, unoConfig, chessConfig, maxPlayers: requestedMax }) => {
     identifiedTokens.set(socket.id, playerToken);
     nicknameMap.set(socket.id, nickname);
     if (!profiles.has(playerToken)) profiles.set(playerToken, { nickname });
@@ -677,7 +680,9 @@ io.on('connection', (socket) => {
             ? cfConfig
             : gameId === 'uno' && unoConfig
               ? unoConfig
-              : undefined;
+              : gameId === 'chess' && chessConfig
+                ? chessConfig
+                : undefined;
     const cap = getGameCapacity(gameId);
     // Allow creator to choose maxPlayers within the game's valid range
     const effectiveMax = requestedMax
@@ -803,7 +808,12 @@ io.on('connection', (socket) => {
         const engine = engineRegistry[room.gameId];
         const startingPlayerIndex = Math.floor(Math.random() * playerIds.length);
         const state = engine.initialState(playerIds, startingPlayerIndex, room.gameConfig);
+        // For timed chess: delay clock start until after the countdown finishes
+        if ((state as { timed?: boolean }).timed) {
+          (state as { lastMoveAt?: number }).lastMoveAt = Date.now() + COUNTDOWN_MS;
+        }
         room.state = state;
+        startTickLoop(room.code);
       }
       // For liarsbar, update the lobby state when new players join
       // (add the new player to the game state's player list).
@@ -866,6 +876,7 @@ io.on('connection', (socket) => {
         gameId: room.gameId,
         playerIndex: joiner.index,
         isSpectator: false,
+        isPublic: room.visibility === 'public',
         playerCount: room.players.length,
         maxPlayers: room.maxPlayers,
         spectatorCount: room.spectators.size,
@@ -915,6 +926,7 @@ io.on('connection', (socket) => {
       gameId: room.gameId,
       playerIndex: null,
       isSpectator: true,
+      isPublic: room.visibility === 'public',
       playerCount: room.players.length,
       maxPlayers: room.maxPlayers,
       spectatorCount: room.spectators.size,
@@ -1136,8 +1148,13 @@ io.on('connection', (socket) => {
         .map((p) => p.playerToken);
       const startingPlayerIndex = Math.floor(Math.random() * playerIds.length);
       const state = engine.initialState(playerIds, startingPlayerIndex, room.gameConfig);
+      // For timed chess: delay clock start until after the countdown finishes
+      if ((state as { timed?: boolean }).timed) {
+        (state as { lastMoveAt?: number }).lastMoveAt = Date.now() + COUNTDOWN_MS;
+      }
       room.state = state;
       room.rematchVotes.clear();
+      startTickLoop(room.code);
       emitRematchStarted(room, state);
       console.log(`[rematch] ${code} restarted`);
     } else {
@@ -1199,7 +1216,12 @@ io.on('connection', (socket) => {
               .sort((a, b) => a.index - b.index)
               .map((p) => p.playerToken);
             const startingPlayerIndex = Math.floor(Math.random() * playerIds.length);
-            room.state = engineRegistry[room.gameId].initialState(playerIds, startingPlayerIndex, room.gameConfig);
+            const qpState = engineRegistry[room.gameId].initialState(playerIds, startingPlayerIndex, room.gameConfig);
+            if ((qpState as { timed?: boolean }).timed) {
+              (qpState as { lastMoveAt?: number }).lastMoveAt = Date.now() + COUNTDOWN_MS;
+            }
+            room.state = qpState;
+            startTickLoop(room.code);
           }
           // For liarsbar, add the new player to the lobby state
           if (room.state && room.gameId === 'liarsbar') {
@@ -1238,6 +1260,7 @@ io.on('connection', (socket) => {
             gameId: room.gameId,
             playerIndex: joiner.index,
             isSpectator: false,
+            isPublic: room.visibility === 'public',
             playerCount: room.players.length,
             maxPlayers: room.maxPlayers,
             spectatorCount: room.spectators.size,

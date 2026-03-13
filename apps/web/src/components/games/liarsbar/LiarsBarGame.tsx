@@ -179,6 +179,7 @@ export function LiarsBarGame({ wsUrl, gameId, initialRoomCode, quickPlay: isQuic
   const mp = useMultiplayer<LiarsBarState>(wsUrl, gameId);
   const { t } = useI18n();
   const ach = useAchievements('liarsbar', mp.roomCode);
+  const hasBluffedRef = useRef(false);
   const compact = useCompact();
   const [joinInput, setJoinInput] = useState(initialRoomCode ?? '');
   const [copied, setCopied] = useState(false);
@@ -234,7 +235,10 @@ export function LiarsBarGame({ wsUrl, gameId, initialRoomCode, quickPlay: isQuic
   // ── Achievement tracking ──────────────────────────────────────────────────
   const prevPhaseRef = useRef(mp.phase);
   useEffect(() => {
-    if (prevPhaseRef.current === 'ended' && mp.phase !== 'ended') ach.reset();
+    if (prevPhaseRef.current === 'ended' && mp.phase !== 'ended') {
+      ach.reset();
+      hasBluffedRef.current = false;
+    }
     prevPhaseRef.current = mp.phase;
   }, [mp.phase, ach]);
 
@@ -246,7 +250,7 @@ export function LiarsBarGame({ wsUrl, gameId, initialRoomCode, quickPlay: isQuic
     const gs = mp.gameState;
     const myI = mp.playerIndex;
     if (gs?.phase === 'ended' && gs?.winner && myI !== null && gs.winner === gs.players[myI]?.id) {
-      ach.trackWin();
+      ach.trackWin(!hasBluffedRef.current ? { liarsbarHonest: true } : undefined);
     }
   }, [mp.gameState?.phase]); // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -322,6 +326,12 @@ export function LiarsBarGame({ wsUrl, gameId, initialRoomCode, quickPlay: isQuic
 
   function handlePlay() {
     if (selectedCards.size === 0) return;
+    // Track bluffing: check if any selected card is not a King
+    const myCards: Card[] = (gs && myIdx !== null) ? (gs.hands?.[myIdx] ?? []) : [];
+    const playedCards = myCards.filter(c => selectedCards.has(c.id));
+    if (playedCards.some(c => c.rank !== 'K')) {
+      hasBluffedRef.current = true;
+    }
     mp.sendAction({ type: 'lb_play', cardIds: [...selectedCards] });
     setSelectedCards(new Set());
   }

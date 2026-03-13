@@ -6,6 +6,7 @@ import { useMultiplayer } from '@/hooks/useMultiplayer';
 import { useI18n } from '@/components/providers/LanguageProvider';
 import type { CurveFeverState, CfDeathEvent, CfKillFeedEntry, CfPowerUpType, RoomVisibility } from 'shared';
 import { ReconnectBanner } from '@/components/ui/ReconnectBanner';
+import { useAchievements } from '@/hooks/useAchievements';
 
 const ARENA_W = 800;
 const ARENA_H = 600;
@@ -102,6 +103,7 @@ const KILL_FEED_DISPLAY_MS = 4000;
 export function CurveFeverGame({ wsUrl, gameId, initialRoomCode, quickPlay: autoQuickPlay }: GameComponentProps) {
   const mp = useMultiplayer<CurveFeverState>(wsUrl, gameId);
   const { t } = useI18n();
+  const ach = useAchievements('curvefever', mp.roomCode);
   const gs = mp.gameState;
 
   // Lobby config
@@ -147,6 +149,24 @@ export function CurveFeverGame({ wsUrl, gameId, initialRoomCode, quickPlay: auto
       mp.quickPlay();
     }
   }, [mp.connection, mp.phase, initialRoomCode, autoQuickPlay, mp.joinRoom, mp.quickPlay]);
+
+  // ── Achievement tracking ────────────────────────────────────────────────
+  const prevPhaseRef = useRef(mp.phase);
+  useEffect(() => {
+    if (prevPhaseRef.current === 'ended' && mp.phase !== 'ended') ach.reset();
+    prevPhaseRef.current = mp.phase;
+  }, [mp.phase, ach]);
+
+  useEffect(() => {
+    if (gs?.phase === 'playing' && !mp.isSpectator) ach.trackPlay();
+  }, [gs?.phase]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  useEffect(() => {
+    if (gs?.phase === 'finished' && gs.winner && !mp.isSpectator) {
+      if (gs.winner === myToken) ach.trackWin();
+      else ach.trackLoss();
+    }
+  }, [gs?.phase]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // ── Keyboard input ───────────────────────────────────────────────────────
   const sendSteer = useCallback((dir: 'left' | 'right' | 'none') => {

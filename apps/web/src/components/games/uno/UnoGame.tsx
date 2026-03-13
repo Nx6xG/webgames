@@ -688,7 +688,10 @@ export function UnoGame({ wsUrl, gameId, initialRoomCode, quickPlay: isQuickPlay
     const winnerPlayer = gs?.players.find(p => p.token === roundWinnerToken);
     const kind = gs?.phase === 'match_end' ? 'match_end' : 'round_end';
     setEndOverlay({ kind, iWon: !!iWon, winnerNick: winnerPlayer?.nickname ?? null, points: gs?.roundPoints ?? 0 });
-    if (iWon && kind === 'match_end') ach.trackWin();
+    if (iWon && kind === 'match_end') {
+      const wild4Finish = gs?.topCard?.type === 'wild4';
+      ach.trackWin(wild4Finish ? { unoWildDraw4Finish: true } : undefined);
+    }
     if (!iWon && kind === 'match_end') ach.trackLoss();
   }, [finishKey, gs, myIdx, ach]);
 

@@ -83,7 +83,7 @@ export interface MultiplayerState<TState extends AnyGameState = AnyGameState> {
 }
 
 export interface MultiplayerActions {
-  createRoom: (options?: { visibility?: RoomVisibility; roomName?: string; rpsConfig?: { mode: string; bestOf?: number }; ldConfig?: { mode: string }; battleshipConfig?: { fleetPreset: string }; cfConfig?: { bestOf?: number }; unoConfig?: { targetScore?: number; stackDraw2?: boolean; stackDraw4?: boolean; allowDraw2OnDraw4?: boolean; allowDraw4OnDraw2?: boolean; playDrawnCardImmediately?: boolean }; maxPlayers?: number }) => void;
+  createRoom: (options?: { visibility?: RoomVisibility; roomName?: string; rpsConfig?: { mode: string; bestOf?: number }; ldConfig?: { mode: string }; battleshipConfig?: { fleetPreset: string }; cfConfig?: { bestOf?: number }; unoConfig?: { targetScore?: number; stackDraw2?: boolean; stackDraw4?: boolean; allowDraw2OnDraw4?: boolean; allowDraw4OnDraw2?: boolean; playDrawnCardImmediately?: boolean }; chessConfig?: { timeSeconds: number; incrementSeconds: number }; maxPlayers?: number }) => void;
   joinRoom: (code: string) => void;
   /** Join the per-gameId matchmaking queue. Server assigns a room automatically. */
   quickPlay: () => void;
@@ -257,7 +257,7 @@ export function useMultiplayer<TState extends AnyGameState = AnyGameState>(
       }));
     });
 
-    socket.on('room_joined', ({ roomCode, playerIndex, isSpectator, playerCount, maxPlayers, spectatorCount, state, players }) =>
+    socket.on('room_joined', ({ roomCode, playerIndex, isSpectator, isPublic, playerCount, maxPlayers, spectatorCount, state, players }) => {
       set((prev) => ({
         ...prev,
         roomCode,
@@ -273,8 +273,9 @@ export function useMultiplayer<TState extends AnyGameState = AnyGameState>(
           : (state ? 'playing' : 'waiting'),
         error: null,
         stateHistory: state ? [state as TState] : [],
-      })),
-    );
+      }));
+      if (isPublic && !isSpectator) fireAch({ type: 'public_game_joined' });
+    });
 
     // Reconnect: server restored our seat
     socket.on('room_rejoined', ({ roomCode, playerIndex, playerCount, maxPlayers, spectatorCount, state, players }) =>
@@ -502,7 +503,7 @@ export function useMultiplayer<TState extends AnyGameState = AnyGameState>(
     };
   }, [wsUrl]);
 
-  const createRoom = useCallback((options?: { visibility?: RoomVisibility; roomName?: string; rpsConfig?: { mode: string; bestOf?: number }; ldConfig?: { mode: string }; battleshipConfig?: { fleetPreset: string }; cfConfig?: { bestOf?: number }; unoConfig?: { targetScore?: number; stackDraw2?: boolean; stackDraw4?: boolean; allowDraw2OnDraw4?: boolean; allowDraw4OnDraw2?: boolean; playDrawnCardImmediately?: boolean }; maxPlayers?: number }) => {
+  const createRoom = useCallback((options?: { visibility?: RoomVisibility; roomName?: string; rpsConfig?: { mode: string; bestOf?: number }; ldConfig?: { mode: string }; battleshipConfig?: { fleetPreset: string }; cfConfig?: { bestOf?: number }; unoConfig?: { targetScore?: number; stackDraw2?: boolean; stackDraw4?: boolean; allowDraw2OnDraw4?: boolean; allowDraw4OnDraw2?: boolean; playDrawnCardImmediately?: boolean }; chessConfig?: { timeSeconds: number; incrementSeconds: number }; maxPlayers?: number }) => {
     set((prev) => ({ ...prev, error: null }));
     socketRef.current?.emit('create_room', {
       playerToken: tokenRef.current,
@@ -515,6 +516,7 @@ export function useMultiplayer<TState extends AnyGameState = AnyGameState>(
       battleshipConfig: options?.battleshipConfig,
       cfConfig: options?.cfConfig,
       unoConfig: options?.unoConfig,
+      chessConfig: options?.chessConfig,
       maxPlayers: options?.maxPlayers,
     });
   }, []);
@@ -555,7 +557,6 @@ export function useMultiplayer<TState extends AnyGameState = AnyGameState>(
       playerToken: tokenRef.current,
       nickname: nicknameRef.current,
     });
-    fireAch({ type: 'public_game_joined' });
   }, []);
 
   const clearError = useCallback(() => set((prev) => ({ ...prev, error: null })), []);

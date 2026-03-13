@@ -1,7 +1,7 @@
 import type { GameEngine, ActionContext, StatusResult } from 'shared';
 import type {
   ChessState, ChessAction, ChessPiece, ChessColor, ChessPieceType,
-  ChessPromoPiece, ChessMoveRecord,
+  ChessPromoPiece, ChessMoveRecord, ChessClockConfig,
 } from 'shared';
 
 // ── Board geometry ─────────────────────────────────────────────────────────────
@@ -408,26 +408,40 @@ function initialBoard(): (ChessPiece | null)[] {
 // ── Engine ─────────────────────────────────────────────────────────────────────
 
 export const chessEngine: GameEngine<ChessState, ChessAction> = {
-  initialState([p0, p1]: string[], startingPlayerIndex: number = 0): ChessState {
+  initialState([p0, p1]: string[], startingPlayerIndex: number = 0, config?: unknown): ChessState {
     const board      = initialBoard();
     const castling   = { w: { kingSide: true, queenSide: true }, b: { kingSide: true, queenSide: true } };
-    // players[0] is always White; players[1] is always Black.
-    // startingPlayerIndex decides which seat moves first — normally White (0),
-    // but can be Black (1) when the server randomizes the starting player.
-    const startColor: 'w' | 'b' = startingPlayerIndex === 0 ? 'w' : 'b';
-    const initKey    = positionKey(board, startColor, castling, null);
+    // In chess White always moves first.
+    // startingPlayerIndex determines which seat (room player index) plays White.
+    // players[] stays in seat order (matches mp.playerIndex on the client).
+    const whiteIdx   = startingPlayerIndex as 0 | 1;
+    const whiteToken = whiteIdx === 0 ? p0 : p1;
+    const initKey    = positionKey(board, 'w', castling, null);
+
+    const cfg = config as ChessClockConfig | undefined;
+    const timed = !!(cfg && cfg.timeSeconds > 0);
+    const timeMs = timed ? cfg!.timeSeconds * 1000 : 0;
+    const incrementMs = timed ? (cfg!.incrementSeconds ?? 0) * 1000 : 0;
+
     return {
       board,
-      turn:            startColor,
+      turn:            'w',
       players:         [{ id: p0 }, { id: p1 }],
+      whiteIndex:      whiteIdx,
       status:          'ongoing',
       check:           false,
-      currentTurn:     startingPlayerIndex === 0 ? p0 : p1,
+      currentTurn:     whiteToken,
       castling,
       enPassantTarget: null,
       halfmoveClock:   0,
       positionCounts:  { [initKey]: 1 },
       moves:           [],
+      ...(timed ? {
+        timed: true,
+        clockMs: [timeMs, timeMs] as [number, number],
+        lastMoveAt: Date.now(),
+        incrementMs,
+      } : {}),
     };
   },
 
@@ -436,6 +450,32 @@ export const chessEngine: GameEngine<ChessState, ChessAction> = {
 
     const actorIdx = state.players.findIndex((p) => p.id === ctx.playerId);
     if (actorIdx === -1) throw new Error('NOT_IN_ROOM: You are not a player in this match');
+
+    // ── Clock check: if timed, deduct time for the moving player ────────────
+    let clockMs = state.clockMs ? [...state.clockMs] as [number, number] : undefined;
+    let lastMoveAt = state.lastMoveAt;
+    if (state.timed && clockMs && lastMoveAt) {
+      const now = Date.now();
+      const turnIdx = state.turn === 'w' ? 0 : 1;
+      const elapsed = Math.max(0, now - lastMoveAt);
+      clockMs[turnIdx] = Math.max(0, clockMs[turnIdx] - elapsed);
+      // Time ran out — opponent wins
+      if (clockMs[turnIdx] <= 0) {
+        // turnIdx is color-based (0=white,1=black); convert to seat index via whiteIndex
+        const timedOutSeat = state.turn === 'w' ? state.whiteIndex : (1 - state.whiteIndex);
+        const winnerId = state.players[1 - timedOutSeat].id;
+        return {
+          ...state,
+          status: 'win',
+          winner: winnerId,
+          termination: 'timeout',
+          currentTurn: winnerId,
+          clockMs: clockMs as [number, number],
+          lastMoveAt: now,
+        };
+      }
+      lastMoveAt = now;
+    }
 
     // ── Resign ────────────────────────────────────────────────────────────────
     if (action.type === 'chess_resign') {
@@ -448,14 +488,15 @@ export const chessEngine: GameEngine<ChessState, ChessAction> = {
         winner,
         termination: 'resigned',
         currentTurn: winner,
+        ...(clockMs ? { clockMs, lastMoveAt } : {}),
       };
     }
 
     // ── Move ──────────────────────────────────────────────────────────────────
     if (action.type !== 'chess_move') throw new Error('INVALID_ACTION: Unknown action type');
 
-    // Turn enforcement: player 0 = White, player 1 = Black
-    const expectedIdx = state.turn === 'w' ? 0 : 1;
+    // Turn enforcement: whiteIndex maps seat to color
+    const expectedIdx = state.turn === 'w' ? state.whiteIndex : (1 - state.whiteIndex);
     if (actorIdx !== expectedIdx) throw new Error('NOT_YOUR_TURN: Wait for your turn');
 
     const { from, to, promotion } = action;
@@ -516,11 +557,18 @@ export const chessEngine: GameEngine<ChessState, ChessAction> = {
       inCheck, hasMoves,
     );
 
+    // Apply increment to the player who just moved (before recording)
+    if (state.timed && clockMs && state.incrementMs) {
+      const turnIdx = state.turn === 'w' ? 0 : 1;
+      clockMs[turnIdx] += state.incrementMs;
+    }
+
     // Move record
     const moveRecord: ChessMoveRecord = {
       from, to, piece, san,
       ...(promotion    ? { promotion }    : {}),
       ...(capturedPiece ? { captured: capturedPiece } : {}),
+      ...(state.timed && clockMs ? { clockAfterMs: clockMs[state.turn === 'w' ? 0 : 1] } : {}),
     };
 
     // Threefold repetition: record the resulting position
@@ -564,10 +612,35 @@ export const chessEngine: GameEngine<ChessState, ChessAction> = {
       halfmoveClock:   newHalfmove,
       positionCounts:  newCounts,
       moves:           [...state.moves, moveRecord],
+      ...(state.timed && clockMs ? { clockMs, lastMoveAt } : {}),
     };
   },
 
   getStatus(state: ChessState): StatusResult {
     return { status: state.status, winner: state.winner };
   },
+
+  // Tick checks for clock timeout in timed games (runs every 500ms)
+  tick(state: ChessState): ChessState {
+    if (!state.timed || state.status !== 'ongoing' || !state.clockMs || !state.lastMoveAt) return state;
+    const now = Date.now();
+    const turnIdx = state.turn === 'w' ? 0 : 1;
+    const elapsed = Math.max(0, now - state.lastMoveAt);
+    const remaining = state.clockMs[turnIdx] - elapsed;
+    if (remaining > 0) return state; // no change needed — return same reference to skip emit
+    const newClockMs: [number, number] = [...state.clockMs];
+    newClockMs[turnIdx] = 0;
+    const timedOutSeat = state.turn === 'w' ? state.whiteIndex : (1 - state.whiteIndex);
+    const winnerId = state.players[1 - timedOutSeat].id;
+    return {
+      ...state,
+      status: 'win',
+      winner: winnerId,
+      termination: 'timeout',
+      currentTurn: winnerId,
+      clockMs: newClockMs,
+      lastMoveAt: now,
+    };
+  },
+  tickInterval: 500,
 };

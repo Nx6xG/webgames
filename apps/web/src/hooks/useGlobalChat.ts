@@ -5,6 +5,13 @@ import { getWsUrl } from '@/lib/getWsUrl';
 import { io, type Socket } from 'socket.io-client';
 import type { ServerToClientEvents, ClientToServerEvents, ChatMessage, ChatScope } from 'shared';
 import { loadCosmetics } from '@/lib/cosmetics';
+import { trackAchievementEvent } from '@/lib/achievements';
+import { useAchievementToasts } from '@/components/ui/AchievementToasts';
+import { useLevelUpToasts } from '@/components/ui/LevelUpToasts';
+import { consumeLastLevelUps } from '@/lib/achievements';
+import { useCloudSync } from '@/hooks/useCloudSync';
+import { loadStats, loadUnlocked, loadUnlockedCosmetics } from '@/lib/achievements/store';
+import { useProgression } from '@/components/providers/ProgressionProvider';
 
 type GameSocket = Socket<ServerToClientEvents, ClientToServerEvents>;
 
@@ -17,6 +24,10 @@ export function useGlobalChat(wsUrl: string, nickname: string) {
   const [globalMessages, setGlobalMessages] = useState<ChatMessage[]>([]);
   const [chatError, setChatError] = useState<string | null>(null);
   const [connected, setConnected] = useState(false);
+  const toasts = useAchievementToasts();
+  const levelUpToasts = useLevelUpToasts();
+  const cloudSync = useCloudSync();
+  const { setProgression } = useProgression();
 
   // Sync ref and notify server when nickname changes while connected.
   useEffect(() => {
@@ -75,7 +86,17 @@ export function useGlobalChat(wsUrl: string, nickname: string) {
   const sendGlobalChat = useCallback((scope: ChatScope, message: string) => {
     if (!message.trim()) return;
     socketRef.current?.emit('chat_send', { scope, message: message.trim() });
-  }, []);
+    // Fire achievement for first message
+    const ids = trackAchievementEvent({ type: 'message_sent' }, setProgression);
+    if (ids.length > 0) toasts.push(ids);
+    const levelUps = consumeLastLevelUps();
+    if (levelUps.length > 0) levelUpToasts.push(levelUps);
+    if (cloudSync.isActive) {
+      cloudSync.syncStats(loadStats());
+      cloudSync.syncAchievements([...loadUnlocked()]);
+      cloudSync.syncUnlockedCosmetics(loadUnlockedCosmetics());
+    }
+  }, [setProgression, toasts, levelUpToasts, cloudSync]);
 
   return { globalMessages, chatError, sendGlobalChat, connected };
 }

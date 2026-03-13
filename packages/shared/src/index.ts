@@ -36,6 +36,7 @@ export type {
   ChessPiece,
   ChessCastlingRights,
   ChessMoveRecord,
+  ChessClockConfig,
   ChessState,
   ChessMoveAction,
   ChessResignAction,

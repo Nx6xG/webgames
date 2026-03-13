@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { verifyAdmin } from '@/lib/adminAuth';
 import { getSupabaseAdmin } from '@/lib/supabaseAdmin';
-import { getXpRequiredForLevel } from '@/lib/progression';
+import { getXpRequiredForLevel } from '@/lib/progression/xp';
 
 async function auditLog(
   sb: ReturnType<typeof getSupabaseAdmin>,
