@@ -702,6 +702,12 @@ export default function HomePage() {
       {/* Active rooms */}
       <ActiveRoomsWidget />
 
+      {/* Game of the Day */}
+      <GameOfTheDay />
+
+      {/* Daily challenges */}
+      <DailyChallengesWidget />
+
       {/* Filter toggle + Search */}
       <div className="max-w-5xl mx-auto px-6 pb-8 flex flex-col sm:flex-row items-start sm:items-center gap-3">
         <div className="flex gap-1 p-1 bg-zinc-800 rounded-lg shrink-0">
@@ -740,12 +746,6 @@ export default function HomePage() {
           )}
         </div>
       </div>
-
-      {/* Game of the Day */}
-      <GameOfTheDay />
-
-      {/* Daily challenges */}
-      <DailyChallengesWidget />
 
       {/* Multiplayer games grid */}
       {showMultiplayer && filteredMultiplayer.length > 0 && (
