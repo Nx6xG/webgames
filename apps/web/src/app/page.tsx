@@ -93,6 +93,24 @@ const SINGLEPLAYER_GAMES = [
     tags:         ['singleplayer', 'puzzle', 'classic'],
     bestScoreKey: '',
   },
+  {
+    id:           'doodlejump',
+    titleKey:     'lobby.games.doodlejump.title',
+    descKey:      'lobby.games.doodlejump.desc',
+    emoji:        '🦘',
+    href:         '/games/doodlejump',
+    tags:         ['singleplayer', 'arcade'],
+    bestScoreKey: '',
+  },
+  {
+    id:           'crossyroad',
+    titleKey:     'lobby.games.crossyroad.title',
+    descKey:      'lobby.games.crossyroad.desc',
+    emoji:        '🐔',
+    href:         '/games/crossyroad',
+    tags:         ['singleplayer', 'arcade'],
+    bestScoreKey: '',
+  },
 ] as const;
 import { GlobalChatWidget } from '@/components/chat/GlobalChatWidget';
 import { ProfileMenu } from '@/components/ProfileMenu';
@@ -157,6 +175,8 @@ const GAME_CONTROLS_KEY: Record<string, string> = {
   minesweeper:     'modal.controls.minesweeper',
   curvefever:      'modal.controls.curvefever',
   uno:             'modal.controls.uno',
+  doodlejump:      'modal.controls.doodlejump',
+  crossyroad:      'modal.controls.crossyroad',
 };
 
 // ── Badge system ─────────────────────────────────────────────────────────────

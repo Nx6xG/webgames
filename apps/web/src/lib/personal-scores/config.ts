@@ -78,6 +78,14 @@ export const SCORE_CONFIGS: Record<string, ScoreGameConfig> = {
     scoreFormat: formatTime,
     columns: [],
   },
+  doodlejump: {
+    sortDirection: 'desc',
+    maxEntries: P,
+    publicMaxEntries: G,
+    shouldStore: (score) => score > 0,
+    scoreLabelKey: 'pb.score',
+    columns: [],
+  },
   breakout: {
     sortDirection: 'desc',
     maxEntries: P,
@@ -86,6 +94,16 @@ export const SCORE_CONFIGS: Record<string, ScoreGameConfig> = {
     scoreLabelKey: 'pb.score',
     columns: [
       { key: 'level', labelKey: 'pb.level' },
+    ],
+  },
+  crossyroad: {
+    sortDirection: 'desc',
+    maxEntries: P,
+    publicMaxEntries: G,
+    shouldStore: (score) => score > 0,
+    scoreLabelKey: 'pb.score',
+    columns: [
+      { key: 'coins', labelKey: 'pb.coins' },
     ],
   },
 };

@@ -52,6 +52,8 @@ function resetAllLocalData() {
     'webgames.sudoku.stats',
     'webgames_progression_v1',
     'webgames_progression_levelups_v1',
+    'webgames.doodlejump.bestScore',
+    'webgames.crossyroad.bestScore',
   ];
   for (const k of keysToRemove) {
     try { localStorage.removeItem(k); } catch { /* ignore */ }
