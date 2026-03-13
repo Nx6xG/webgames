@@ -8,6 +8,9 @@ import { useVisibilityPause } from '@/hooks/useVisibilityPause';
 import { ScoreboardPanel } from '@/components/ui/ScoreboardPanel';
 import { useAuth } from '@/components/providers/AuthProvider';
 import { useNickname } from '@/components/providers/NicknameProvider';
+import { useSkinShop } from '@/hooks/useSkinShop';
+import { SkinShopOverlay } from '@/components/ui/SkinShopOverlay';
+import type { SkinDef } from '@/lib/skinShop';
 import * as sfx from './sound';
 
 // ── Constants ────────────────────────────────────────────────────────────────
@@ -28,6 +31,170 @@ const PIPE_MAX_BOTTOM = 60;
 const GROUND_H = 40;
 
 const BEST_KEY = 'webgames.flappy.bestScore';
+
+// ── Bird skins ──────────────────────────────────────────────────────────────
+
+const FLAPPY_SKINS: SkinDef[] = [
+  { id: 'sparrow',   price: 0,   nameKey: 'flappy.skin.sparrow',   colors: { body: '#fbbf24', belly: '#fef3c7', wing: '#f59e0b', beak: '#f97316', eye: '#1f2937' } },
+  { id: 'bluejay',   price: 15,  nameKey: 'flappy.skin.bluejay',   colors: { body: '#3b82f6', belly: '#dbeafe', wing: '#2563eb', beak: '#f97316', eye: '#1f2937' } },
+  { id: 'robin',     price: 15,  nameKey: 'flappy.skin.robin',     colors: { body: '#78716c', belly: '#ef4444', wing: '#57534e', beak: '#fbbf24', eye: '#1f2937' } },
+  { id: 'parrot',    price: 25,  nameKey: 'flappy.skin.parrot',    colors: { body: '#22c55e', belly: '#fbbf24', wing: '#15803d', beak: '#1f2937', eye: '#1f2937' } },
+  { id: 'flamingo',  price: 30,  nameKey: 'flappy.skin.flamingo',  colors: { body: '#f472b6', belly: '#fce7f3', wing: '#ec4899', beak: '#1f2937', eye: '#1f2937' } },
+  { id: 'owl',       price: 40,  nameKey: 'flappy.skin.owl',       colors: { body: '#92400e', belly: '#fef3c7', wing: '#78350f', beak: '#f59e0b', eye: '#fbbf24' } },
+  { id: 'penguin',   price: 60,  nameKey: 'flappy.skin.penguin',   colors: { body: '#1f2937', belly: '#f8fafc', wing: '#111827', beak: '#f97316', eye: '#1f2937' } },
+  { id: 'phoenix',   price: 100, nameKey: 'flappy.skin.phoenix',   colors: { body: '#ef4444', belly: '#fbbf24', wing: '#dc2626', beak: '#f97316', eye: '#fef08a' } },
+  { id: 'icebird',   price: 150, nameKey: 'flappy.skin.icebird',   colors: { body: '#67e8f9', belly: '#ecfeff', wing: '#06b6d4', beak: '#a5f3fc', eye: '#164e63' }, requireAll: true },
+];
+
+// ── Icebird CSS animations (injected once) ──────────────────────────────────
+
+const ICEBIRD_STYLES = `
+@keyframes icebird-pulse {
+  0%, 100% { box-shadow: 0 0 12px 4px rgba(103,232,249,0.5), 0 0 24px 8px rgba(6,182,212,0.25), inset 0 0 8px 2px rgba(255,255,255,0.15); }
+  50% { box-shadow: 0 0 20px 8px rgba(103,232,249,0.7), 0 0 40px 16px rgba(6,182,212,0.35), inset 0 0 12px 4px rgba(255,255,255,0.25); }
+}
+@keyframes icebird-shimmer {
+  0% { background-position: -200% 0; }
+  100% { background-position: 200% 0; }
+}
+@keyframes icebird-crystal-1 {
+  0% { opacity: 0; transform: translate(0, 0) scale(0.5) rotate(0deg); }
+  20% { opacity: 1; }
+  80% { opacity: 0.8; }
+  100% { opacity: 0; transform: translate(-18px, -22px) scale(1.2) rotate(180deg); }
+}
+@keyframes icebird-crystal-2 {
+  0% { opacity: 0; transform: translate(0, 0) scale(0.6) rotate(0deg); }
+  25% { opacity: 1; }
+  75% { opacity: 0.7; }
+  100% { opacity: 0; transform: translate(12px, -28px) scale(1) rotate(-150deg); }
+}
+@keyframes icebird-crystal-3 {
+  0% { opacity: 0; transform: translate(0, 0) scale(0.4) rotate(0deg); }
+  30% { opacity: 0.9; }
+  70% { opacity: 0.6; }
+  100% { opacity: 0; transform: translate(-24px, 8px) scale(1.1) rotate(210deg); }
+}
+@keyframes icebird-crystal-4 {
+  0% { opacity: 0; transform: translate(0, 0) scale(0.5) rotate(0deg); }
+  15% { opacity: 1; }
+  85% { opacity: 0.5; }
+  100% { opacity: 0; transform: translate(8px, 20px) scale(0.9) rotate(-120deg); }
+}
+@keyframes icebird-trail {
+  0% { opacity: 0.7; transform: scale(1); }
+  100% { opacity: 0; transform: scale(0.2) translateX(-30px); }
+}
+`;
+
+let icebirdStylesInjected = false;
+function ensureIcebirdStyles() {
+  if (icebirdStylesInjected || typeof document === 'undefined') return;
+  icebirdStylesInjected = true;
+  const el = document.createElement('style');
+  el.textContent = ICEBIRD_STYLES;
+  document.head.appendChild(el);
+}
+
+// ── Skin preview renderer (for SkinShopOverlay canvas) ──────────────────────
+
+function renderFlappyPreview(ctx: CanvasRenderingContext2D, skin: SkinDef, size: number) {
+  const c = skin.colors;
+  const cx = size / 2;
+  const cy = size / 2;
+  const bodyR = size * 0.3;
+
+  // Icebird: draw frost aura + sparkles behind
+  if (skin.id === 'icebird') {
+    // Outer glow
+    const auraGrad = ctx.createRadialGradient(cx, cy, bodyR * 0.5, cx, cy, bodyR * 2);
+    auraGrad.addColorStop(0, 'rgba(103,232,249,0.35)');
+    auraGrad.addColorStop(0.5, 'rgba(6,182,212,0.15)');
+    auraGrad.addColorStop(1, 'rgba(6,182,212,0)');
+    ctx.fillStyle = auraGrad;
+    ctx.beginPath();
+    ctx.arc(cx, cy, bodyR * 2, 0, Math.PI * 2);
+    ctx.fill();
+
+    // Ice sparkle dots
+    const sparkles = [
+      { x: cx - bodyR * 1.2, y: cy - bodyR * 0.8, r: 2.5 },
+      { x: cx + bodyR * 1.1, y: cy - bodyR * 1.0, r: 2 },
+      { x: cx - bodyR * 0.8, y: cy + bodyR * 1.1, r: 1.8 },
+      { x: cx + bodyR * 1.3, y: cy + bodyR * 0.6, r: 2.2 },
+      { x: cx + bodyR * 0.2, y: cy - bodyR * 1.4, r: 1.5 },
+      { x: cx - bodyR * 1.4, y: cy + bodyR * 0.2, r: 1.6 },
+    ];
+    for (const sp of sparkles) {
+      const spGrad = ctx.createRadialGradient(sp.x, sp.y, 0, sp.x, sp.y, sp.r * 2);
+      spGrad.addColorStop(0, 'rgba(255,255,255,0.9)');
+      spGrad.addColorStop(0.5, 'rgba(165,243,252,0.5)');
+      spGrad.addColorStop(1, 'rgba(103,232,249,0)');
+      ctx.fillStyle = spGrad;
+      ctx.beginPath();
+      ctx.arc(sp.x, sp.y, sp.r * 2, 0, Math.PI * 2);
+      ctx.fill();
+    }
+
+    // Shimmer gradient on body
+    const shimGrad = ctx.createLinearGradient(cx - bodyR, cy, cx + bodyR, cy);
+    shimGrad.addColorStop(0, c.body);
+    shimGrad.addColorStop(0.35, 'rgba(255,255,255,0.5)');
+    shimGrad.addColorStop(0.5, c.body);
+    shimGrad.addColorStop(0.65, 'rgba(236,254,255,0.4)');
+    shimGrad.addColorStop(1, c.body);
+    ctx.fillStyle = shimGrad;
+    ctx.beginPath();
+    ctx.arc(cx, cy, bodyR, 0, Math.PI * 2);
+    ctx.fill();
+
+    // Frost ring
+    ctx.strokeStyle = 'rgba(165,243,252,0.6)';
+    ctx.lineWidth = 1.5;
+    ctx.beginPath();
+    ctx.arc(cx, cy, bodyR + 3, 0, Math.PI * 2);
+    ctx.stroke();
+  } else {
+    // Body circle (normal skins)
+    ctx.fillStyle = c.body;
+    ctx.beginPath();
+    ctx.arc(cx, cy, bodyR, 0, Math.PI * 2);
+    ctx.fill();
+  }
+
+  // Belly circle (smaller, offset down)
+  ctx.fillStyle = c.belly;
+  ctx.beginPath();
+  ctx.arc(cx + bodyR * 0.05, cy + bodyR * 0.2, bodyR * 0.6, 0, Math.PI * 2);
+  ctx.fill();
+
+  // Wing
+  ctx.fillStyle = c.wing;
+  ctx.beginPath();
+  ctx.ellipse(cx - bodyR * 0.4, cy - bodyR * 0.05, bodyR * 0.45, bodyR * 0.28, -0.3, 0, Math.PI * 2);
+  ctx.fill();
+
+  // Beak triangle
+  ctx.fillStyle = c.beak;
+  ctx.beginPath();
+  ctx.moveTo(cx + bodyR * 0.85, cy - bodyR * 0.1);
+  ctx.lineTo(cx + bodyR * 1.3, cy + bodyR * 0.05);
+  ctx.lineTo(cx + bodyR * 0.85, cy + bodyR * 0.2);
+  ctx.closePath();
+  ctx.fill();
+
+  // Eye white
+  ctx.fillStyle = '#ffffff';
+  ctx.beginPath();
+  ctx.arc(cx + bodyR * 0.4, cy - bodyR * 0.25, bodyR * 0.22, 0, Math.PI * 2);
+  ctx.fill();
+
+  // Eye pupil
+  ctx.fillStyle = c.eye;
+  ctx.beginPath();
+  ctx.arc(cx + bodyR * 0.48, cy - bodyR * 0.22, bodyR * 0.12, 0, Math.PI * 2);
+  ctx.fill();
+}
 
 // ── Difficulty ──────────────────────────────────────────────────────────────
 
@@ -82,6 +249,11 @@ export function FlappyGame() {
   const { nickname } = useNickname();
   const ach = useAchievements('flappy');
   const pb = usePersonalScores('flappy', user ? { userId: user.id, nickname } : undefined);
+  const shop = useSkinShop('flappy', FLAPPY_SKINS);
+  const isIcebird = shop.activeSkin === 'icebird';
+
+  // Inject icebird CSS animations once
+  useEffect(() => { if (isIcebird) ensureIcebirdStyles(); }, [isIcebird]);
 
   // ── State ────────────────────────────────────────────────────────────────
   const [difficulty, setDifficulty] = useState<FlappyDifficulty>('normal');
@@ -236,6 +408,7 @@ export function FlappyGame() {
       if (!savedRef.current) {
         savedRef.current = true;
         pb.submit(newScore);
+        shop.addCoins(newScore);
       }
       return;
     }
@@ -464,33 +637,140 @@ export function FlappyGame() {
             })}
 
             {/* Bird */}
-            <div
-              className="absolute rounded-full bg-amber-400 border-2 border-amber-500 shadow-lg shadow-amber-500/20 z-10"
-              style={{
-                left: `${(BIRD_X / GAME_W) * 100}%`,
-                top: `${(birdY / GAME_H) * 100}%`,
-                width: `${(BIRD_SIZE / GAME_W) * 100}%`,
-                height: `${(BIRD_SIZE / GAME_H) * 100}%`,
-                transform: `rotate(${birdAngle}deg)`,
-                transition: 'transform 0.1s ease-out',
-              }}
-            >
-              {/* Eye */}
-              <div
-                className="absolute bg-white rounded-full"
-                style={{ width: '30%', height: '30%', top: '18%', right: '15%' }}
-              >
-                <div
-                  className="absolute bg-zinc-900 rounded-full"
-                  style={{ width: '55%', height: '55%', bottom: '10%', right: '10%' }}
-                />
-              </div>
-              {/* Beak */}
-              <div
-                className="absolute bg-orange-500 rounded-sm"
-                style={{ width: '28%', height: '18%', top: '50%', right: '-12%' }}
-              />
-            </div>
+            {(() => {
+              const sc = shop.activeSkinDef.colors;
+              const birdLeft = `${(BIRD_X / GAME_W) * 100}%`;
+              const birdTop = `${(birdY / GAME_H) * 100}%`;
+              const birdW = `${(BIRD_SIZE / GAME_W) * 100}%`;
+              const birdH = `${(BIRD_SIZE / GAME_H) * 100}%`;
+              const isPlaying = phase === 'playing' || phase === 'countdown';
+
+              return (
+                <>
+                  {/* Icebird frost trail (behind bird) */}
+                  {isIcebird && isPlaying && (
+                    <>
+                      {[0, 1, 2].map((i) => (
+                        <div
+                          key={`trail-${i}`}
+                          className="absolute rounded-full z-[9]"
+                          style={{
+                            left: `${((BIRD_X - 6 - i * 10) / GAME_W) * 100}%`,
+                            top: `${((birdY + BIRD_SIZE * 0.3) / GAME_H) * 100}%`,
+                            width: `${((BIRD_SIZE * (0.5 - i * 0.12)) / GAME_W) * 100}%`,
+                            height: `${((BIRD_SIZE * (0.5 - i * 0.12)) / GAME_H) * 100}%`,
+                            background: `radial-gradient(circle, rgba(103,232,249,${0.3 - i * 0.1}) 0%, transparent 70%)`,
+                            animation: `icebird-trail ${0.5 + i * 0.15}s ease-out infinite`,
+                            animationDelay: `${i * 0.12}s`,
+                            transform: `rotate(${birdAngle}deg)`,
+                          }}
+                        />
+                      ))}
+                    </>
+                  )}
+
+                  {/* Icebird floating crystals */}
+                  {isIcebird && isPlaying && (
+                    <>
+                      {[
+                        { anim: 'icebird-crystal-1', dur: '1.8s', delay: '0s',    x: 0.5, y: 0.3,  char: '\u2732' },
+                        { anim: 'icebird-crystal-2', dur: '2.2s', delay: '0.4s',  x: 0.8, y: -0.1, char: '\u2733' },
+                        { anim: 'icebird-crystal-3', dur: '2.0s', delay: '0.9s',  x: -0.2, y: 0.7, char: '\u2731' },
+                        { anim: 'icebird-crystal-4', dur: '1.6s', delay: '1.3s',  x: 0.6, y: 0.8,  char: '\u2732' },
+                      ].map((cr, i) => (
+                        <div
+                          key={`crystal-${i}`}
+                          className="absolute z-[11] pointer-events-none"
+                          style={{
+                            left: `${((BIRD_X + BIRD_SIZE * cr.x) / GAME_W) * 100}%`,
+                            top: `${((birdY + BIRD_SIZE * cr.y) / GAME_H) * 100}%`,
+                            fontSize: '8px',
+                            color: 'rgba(165,243,252,0.9)',
+                            textShadow: '0 0 4px rgba(103,232,249,0.8)',
+                            animation: `${cr.anim} ${cr.dur} ease-in-out infinite`,
+                            animationDelay: cr.delay,
+                          }}
+                        >
+                          {cr.char}
+                        </div>
+                      ))}
+                    </>
+                  )}
+
+                  {/* Bird body */}
+                  <div
+                    className="absolute rounded-full border-2 shadow-lg z-10"
+                    style={{
+                      left: birdLeft,
+                      top: birdTop,
+                      width: birdW,
+                      height: birdH,
+                      transform: `rotate(${birdAngle}deg)`,
+                      transition: 'transform 0.1s ease-out',
+                      backgroundColor: sc.body,
+                      borderColor: isIcebird ? 'rgba(165,243,252,0.8)' : sc.wing,
+                      boxShadow: isIcebird
+                        ? undefined
+                        : `0 4px 6px -1px ${sc.body}33`,
+                      ...(isIcebird ? {
+                        animation: 'icebird-pulse 2s ease-in-out infinite',
+                        backgroundImage: 'linear-gradient(90deg, transparent 0%, rgba(255,255,255,0.3) 25%, transparent 50%, rgba(236,254,255,0.25) 75%, transparent 100%)',
+                        backgroundSize: '200% 100%',
+                      } : {}),
+                    }}
+                  >
+                    {/* Icebird shimmer overlay */}
+                    {isIcebird && (
+                      <div
+                        className="absolute inset-0 rounded-full pointer-events-none"
+                        style={{
+                          backgroundImage: 'linear-gradient(105deg, transparent 30%, rgba(255,255,255,0.4) 45%, transparent 55%)',
+                          backgroundSize: '200% 100%',
+                          animation: 'icebird-shimmer 2s linear infinite',
+                        }}
+                      />
+                    )}
+                    {/* Belly */}
+                    <div
+                      className="absolute rounded-full"
+                      style={{
+                        width: '55%', height: '55%', bottom: '8%', left: '10%',
+                        backgroundColor: sc.belly,
+                      }}
+                    />
+                    {/* Wing */}
+                    <div
+                      className="absolute rounded-full"
+                      style={{
+                        width: '40%', height: '30%', top: '20%', left: '-5%',
+                        backgroundColor: sc.wing,
+                      }}
+                    />
+                    {/* Eye */}
+                    <div
+                      className="absolute bg-white rounded-full"
+                      style={{ width: '30%', height: '30%', top: '18%', right: '15%' }}
+                    >
+                      <div
+                        className="absolute rounded-full"
+                        style={{
+                          width: '55%', height: '55%', bottom: '10%', right: '10%',
+                          backgroundColor: sc.eye,
+                        }}
+                      />
+                    </div>
+                    {/* Beak */}
+                    <div
+                      className="absolute rounded-sm"
+                      style={{
+                        width: '28%', height: '18%', top: '50%', right: '-12%',
+                        backgroundColor: sc.beak,
+                      }}
+                    />
+                  </div>
+                </>
+              );
+            })()}
 
             {/* Ground */}
             <div
@@ -512,6 +792,11 @@ export function FlappyGame() {
                 <div className="text-3xl font-black text-amber-400 mb-2 drop-shadow-lg">{t('game.name.flappy')}</div>
                 <p className="text-sm text-zinc-300 mb-4">{t('lobby.games.flappy.desc')}</p>
 
+                {/* Wallet */}
+                <div className="flex items-center gap-1.5 text-amber-400 font-bold text-xs mb-4 px-3 py-1 rounded-full bg-amber-950/40 border border-amber-800/30">
+                  <span className="text-sm">●</span> {shop.wallet}
+                </div>
+
                 {/* Difficulty selector */}
                 <div className="flex flex-col items-center gap-1.5 mb-5">
                   <span className="text-[11px] text-zinc-400 uppercase tracking-wider font-semibold">{t('flappy.difficulty')}</span>
@@ -532,13 +817,21 @@ export function FlappyGame() {
                   </div>
                 </div>
 
-                <button
-                  onClick={(e) => { e.stopPropagation(); flap(); }}
-                  className="px-6 py-3 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white font-bold text-sm transition-all active:scale-95 shadow-lg shadow-indigo-900/40"
-                >
-                  {t('flappy.startButton')}
-                </button>
-                <p className="text-[11px] text-zinc-500 mt-4">{t('flappy.idleHint')}</p>
+                <div className="flex gap-2 mb-2">
+                  <button
+                    onClick={(e) => { e.stopPropagation(); flap(); }}
+                    className="px-6 py-3 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white font-bold text-sm transition-all active:scale-95 shadow-lg shadow-indigo-900/40"
+                  >
+                    {t('flappy.startButton')}
+                  </button>
+                  <button
+                    onClick={(e) => { e.stopPropagation(); shop.setShowShop(true); }}
+                    className="px-4 py-3 rounded-xl bg-amber-700 hover:bg-amber-600 text-white font-bold text-sm transition-all active:scale-95 shadow-lg shadow-amber-900/40"
+                  >
+                    {t('skinShop.title')}
+                  </button>
+                </div>
+                <p className="text-[11px] text-zinc-500 mt-3">{t('flappy.idleHint')}</p>
               </div>
             )}
 
@@ -570,20 +863,44 @@ export function FlappyGame() {
                 <div className="text-2xl font-black text-rose-400 mb-1">{t('game.over')}</div>
                 <div className="text-4xl font-black text-zinc-100 mb-1 tabular-nums">{score}</div>
                 {score >= best && score > 0 && (
-                  <span className="text-xs font-bold text-amber-400 mb-3">{t('game.newBest')}</span>
+                  <span className="text-xs font-bold text-amber-400 mb-2">{t('game.newBest')}</span>
                 )}
-                <div className="text-xs text-zinc-400 mb-5">
+                <div className="text-xs text-zinc-400 mb-2">
                   {t('game.best')}: <span className="text-zinc-200 font-bold tabular-nums">{best}</span>
                 </div>
-                <div className="flex gap-3">
+                <div className="flex items-center gap-1.5 text-amber-400 font-bold text-xs mb-4 px-3 py-1 rounded-full bg-amber-950/40 border border-amber-800/30">
+                  <span className="text-sm">●</span> {shop.wallet}
+                  {score > 0 && <span className="text-emerald-400 text-[10px] ml-1">+{score}</span>}
+                </div>
+                <div className="flex gap-2">
                   <button
                     onClick={(e) => { e.stopPropagation(); restart(); }}
                     className="px-5 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white font-bold text-sm transition-all active:scale-95"
                   >
                     {t('game.restart')}
                   </button>
+                  <button
+                    onClick={(e) => { e.stopPropagation(); shop.setShowShop(true); }}
+                    className="px-4 py-2.5 rounded-xl bg-amber-700 hover:bg-amber-600 text-white font-bold text-sm transition-all active:scale-95"
+                  >
+                    {t('skinShop.title')}
+                  </button>
                 </div>
               </div>
+            )}
+
+            {/* Skin Shop */}
+            {shop.showShop && (
+              <SkinShopOverlay
+                skins={FLAPPY_SKINS}
+                wallet={shop.wallet}
+                owned={shop.owned}
+                activeSkin={shop.activeSkin}
+                onBuy={shop.buy}
+                onEquip={shop.equip}
+                onClose={() => shop.setShowShop(false)}
+                renderPreview={renderFlappyPreview}
+              />
             )}
           </div>
         </div>

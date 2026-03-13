@@ -1626,6 +1626,60 @@ export const messages: Record<Lang, Record<string, string>> = {
     'admin.gameProgress.diffUnlockHint': 'Schwierigkeiten die hier freigeschaltet werden gelten zusätzlich zu den normalen Unlock-Bedingungen.',
     'admin.gameProgress.alwaysOpen':     'Immer offen',
 
+    // ── Shared Skin Shop ────────────────────────────────────────────────────
+    'skinShop.title':                    'Shop',
+    'skinShop.equipped':                 'Ausgerüstet',
+    'skinShop.owned':                    'Gekauft',
+    'skinShop.locked':                   'Gesperrt',
+
+    // ── Snake Skins ─────────────────────────────────────────────────────────
+    'snake.skin.classic':       'Klassisch',
+    'snake.skin.ice':           'Eis',
+    'snake.skin.berry':         'Beere',
+    'snake.skin.ocean':         'Ozean',
+    'snake.skin.sunset':        'Sonnenuntergang',
+    'snake.skin.neon':          'Neon',
+    'snake.skin.venom':         'Gift',
+    'snake.skin.lava':          'Lava',
+    'snake.skin.rainbow':       'Regenbogen',
+    'snake.skin.cosmic':        'Kosmisch',
+
+    // ── Doodle Jump Skins ───────────────────────────────────────────────────
+    'doodlejump.skin.doodler':  'Doodler',
+    'doodlejump.skin.alien':    'Alien',
+    'doodlejump.skin.snowman':  'Schneemann',
+    'doodlejump.skin.pumpkin':  'Kürbis',
+    'doodlejump.skin.robot':    'Roboter',
+    'doodlejump.skin.astronaut':'Astronaut',
+    'doodlejump.skin.wizard':   'Zauberer',
+    'doodlejump.skin.phoenix':  'Phönix',
+    'doodlejump.skin.crystal':  'Kristall',
+
+    // ── Flappy Bird Skins ───────────────────────────────────────────────────
+    'flappy.skin.sparrow':      'Spatz',
+    'flappy.skin.bluejay':      'Blaumeise',
+    'flappy.skin.robin':        'Rotkehlchen',
+    'flappy.skin.parrot':       'Papagei',
+    'flappy.skin.flamingo':     'Flamingo',
+    'flappy.skin.owl':          'Eule',
+    'flappy.skin.penguin':      'Pinguin',
+    'flappy.skin.phoenix':      'Phönix',
+    'flappy.skin.icebird':      'Eisvogel',
+
+    'pong.skin.default':        'Standard',
+    'pong.skin.ember':          'Glut',
+    'pong.skin.frost':          'Frost',
+    'pong.skin.toxic':          'Gift',
+    'pong.skin.solar':          'Solar',
+    'pong.skin.violet':         'Violett',
+    'pong.skin.blood':          'Blut',
+    'pong.skin.gold':           'Gold',
+    'pong.skin.neon':           'Neon',
+    'pong.skin.plasma':         'Plasma',
+    'pong.goldenLocked':        'Sammle alle Skins',
+    'pong.shop':                'Shop',
+    'pong.coins':               'Münzen',
+
     // ── Token Shop ──────────────────────────────────────────────────────────
     'shop.title':              'Token Shop',
     'shop.balance':            'Guthaben',
@@ -3277,6 +3331,60 @@ export const messages: Record<Lang, Record<string, string>> = {
     'admin.gameProgress.diff.expert':    'Expert',
     'admin.gameProgress.diffUnlockHint': 'Difficulties unlocked here apply in addition to normal unlock requirements.',
     'admin.gameProgress.alwaysOpen':     'Always open',
+
+    // ── Shared Skin Shop ────────────────────────────────────────────────────
+    'skinShop.title':                    'Shop',
+    'skinShop.equipped':                 'Equipped',
+    'skinShop.owned':                    'Owned',
+    'skinShop.locked':                   'Locked',
+
+    // ── Snake Skins ─────────────────────────────────────────────────────────
+    'snake.skin.classic':       'Classic',
+    'snake.skin.ice':           'Ice',
+    'snake.skin.berry':         'Berry',
+    'snake.skin.ocean':         'Ocean',
+    'snake.skin.sunset':        'Sunset',
+    'snake.skin.neon':          'Neon',
+    'snake.skin.venom':         'Venom',
+    'snake.skin.lava':          'Lava',
+    'snake.skin.rainbow':       'Rainbow',
+    'snake.skin.cosmic':        'Cosmic',
+
+    // ── Doodle Jump Skins ───────────────────────────────────────────────────
+    'doodlejump.skin.doodler':  'Doodler',
+    'doodlejump.skin.alien':    'Alien',
+    'doodlejump.skin.snowman':  'Snowman',
+    'doodlejump.skin.pumpkin':  'Pumpkin',
+    'doodlejump.skin.robot':    'Robot',
+    'doodlejump.skin.astronaut':'Astronaut',
+    'doodlejump.skin.wizard':   'Wizard',
+    'doodlejump.skin.phoenix':  'Phoenix',
+    'doodlejump.skin.crystal':  'Crystal',
+
+    // ── Flappy Bird Skins ───────────────────────────────────────────────────
+    'flappy.skin.sparrow':      'Sparrow',
+    'flappy.skin.bluejay':      'Blue Jay',
+    'flappy.skin.robin':        'Robin',
+    'flappy.skin.parrot':       'Parrot',
+    'flappy.skin.flamingo':     'Flamingo',
+    'flappy.skin.owl':          'Owl',
+    'flappy.skin.penguin':      'Penguin',
+    'flappy.skin.phoenix':      'Phoenix',
+    'flappy.skin.icebird':      'Ice Bird',
+
+    'pong.skin.default':        'Default',
+    'pong.skin.ember':          'Ember',
+    'pong.skin.frost':          'Frost',
+    'pong.skin.toxic':          'Toxic',
+    'pong.skin.solar':          'Solar',
+    'pong.skin.violet':         'Violet',
+    'pong.skin.blood':          'Blood',
+    'pong.skin.gold':           'Gold',
+    'pong.skin.neon':           'Neon',
+    'pong.skin.plasma':         'Plasma',
+    'pong.goldenLocked':        'Collect all skins',
+    'pong.shop':                'Shop',
+    'pong.coins':               'Coins',
 
     // ── Token Shop ──────────────────────────────────────────────────────────
     'shop.title':              'Token Shop',

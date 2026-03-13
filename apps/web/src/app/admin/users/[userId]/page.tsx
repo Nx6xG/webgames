@@ -67,6 +67,40 @@ const CROSSY_SKINS: { id: string; price: number }[] = [
   { id: 'diamond', price: 300 }, { id: 'golden', price: 500 },
 ];
 
+const SNAKE_SKINS: { id: string; price: number }[] = [
+  { id: 'classic', price: 0 }, { id: 'ice', price: 15 }, { id: 'berry', price: 15 },
+  { id: 'ocean', price: 25 }, { id: 'sunset', price: 30 }, { id: 'neon', price: 40 },
+  { id: 'venom', price: 60 }, { id: 'lava', price: 80 }, { id: 'rainbow', price: 120 },
+  { id: 'cosmic', price: 200 },
+];
+
+const DOODLE_SKINS: { id: string; price: number }[] = [
+  { id: 'doodler', price: 0 }, { id: 'alien', price: 20 }, { id: 'snowman', price: 20 },
+  { id: 'pumpkin', price: 30 }, { id: 'robot', price: 40 }, { id: 'astronaut', price: 60 },
+  { id: 'wizard', price: 80 }, { id: 'phoenix', price: 120 }, { id: 'crystal', price: 200 },
+];
+
+const FLAPPY_SKINS: { id: string; price: number }[] = [
+  { id: 'sparrow', price: 0 }, { id: 'bluejay', price: 15 }, { id: 'robin', price: 15 },
+  { id: 'parrot', price: 25 }, { id: 'flamingo', price: 30 }, { id: 'owl', price: 40 },
+  { id: 'penguin', price: 60 }, { id: 'phoenix', price: 100 }, { id: 'icebird', price: 150 },
+];
+
+const PONG_SKINS: { id: string; price: number }[] = [
+  { id: 'default', price: 0 }, { id: 'ember', price: 15 }, { id: 'frost', price: 15 },
+  { id: 'toxic', price: 25 }, { id: 'solar', price: 30 }, { id: 'violet', price: 40 },
+  { id: 'blood', price: 60 }, { id: 'gold', price: 80 }, { id: 'neon', price: 120 },
+  { id: 'plasma', price: 200 },
+];
+
+const SKIN_GAMES: { gameId: string; nameKeyPrefix: string; skins: { id: string; price: number }[] }[] = [
+  { gameId: 'crossyroad', nameKeyPrefix: 'crossyroad.skin', skins: CROSSY_SKINS },
+  { gameId: 'snake', nameKeyPrefix: 'snake.skin', skins: SNAKE_SKINS },
+  { gameId: 'doodlejump', nameKeyPrefix: 'doodlejump.skin', skins: DOODLE_SKINS },
+  { gameId: 'flappy', nameKeyPrefix: 'flappy.skin', skins: FLAPPY_SKINS },
+  { gameId: 'pong', nameKeyPrefix: 'pong.skin', skins: PONG_SKINS },
+];
+
 const DIFF_COLORS = {
   easy: { bg: 'bg-emerald-950/30', border: 'border-emerald-900/40', text: 'text-emerald-400' },
   medium: { bg: 'bg-amber-950/30', border: 'border-amber-900/40', text: 'text-amber-400' },
@@ -894,7 +928,7 @@ function GameProgressManager({
   onResetProgress: (game: string) => void;
   onCancelConfirm: () => void;
 }) {
-  const [activeTab, setActiveTab] = useState<'mahjong' | 'crossyroad' | 'sudoku' | 'minesweeper'>('mahjong');
+  const [activeTab, setActiveTab] = useState<string>('mahjong');
 
   // ── Mahjong state ──
   const rawMahjong = gameProgress?.mahjong as MahjongProgress | string[] | undefined;
@@ -907,14 +941,16 @@ function GameProgressManager({
   const completedSet = new Set(mahjong.completed);
   const unlockedSet = new Set(mahjong.unlocked);
 
-  // ── Crossy Road state ──
-  const rawCrossy = gameProgress?.crossyroad as CrossyProgress | undefined;
-  const crossy: CrossyProgress = rawCrossy && typeof rawCrossy === 'object' && 'wallet' in rawCrossy
-    ? { wallet: rawCrossy.wallet ?? 0, owned: rawCrossy.owned ?? ['chicken'], activeSkin: rawCrossy.activeSkin ?? 'chicken' }
-    : { wallet: 0, owned: ['chicken'], activeSkin: 'chicken' };
-
-  const ownedSet = new Set(crossy.owned);
+  // ── Generic skin game state ──
   const [walletInput, setWalletInput] = useState('');
+
+  function getSkinProgress(gameId: string, defaultSkin: string): CrossyProgress {
+    const raw = gameProgress?.[gameId] as CrossyProgress | undefined;
+    if (raw && typeof raw === 'object' && 'wallet' in raw) {
+      return { wallet: raw.wallet ?? 0, owned: raw.owned ?? [defaultSkin], activeSkin: raw.activeSkin ?? defaultSkin };
+    }
+    return { wallet: 0, owned: [defaultSkin], activeSkin: defaultSkin };
+  }
 
   // ── Sudoku state ──
   const rawSudoku = gameProgress?.sudoku as { unlockedDifficulties?: string[] } | undefined;
@@ -960,26 +996,26 @@ function GameProgressManager({
     saveMahjong(newCompleted, newUnlocked);
   }
 
-  function saveCrossy(updates: Partial<CrossyProgress>) {
-    onSetProgress('crossyroad', { ...crossy, ...updates });
+  function saveSkinGame(gameId: string, defaultSkin: string, updates: Partial<CrossyProgress>) {
+    const current = getSkinProgress(gameId, defaultSkin);
+    onSetProgress(gameId, { ...current, ...updates });
   }
 
-  function toggleCrossySkin(skinId: string) {
-    const newOwned = ownedSet.has(skinId)
-      ? crossy.owned.filter((s) => s !== skinId)
-      : [...crossy.owned, skinId];
-    saveCrossy({ owned: newOwned });
+  function toggleSkin(gameId: string, defaultSkin: string, skinId: string) {
+    const p = getSkinProgress(gameId, defaultSkin);
+    const owned = new Set(p.owned);
+    const newOwned = owned.has(skinId) ? p.owned.filter((s) => s !== skinId) : [...p.owned, skinId];
+    saveSkinGame(gameId, defaultSkin, { owned: newOwned });
   }
 
-  function grantAllCrossySkins() {
-    const allIds = CROSSY_SKINS.map((s) => s.id);
-    saveCrossy({ owned: allIds });
+  function grantAllSkins(gameId: string, defaultSkin: string, skins: { id: string }[]) {
+    saveSkinGame(gameId, defaultSkin, { owned: skins.map((s) => s.id) });
   }
 
-  function handleSetWallet() {
+  function handleSetWallet(gameId: string, defaultSkin: string) {
     const val = parseInt(walletInput, 10);
     if (isNaN(val) || val < 0) return;
-    saveCrossy({ wallet: val });
+    saveSkinGame(gameId, defaultSkin, { wallet: val });
     setWalletInput('');
   }
 
@@ -1000,12 +1036,16 @@ function GameProgressManager({
     <div className="space-y-3">
       {/* Tabs */}
       <div className="flex gap-0.5 bg-zinc-800/50 rounded-md p-0.5 flex-wrap">
-        {([
+        {[
           ['mahjong', 'Mahjong'],
           ['crossyroad', 'Crossy Road'],
+          ['snake', 'Snake'],
+          ['doodlejump', 'Doodle Jump'],
+          ['flappy', 'Flappy Bird'],
+          ['pong', 'Pong'],
           ['sudoku', 'Sudoku'],
           ['minesweeper', 'Minesweeper'],
-        ] as const).map(([tab, label]) => (
+        ].map(([tab, label]) => (
           <button key={tab} onClick={() => setActiveTab(tab)}
             className={`px-3 py-1 rounded text-[11px] font-medium transition-colors ${
               activeTab === tab ? 'bg-zinc-700 text-zinc-100' : 'text-zinc-500 hover:text-zinc-300'
@@ -1127,94 +1167,97 @@ function GameProgressManager({
         </div>
       )}
 
-      {activeTab === 'crossyroad' && (
-        <div className="space-y-3">
-          {/* Wallet */}
-          <div className="rounded-lg bg-amber-950/20 border border-amber-900/30 p-3 space-y-2">
-            <div className="flex items-center gap-3">
-              <div>
-                <p className="text-[10px] text-zinc-500">{t('admin.gameProgress.wallet')}</p>
-                <p className="text-amber-400 font-bold text-lg tabular-nums">{crossy.wallet}</p>
-              </div>
-              <div className="ml-auto flex gap-1.5 items-center">
-                <input
-                  type="number"
-                  value={walletInput}
-                  onChange={(e) => setWalletInput(e.target.value)}
-                  placeholder={String(crossy.wallet)}
-                  min="0"
-                  className="w-24 bg-zinc-800/50 border border-zinc-700/50 rounded-md px-2.5 py-1 text-[11px] text-zinc-200 placeholder-zinc-600 focus:outline-none focus:border-amber-500/50"
-                  onKeyDown={(e) => { if (e.key === 'Enter') handleSetWallet(); }}
-                />
-                <button onClick={handleSetWallet}
-                  disabled={actionLoading === 'set_gp_crossyroad'}
-                  className="px-2.5 py-1 rounded-md text-[10px] font-medium border border-amber-800/60 text-amber-400 hover:bg-amber-900/30 transition-colors disabled:opacity-40">
-                  {t('admin.progression.apply')}
-                </button>
-              </div>
-            </div>
-            {/* Quick add buttons */}
-            <div className="flex gap-1 flex-wrap">
-              {[50, 100, 250, 500, 1000].map((amount) => (
-                <button key={amount}
-                  onClick={() => saveCrossy({ wallet: crossy.wallet + amount })}
-                  disabled={actionLoading === 'set_gp_crossyroad'}
-                  className="px-2 py-0.5 rounded text-[10px] font-medium border border-amber-800/40 text-amber-400/70 hover:bg-amber-900/20 transition-colors disabled:opacity-40">
-                  +{amount}
-                </button>
-              ))}
-            </div>
-          </div>
-
-          {/* Active skin */}
-          <div className="text-[11px] text-zinc-500">
-            {t('admin.gameProgress.activeSkin')}: <span className="text-zinc-300 font-medium">{crossy.activeSkin}</span>
-          </div>
-
-          {/* Skins grid */}
-          <div className="flex items-center gap-2 flex-wrap mb-1">
-            <button onClick={grantAllCrossySkins}
-              disabled={ownedSet.size === CROSSY_SKINS.length || actionLoading === 'set_gp_crossyroad'}
-              className="px-2.5 py-1 rounded-md text-[10px] font-semibold border border-emerald-800/60 text-emerald-400 hover:bg-emerald-900/30 transition-colors disabled:opacity-40">
-              {t('admin.gameProgress.grantAllSkins')} ({CROSSY_SKINS.length - ownedSet.size})
-            </button>
-            <ActionButton
-              label={t('admin.gameProgress.reset')} variant="danger"
-              loading={actionLoading === 'reset_gp_crossyroad'} confirming={confirm === 'reset_gp_crossyroad'}
-              onClick={() => onResetProgress('crossyroad')}
-              onCancel={onCancelConfirm}
-            />
-          </div>
-
-          <div className="grid grid-cols-2 sm:grid-cols-4 gap-1.5">
-            {CROSSY_SKINS.map((skin) => {
-              const owned = ownedSet.has(skin.id);
-              return (
-                <div key={skin.id}
-                  className={`rounded-md px-2.5 py-2 transition-colors ${
-                    owned ? 'bg-emerald-950/30 border border-emerald-800/40' : 'bg-zinc-900/50 border border-zinc-800/50'
-                  }`}
-                >
-                  <div className="flex items-center justify-between">
-                    <div className="min-w-0">
-                      <p className="text-[11px] text-zinc-200 font-medium truncate">{t(`crossyroad.skin.${skin.id}`)}</p>
-                      <p className="text-[9px] text-zinc-500 tabular-nums">{skin.price === 0 ? t('admin.gameProgress.free') : `${skin.price} coins`}</p>
-                    </div>
-                    <button onClick={() => toggleCrossySkin(skin.id)}
-                      disabled={actionLoading === 'set_gp_crossyroad'}
-                      className={`px-2 py-0.5 rounded text-[10px] font-medium border shrink-0 transition-colors disabled:opacity-40 ${
-                        owned
-                          ? 'border-rose-800/60 text-rose-400 hover:bg-rose-900/30'
-                          : 'border-emerald-800/60 text-emerald-400 hover:bg-emerald-900/30'
-                      }`}
-                    >{owned ? t('admin.gameProgress.revoke') : t('admin.gameProgress.grant')}</button>
-                  </div>
+      {SKIN_GAMES.some((sg) => sg.gameId === activeTab) && (() => {
+        const sg = SKIN_GAMES.find((s) => s.gameId === activeTab)!;
+        const defaultSkin = sg.skins[0].id;
+        const progress = getSkinProgress(sg.gameId, defaultSkin);
+        const ownedSet = new Set(progress.owned);
+        return (
+          <div className="space-y-3">
+            {/* Wallet */}
+            <div className="rounded-lg bg-amber-950/20 border border-amber-900/30 p-3 space-y-2">
+              <div className="flex items-center gap-3">
+                <div>
+                  <p className="text-[10px] text-zinc-500">{t('admin.gameProgress.wallet')}</p>
+                  <p className="text-amber-400 font-bold text-lg tabular-nums">{progress.wallet}</p>
                 </div>
-              );
-            })}
+                <div className="ml-auto flex gap-1.5 items-center">
+                  <input
+                    type="number"
+                    value={walletInput}
+                    onChange={(e) => setWalletInput(e.target.value)}
+                    placeholder={String(progress.wallet)}
+                    min="0"
+                    className="w-24 bg-zinc-800/50 border border-zinc-700/50 rounded-md px-2.5 py-1 text-[11px] text-zinc-200 placeholder-zinc-600 focus:outline-none focus:border-amber-500/50"
+                    onKeyDown={(e) => { if (e.key === 'Enter') handleSetWallet(sg.gameId, defaultSkin); }}
+                  />
+                  <button onClick={() => handleSetWallet(sg.gameId, defaultSkin)}
+                    disabled={actionLoading === `set_gp_${sg.gameId}`}
+                    className="px-2.5 py-1 rounded-md text-[10px] font-medium border border-amber-800/60 text-amber-400 hover:bg-amber-900/30 transition-colors disabled:opacity-40">
+                    {t('admin.progression.apply')}
+                  </button>
+                </div>
+              </div>
+              <div className="flex gap-1 flex-wrap">
+                {[50, 100, 250, 500, 1000].map((amount) => (
+                  <button key={amount}
+                    onClick={() => saveSkinGame(sg.gameId, defaultSkin, { wallet: progress.wallet + amount })}
+                    disabled={actionLoading === `set_gp_${sg.gameId}`}
+                    className="px-2 py-0.5 rounded text-[10px] font-medium border border-amber-800/40 text-amber-400/70 hover:bg-amber-900/20 transition-colors disabled:opacity-40">
+                    +{amount}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            <div className="text-[11px] text-zinc-500">
+              {t('admin.gameProgress.activeSkin')}: <span className="text-zinc-300 font-medium">{progress.activeSkin}</span>
+            </div>
+
+            <div className="flex items-center gap-2 flex-wrap mb-1">
+              <button onClick={() => grantAllSkins(sg.gameId, defaultSkin, sg.skins)}
+                disabled={ownedSet.size === sg.skins.length || actionLoading === `set_gp_${sg.gameId}`}
+                className="px-2.5 py-1 rounded-md text-[10px] font-semibold border border-emerald-800/60 text-emerald-400 hover:bg-emerald-900/30 transition-colors disabled:opacity-40">
+                {t('admin.gameProgress.grantAllSkins')} ({sg.skins.length - ownedSet.size})
+              </button>
+              <ActionButton
+                label={t('admin.gameProgress.reset')} variant="danger"
+                loading={actionLoading === `reset_gp_${sg.gameId}`} confirming={confirm === `reset_gp_${sg.gameId}`}
+                onClick={() => onResetProgress(sg.gameId)}
+                onCancel={onCancelConfirm}
+              />
+            </div>
+
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-1.5">
+              {sg.skins.map((skin) => {
+                const owned = ownedSet.has(skin.id);
+                return (
+                  <div key={skin.id}
+                    className={`rounded-md px-2.5 py-2 transition-colors ${
+                      owned ? 'bg-emerald-950/30 border border-emerald-800/40' : 'bg-zinc-900/50 border border-zinc-800/50'
+                    }`}
+                  >
+                    <div className="flex items-center justify-between">
+                      <div className="min-w-0">
+                        <p className="text-[11px] text-zinc-200 font-medium truncate">{t(`${sg.nameKeyPrefix}.${skin.id}`)}</p>
+                        <p className="text-[9px] text-zinc-500 tabular-nums">{skin.price === 0 ? t('admin.gameProgress.free') : `${skin.price} coins`}</p>
+                      </div>
+                      <button onClick={() => toggleSkin(sg.gameId, defaultSkin, skin.id)}
+                        disabled={actionLoading === `set_gp_${sg.gameId}`}
+                        className={`px-2 py-0.5 rounded text-[10px] font-medium border shrink-0 transition-colors disabled:opacity-40 ${
+                          owned
+                            ? 'border-rose-800/60 text-rose-400 hover:bg-rose-900/30'
+                            : 'border-emerald-800/60 text-emerald-400 hover:bg-emerald-900/30'
+                        }`}
+                      >{owned ? t('admin.gameProgress.revoke') : t('admin.gameProgress.grant')}</button>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
           </div>
-        </div>
-      )}
+        );
+      })()}
 
       {(activeTab === 'sudoku' || activeTab === 'minesweeper') && (() => {
         const game = activeTab;

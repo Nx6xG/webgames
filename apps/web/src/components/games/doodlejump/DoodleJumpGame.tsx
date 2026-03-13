@@ -8,6 +8,9 @@ import { useVisibilityPause } from '@/hooks/useVisibilityPause';
 import { ScoreboardPanel } from '@/components/ui/ScoreboardPanel';
 import { useAuth } from '@/components/providers/AuthProvider';
 import { useNickname } from '@/components/providers/NicknameProvider';
+import { useSkinShop } from '@/hooks/useSkinShop';
+import { SkinShopOverlay } from '@/components/ui/SkinShopOverlay';
+import type { SkinDef } from '@/lib/skinShop';
 import * as sfx from './sound';
 
 // ── Constants ────────────────────────────────────────────────────────────────
@@ -36,6 +39,20 @@ const COUNTDOWN_STEPS = 3;
 const COUNTDOWN_STEP_MS = 700;
 
 const BEST_KEY = 'webgames.doodlejump.bestScore';
+
+// ── Doodler skins ───────────────────────────────────────────────────────────
+
+const DOODLE_SKINS: SkinDef[] = [
+  { id: 'doodler',   price: 0,   nameKey: 'doodlejump.skin.doodler',   colors: { body: '#8b5cf6', bodyDark: '#6d28d9', eyes: '#1f2937', mouth: '#ec4899', feet: '#7c3aed' } },
+  { id: 'alien',     price: 20,  nameKey: 'doodlejump.skin.alien',     colors: { body: '#22c55e', bodyDark: '#15803d', eyes: '#000000', mouth: '#4ade80', feet: '#16a34a' } },
+  { id: 'snowman',   price: 20,  nameKey: 'doodlejump.skin.snowman',   colors: { body: '#e2e8f0', bodyDark: '#94a3b8', eyes: '#1f2937', mouth: '#f97316', feet: '#64748b' } },
+  { id: 'pumpkin',   price: 30,  nameKey: 'doodlejump.skin.pumpkin',   colors: { body: '#fb923c', bodyDark: '#c2410c', eyes: '#fef08a', mouth: '#fef08a', feet: '#92400e' } },
+  { id: 'robot',     price: 40,  nameKey: 'doodlejump.skin.robot',     colors: { body: '#94a3b8', bodyDark: '#475569', eyes: '#22d3ee', mouth: '#22d3ee', feet: '#334155' } },
+  { id: 'astronaut', price: 60,  nameKey: 'doodlejump.skin.astronaut', colors: { body: '#f8fafc', bodyDark: '#cbd5e1', eyes: '#3b82f6', mouth: '#60a5fa', feet: '#64748b' } },
+  { id: 'wizard',    price: 80,  nameKey: 'doodlejump.skin.wizard',    colors: { body: '#7c3aed', bodyDark: '#5b21b6', eyes: '#fbbf24', mouth: '#c084fc', feet: '#6d28d9' } },
+  { id: 'phoenix',   price: 120, nameKey: 'doodlejump.skin.phoenix',   colors: { body: '#ef4444', bodyDark: '#991b1b', eyes: '#fef08a', mouth: '#fbbf24', feet: '#dc2626' } },
+  { id: 'crystal',   price: 200, nameKey: 'doodlejump.skin.crystal',   colors: { body: '#67e8f9', bodyDark: '#06b6d4', eyes: '#ecfeff', mouth: '#a5f3fc', feet: '#0891b2' }, requireAll: true },
+];
 
 // ── Platform types ──────────────────────────────────────────────────────────
 
@@ -290,58 +307,237 @@ function drawPlatform(ctx: CanvasRenderingContext2D, p: Platform, screenY: numbe
   }
 }
 
-function drawDoodler(ctx: CanvasRenderingContext2D, x: number, screenY: number, velY: number) {
-  // Body — rounded rectangle, slight tilt based on horizontal velocity
-  const bodyColor = '#a78bfa'; // violet-400
-  const bodyDark = '#7c3aed'; // violet-600
+/** Helper: get a prismatic rainbow color cycling through hue at a given speed. */
+function prismaticColor(time: number, offset: number = 0, saturation: number = 100, lightness: number = 70): string {
+  const hue = ((time * 0.1) + offset) % 360;
+  return `hsl(${hue}, ${saturation}%, ${lightness}%)`;
+}
 
-  const grad = ctx.createLinearGradient(x, screenY, x, screenY + DOODLER_H);
-  grad.addColorStop(0, bodyColor);
-  grad.addColorStop(1, bodyDark);
-  ctx.fillStyle = grad;
-  drawRoundedRect(ctx, x, screenY, DOODLER_W, DOODLER_H, 8);
+/** Draw dramatic crystal effects around the doodler. */
+function drawCrystalEffects(ctx: CanvasRenderingContext2D, x: number, screenY: number, velY: number) {
+  const now = performance.now();
+  const cx = x + DOODLER_W / 2;
+  const cy = screenY + DOODLER_H / 2;
+
+  // ── 1. Prismatic aura glow ──────────────────────────────────────────
+  ctx.save();
+  const auraRadius = 28 + Math.sin(now * 0.004) * 4;
+  const auraGrad = ctx.createRadialGradient(cx, cy, 8, cx, cy, auraRadius);
+  const hue1 = (now * 0.08) % 360;
+  const hue2 = (hue1 + 120) % 360;
+  const hue3 = (hue1 + 240) % 360;
+  auraGrad.addColorStop(0, `hsla(${hue1}, 100%, 80%, 0.35)`);
+  auraGrad.addColorStop(0.4, `hsla(${hue2}, 100%, 70%, 0.18)`);
+  auraGrad.addColorStop(0.7, `hsla(${hue3}, 100%, 70%, 0.08)`);
+  auraGrad.addColorStop(1, 'hsla(0, 0%, 100%, 0)');
+  ctx.fillStyle = auraGrad;
+  ctx.beginPath();
+  ctx.arc(cx, cy, auraRadius, 0, Math.PI * 2);
   ctx.fill();
+  ctx.restore();
+
+  // ── 2. Orbiting sparkle particles (6 of them) ──────────────────────
+  ctx.save();
+  const orbitCount = 6;
+  const orbitRadius = 22 + Math.sin(now * 0.003) * 3;
+  for (let i = 0; i < orbitCount; i++) {
+    const angle = (now * 0.003) + (i * Math.PI * 2 / orbitCount);
+    const ox = cx + Math.cos(angle) * orbitRadius;
+    const oy = cy + Math.sin(angle) * (orbitRadius * 0.7); // slightly elliptical
+    const sparkleSize = 2 + Math.sin(now * 0.01 + i * 1.5) * 1;
+    const color = prismaticColor(now, i * 60, 100, 85);
+
+    ctx.shadowColor = color;
+    ctx.shadowBlur = 6;
+    ctx.fillStyle = color;
+    ctx.beginPath();
+    ctx.arc(ox, oy, sparkleSize, 0, Math.PI * 2);
+    ctx.fill();
+
+    // Draw a tiny 4-point star shape
+    ctx.strokeStyle = 'rgba(255,255,255,0.7)';
+    ctx.lineWidth = 0.5;
+    ctx.beginPath();
+    ctx.moveTo(ox - sparkleSize * 1.5, oy);
+    ctx.lineTo(ox + sparkleSize * 1.5, oy);
+    ctx.moveTo(ox, oy - sparkleSize * 1.5);
+    ctx.lineTo(ox, oy + sparkleSize * 1.5);
+    ctx.stroke();
+  }
+  ctx.shadowBlur = 0;
+  ctx.restore();
+
+  // ── 3. Crystalline shimmer (diagonal highlight sweeping across body) ─
+  ctx.save();
+  ctx.beginPath();
+  drawRoundedRect(ctx, x, screenY, DOODLER_W, DOODLER_H, 8);
+  ctx.clip();
+
+  const shimmerX = ((now * 0.06) % (DOODLER_W + 30)) - 15;
+  const shimmerGrad = ctx.createLinearGradient(
+    x + shimmerX - 8, screenY,
+    x + shimmerX + 8, screenY + DOODLER_H
+  );
+  shimmerGrad.addColorStop(0, 'rgba(255,255,255,0)');
+  shimmerGrad.addColorStop(0.3, 'rgba(255,255,255,0)');
+  shimmerGrad.addColorStop(0.5, 'rgba(255,255,255,0.35)');
+  shimmerGrad.addColorStop(0.7, 'rgba(255,255,255,0)');
+  shimmerGrad.addColorStop(1, 'rgba(255,255,255,0)');
+  ctx.fillStyle = shimmerGrad;
+  ctx.fillRect(x, screenY, DOODLER_W, DOODLER_H);
+  ctx.restore();
+
+  // ── 4. Floating crystal fragments drifting upward ──────────────────
+  ctx.save();
+  const fragmentCount = 8;
+  for (let i = 0; i < fragmentCount; i++) {
+    // Each fragment has a unique cycle based on index
+    const cycle = ((now * 0.001 + i * 1.7) % 2.5); // 0..2.5 seconds per cycle
+    const progress = cycle / 2.5; // 0..1
+    const alpha = progress < 0.1 ? progress * 10 : progress > 0.7 ? (1 - progress) / 0.3 : 1;
+
+    const fx = cx + Math.sin(now * 0.002 + i * 2.1) * 14 + (i % 2 === 0 ? -6 : 6);
+    const fy = screenY + DOODLER_H - progress * 60 - (velY > 0 ? 10 : 0);
+    const fSize = 1.5 + Math.sin(i * 0.7) * 0.8;
+    const fColor = prismaticColor(now, i * 45, 90, 80);
+
+    ctx.globalAlpha = alpha * 0.7;
+    ctx.fillStyle = fColor;
+
+    // Draw tiny diamond shape
+    ctx.beginPath();
+    ctx.moveTo(fx, fy - fSize * 1.5);
+    ctx.lineTo(fx + fSize, fy);
+    ctx.lineTo(fx, fy + fSize * 1.5);
+    ctx.lineTo(fx - fSize, fy);
+    ctx.closePath();
+    ctx.fill();
+  }
+  ctx.globalAlpha = 1;
+  ctx.restore();
+}
+
+/** Draw glowing/pulsing eyes for the crystal skin. */
+function drawCrystalEyes(ctx: CanvasRenderingContext2D, x: number, screenY: number, velY: number) {
+  const now = performance.now();
+  const eyeY = screenY + 10;
+  const eyeR = 4;
+  const pulse = 0.6 + Math.sin(now * 0.006) * 0.4; // 0.2..1.0
+
+  const glowColor = prismaticColor(now, 180, 100, 90);
+
+  for (const ex of [x + 10, x + 22]) {
+    // Glow behind eye
+    ctx.save();
+    ctx.shadowColor = glowColor;
+    ctx.shadowBlur = 8 * pulse;
+    ctx.fillStyle = `rgba(255,255,255,${0.6 + pulse * 0.4})`;
+    ctx.beginPath();
+    ctx.arc(ex, eyeY, eyeR, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.restore();
+
+    // Iris with prismatic color
+    ctx.fillStyle = glowColor;
+    ctx.beginPath();
+    ctx.arc(ex, eyeY + (velY > 0 ? -1 : 1), 2.2, 0, Math.PI * 2);
+    ctx.fill();
+
+    // Bright center dot
+    ctx.fillStyle = '#ffffff';
+    ctx.beginPath();
+    ctx.arc(ex, eyeY + (velY > 0 ? -1 : 1), 0.8, 0, Math.PI * 2);
+    ctx.fill();
+  }
+}
+
+function drawDoodler(ctx: CanvasRenderingContext2D, x: number, screenY: number, velY: number, skinColors?: Record<string, string>, skinId?: string) {
+  const isCrystal = skinId === 'crystal';
+  const bodyColor = skinColors?.body ?? '#8b5cf6';
+  const bodyDark = skinColors?.bodyDark ?? '#6d28d9';
+  const mouthColor = skinColors?.mouth ?? '#ec4899';
+  const feetColor = skinColors?.feet ?? '#7c3aed';
+
+  // Crystal: draw aura + orbiting sparkles BEFORE the body
+  if (isCrystal) {
+    drawCrystalEffects(ctx, x, screenY, velY);
+  }
+
+  // Body gradient — crystal gets a subtle prismatic tint
+  const grad = ctx.createLinearGradient(x, screenY, x, screenY + DOODLER_H);
+  if (isCrystal) {
+    const now = performance.now();
+    const h1 = (now * 0.05) % 360;
+    const h2 = (h1 + 60) % 360;
+    grad.addColorStop(0, `hsl(${h1}, 70%, 80%)`);
+    grad.addColorStop(0.5, bodyColor);
+    grad.addColorStop(1, `hsl(${h2}, 60%, 45%)`);
+  } else {
+    grad.addColorStop(0, bodyColor);
+    grad.addColorStop(1, bodyDark);
+  }
+  ctx.fillStyle = grad;
+
+  // Crystal: add outer glow via shadow
+  if (isCrystal) {
+    ctx.save();
+    const now = performance.now();
+    ctx.shadowColor = prismaticColor(now, 0, 100, 75);
+    ctx.shadowBlur = 12 + Math.sin(now * 0.005) * 4;
+    drawRoundedRect(ctx, x, screenY, DOODLER_W, DOODLER_H, 8);
+    ctx.fill();
+    ctx.restore();
+  } else {
+    drawRoundedRect(ctx, x, screenY, DOODLER_W, DOODLER_H, 8);
+    ctx.fill();
+  }
 
   // Outline
-  ctx.strokeStyle = '#6d28d9';
+  if (isCrystal) {
+    const now = performance.now();
+    ctx.strokeStyle = prismaticColor(now, 120, 80, 70);
+  } else {
+    ctx.strokeStyle = bodyDark;
+  }
   ctx.lineWidth = 1.5;
   drawRoundedRect(ctx, x, screenY, DOODLER_W, DOODLER_H, 8);
   ctx.stroke();
 
-  // Eyes
-  const eyeY = screenY + 10;
-  const eyeR = 4;
+  // Eyes — crystal gets special glowing eyes
+  if (isCrystal) {
+    drawCrystalEyes(ctx, x, screenY, velY);
+  } else {
+    const eyesColor = skinColors?.eyes ?? '#1f2937';
+    const eyeY = screenY + 10;
+    const eyeR = 4;
 
-  // Left eye
-  ctx.fillStyle = '#ffffff';
-  ctx.beginPath();
-  ctx.arc(x + 10, eyeY, eyeR, 0, Math.PI * 2);
-  ctx.fill();
-  ctx.fillStyle = '#1e1b4b';
-  ctx.beginPath();
-  ctx.arc(x + 10, eyeY + (velY > 0 ? -1 : 1), 2, 0, Math.PI * 2);
-  ctx.fill();
+    ctx.fillStyle = '#ffffff';
+    ctx.beginPath();
+    ctx.arc(x + 10, eyeY, eyeR, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.fillStyle = eyesColor;
+    ctx.beginPath();
+    ctx.arc(x + 10, eyeY + (velY > 0 ? -1 : 1), 2, 0, Math.PI * 2);
+    ctx.fill();
 
-  // Right eye
-  ctx.fillStyle = '#ffffff';
-  ctx.beginPath();
-  ctx.arc(x + 22, eyeY, eyeR, 0, Math.PI * 2);
-  ctx.fill();
-  ctx.fillStyle = '#1e1b4b';
-  ctx.beginPath();
-  ctx.arc(x + 22, eyeY + (velY > 0 ? -1 : 1), 2, 0, Math.PI * 2);
-  ctx.fill();
+    ctx.fillStyle = '#ffffff';
+    ctx.beginPath();
+    ctx.arc(x + 22, eyeY, eyeR, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.fillStyle = eyesColor;
+    ctx.beginPath();
+    ctx.arc(x + 22, eyeY + (velY > 0 ? -1 : 1), 2, 0, Math.PI * 2);
+    ctx.fill();
+  }
 
   // Mouth — smile when going up, open mouth when falling
   if (velY < 0) {
-    // Falling — open mouth
-    ctx.fillStyle = '#1e1b4b';
+    ctx.fillStyle = mouthColor;
     ctx.beginPath();
     ctx.ellipse(x + DOODLER_W / 2, screenY + 26, 5, 4, 0, 0, Math.PI * 2);
     ctx.fill();
   } else {
-    // Jumping — smile
-    ctx.strokeStyle = '#1e1b4b';
+    ctx.strokeStyle = mouthColor;
     ctx.lineWidth = 1.5;
     ctx.beginPath();
     ctx.arc(x + DOODLER_W / 2, screenY + 24, 5, 0.1, Math.PI - 0.1);
@@ -350,7 +546,12 @@ function drawDoodler(ctx: CanvasRenderingContext2D, x: number, screenY: number, 
 
   // Feet — little stubs when falling
   if (velY < 0) {
-    ctx.fillStyle = bodyDark;
+    if (isCrystal) {
+      const now = performance.now();
+      ctx.fillStyle = prismaticColor(now, 200, 70, 60);
+    } else {
+      ctx.fillStyle = feetColor;
+    }
     ctx.fillRect(x + 6, screenY + DOODLER_H, 6, 4);
     ctx.fillRect(x + DOODLER_W - 12, screenY + DOODLER_H, 6, 4);
   }
@@ -390,6 +591,161 @@ function drawScore(ctx: CanvasRenderingContext2D, score: number) {
   ctx.fillText(String(score), 12, 28);
 }
 
+// ── Skin preview for shop ───────────────────────────────────────────────────
+
+function renderSkinPreview(ctx: CanvasRenderingContext2D, skin: SkinDef, size: number) {
+  const c = skin.colors;
+  const cx = size / 2;
+  const cy = size / 2;
+  const bodyW = size * 0.6;
+  const bodyH = size * 0.7;
+  const bx = cx - bodyW / 2;
+  const by = size * 0.12;
+  const isCrystal = skin.id === 'crystal';
+
+  // Crystal: rainbow aura glow behind the body
+  if (isCrystal) {
+    const now = performance.now();
+    const auraR = size * 0.48;
+    const auraGrad = ctx.createRadialGradient(cx, cy, size * 0.15, cx, cy, auraR);
+    const h1 = (now * 0.08) % 360;
+    const h2 = (h1 + 120) % 360;
+    const h3 = (h1 + 240) % 360;
+    auraGrad.addColorStop(0, `hsla(${h1}, 100%, 80%, 0.3)`);
+    auraGrad.addColorStop(0.4, `hsla(${h2}, 100%, 70%, 0.15)`);
+    auraGrad.addColorStop(0.7, `hsla(${h3}, 100%, 70%, 0.07)`);
+    auraGrad.addColorStop(1, 'hsla(0, 0%, 100%, 0)');
+    ctx.fillStyle = auraGrad;
+    ctx.beginPath();
+    ctx.arc(cx, cy, auraR, 0, Math.PI * 2);
+    ctx.fill();
+
+    // Sparkle dots around the body
+    const sparkleCount = 6;
+    for (let i = 0; i < sparkleCount; i++) {
+      const angle = (now * 0.002) + (i * Math.PI * 2 / sparkleCount);
+      const sr = size * 0.4;
+      const sx = cx + Math.cos(angle) * sr;
+      const sy = cy + Math.sin(angle) * (sr * 0.7);
+      const sSize = size * 0.03 + Math.sin(now * 0.008 + i) * size * 0.01;
+      const sColor = prismaticColor(now, i * 60, 100, 85);
+
+      ctx.save();
+      ctx.shadowColor = sColor;
+      ctx.shadowBlur = 4;
+      ctx.fillStyle = sColor;
+      ctx.beginPath();
+      ctx.arc(sx, sy, sSize, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.restore();
+    }
+  }
+
+  // Body
+  const grad = ctx.createLinearGradient(bx, by, bx, by + bodyH);
+  if (isCrystal) {
+    const now = performance.now();
+    const h1 = (now * 0.05) % 360;
+    const h2 = (h1 + 60) % 360;
+    grad.addColorStop(0, `hsl(${h1}, 70%, 80%)`);
+    grad.addColorStop(0.5, c.body);
+    grad.addColorStop(1, `hsl(${h2}, 60%, 45%)`);
+  } else {
+    grad.addColorStop(0, c.body);
+    grad.addColorStop(1, c.bodyDark);
+  }
+  ctx.fillStyle = grad;
+
+  if (isCrystal) {
+    ctx.save();
+    const now = performance.now();
+    ctx.shadowColor = prismaticColor(now, 0, 100, 75);
+    ctx.shadowBlur = 10;
+    drawRoundedRect(ctx, bx, by, bodyW, bodyH, bodyW * 0.25);
+    ctx.fill();
+    ctx.restore();
+  } else {
+    drawRoundedRect(ctx, bx, by, bodyW, bodyH, bodyW * 0.25);
+    ctx.fill();
+  }
+
+  // Crystal: shimmer sweep across body
+  if (isCrystal) {
+    ctx.save();
+    ctx.beginPath();
+    drawRoundedRect(ctx, bx, by, bodyW, bodyH, bodyW * 0.25);
+    ctx.clip();
+    const now = performance.now();
+    const shimmerX = ((now * 0.04) % (bodyW + 20)) - 10;
+    const shimmerGrad = ctx.createLinearGradient(
+      bx + shimmerX - 6, by,
+      bx + shimmerX + 6, by + bodyH
+    );
+    shimmerGrad.addColorStop(0, 'rgba(255,255,255,0)');
+    shimmerGrad.addColorStop(0.4, 'rgba(255,255,255,0)');
+    shimmerGrad.addColorStop(0.5, 'rgba(255,255,255,0.4)');
+    shimmerGrad.addColorStop(0.6, 'rgba(255,255,255,0)');
+    shimmerGrad.addColorStop(1, 'rgba(255,255,255,0)');
+    ctx.fillStyle = shimmerGrad;
+    ctx.fillRect(bx, by, bodyW, bodyH);
+    ctx.restore();
+  }
+
+  // Eyes
+  const eyeR = size * 0.06;
+  const eyeY = by + bodyH * 0.28;
+  const eyeSpread = bodyW * 0.22;
+
+  if (isCrystal) {
+    const now = performance.now();
+    const glowColor = prismaticColor(now, 180, 100, 90);
+    const pulse = 0.6 + Math.sin(now * 0.006) * 0.4;
+    for (const ex of [cx - eyeSpread, cx + eyeSpread]) {
+      ctx.save();
+      ctx.shadowColor = glowColor;
+      ctx.shadowBlur = 6 * pulse;
+      ctx.fillStyle = `rgba(255,255,255,${0.6 + pulse * 0.4})`;
+      ctx.beginPath();
+      ctx.arc(ex, eyeY, eyeR * 1.5, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.restore();
+      ctx.fillStyle = glowColor;
+      ctx.beginPath();
+      ctx.arc(ex, eyeY, eyeR, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.fillStyle = '#ffffff';
+      ctx.beginPath();
+      ctx.arc(ex, eyeY, eyeR * 0.4, 0, Math.PI * 2);
+      ctx.fill();
+    }
+  } else {
+    ctx.fillStyle = '#ffffff';
+    ctx.beginPath();
+    ctx.arc(cx - eyeSpread, eyeY, eyeR * 1.5, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.fillStyle = c.eyes;
+    ctx.beginPath();
+    ctx.arc(cx - eyeSpread, eyeY, eyeR, 0, Math.PI * 2);
+    ctx.fill();
+
+    ctx.fillStyle = '#ffffff';
+    ctx.beginPath();
+    ctx.arc(cx + eyeSpread, eyeY, eyeR * 1.5, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.fillStyle = c.eyes;
+    ctx.beginPath();
+    ctx.arc(cx + eyeSpread, eyeY, eyeR, 0, Math.PI * 2);
+    ctx.fill();
+  }
+
+  // Mouth — small smile arc
+  ctx.strokeStyle = c.mouth;
+  ctx.lineWidth = 1.5;
+  ctx.beginPath();
+  ctx.arc(cx, by + bodyH * 0.55, size * 0.08, 0.15, Math.PI - 0.15);
+  ctx.stroke();
+}
+
 // ── Component ───────────────────────────────────────────────────────────────
 
 export function DoodleJumpGame() {
@@ -398,6 +754,7 @@ export function DoodleJumpGame() {
   const { nickname } = useNickname();
   const ach = useAchievements('doodlejump');
   const pb = usePersonalScores('doodlejump', user ? { userId: user.id, nickname } : undefined);
+  const shop = useSkinShop('doodlejump', DOODLE_SKINS);
 
   // ── React state (for overlays) ──────────────────────────────────────────
   const [phase, setPhase] = useState<Phase>('idle');
@@ -470,15 +827,17 @@ export function DoodleJumpGame() {
       drawPlatform(ctx, p, screenY);
     }
 
-    // Doodler
+    // Doodler — use activeSkinRef to avoid stale closure in RAF
     const doodlerScreenY = CANVAS_H - (gs.doodlerY - gs.cameraY) - DOODLER_H;
-    drawDoodler(ctx, gs.doodlerX, doodlerScreenY, gs.velY);
+    const currentSkinId = shop.activeSkinRef.current;
+    const currentSkinDef = DOODLE_SKINS.find((s) => s.id === currentSkinId) ?? DOODLE_SKINS[0];
+    drawDoodler(ctx, gs.doodlerX, doodlerScreenY, gs.velY, currentSkinDef.colors, currentSkinId);
 
     // Score
     drawScore(ctx, gs.score);
 
     ctx.restore();
-  }, []);
+  }, [shop.activeSkinRef]);
 
   // ── Game tick (delta-time based — consistent across all refresh rates) ──
   const tick = useCallback((timestamp: number) => {
@@ -656,6 +1015,7 @@ export function DoodleJumpGame() {
       if (!savedRef.current) {
         savedRef.current = true;
         pb.submit(gs.score);
+        shop.addCoins(gs.score);
       }
 
       // Render one last frame
@@ -858,16 +1218,27 @@ export function DoodleJumpGame() {
           {phase === 'idle' && (
             <div className="absolute inset-0 flex flex-col items-center justify-center bg-black/50 backdrop-blur-[2px] z-20">
               <div className="text-3xl font-black text-violet-400 mb-2 drop-shadow-lg">Doodle Jump</div>
-              <p className="text-sm text-zinc-300 mb-6 text-center px-4">
+              <p className="text-sm text-zinc-300 mb-4 text-center px-4">
                 {t('doodlejump.desc') !== 'doodlejump.desc' ? t('doodlejump.desc') : 'Jump from platform to platform and climb as high as you can!'}
               </p>
-              <button
-                onClick={(e) => { e.stopPropagation(); start(); }}
-                className="px-6 py-3 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white font-bold text-sm transition-all active:scale-95 shadow-lg shadow-indigo-900/40"
-              >
-                {t('flappy.startButton') !== 'flappy.startButton' ? t('flappy.startButton') : 'Start'}
-              </button>
-              <p className="text-[11px] text-zinc-500 mt-4">
+              <div className="flex items-center gap-1.5 text-amber-400 font-bold text-xs mb-4 px-3 py-1 rounded-full bg-amber-950/40 border border-amber-800/30">
+                <span className="text-sm">●</span> {shop.wallet}
+              </div>
+              <div className="flex gap-2 mb-2">
+                <button
+                  onClick={(e) => { e.stopPropagation(); start(); }}
+                  className="px-6 py-3 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white font-bold text-sm transition-all active:scale-95 shadow-lg shadow-indigo-900/40"
+                >
+                  {t('flappy.startButton') !== 'flappy.startButton' ? t('flappy.startButton') : 'Start'}
+                </button>
+                <button
+                  onClick={(e) => { e.stopPropagation(); shop.setShowShop(true); }}
+                  className="px-4 py-3 rounded-xl bg-amber-700 hover:bg-amber-600 text-white font-bold text-sm transition-all active:scale-95 shadow-lg shadow-amber-900/40"
+                >
+                  {t('skinShop.title') !== 'skinShop.title' ? t('skinShop.title') : 'Shop'}
+                </button>
+              </div>
+              <p className="text-[11px] text-zinc-500 mt-3">
                 {t('doodlejump.hint') !== 'doodlejump.hint' ? t('doodlejump.hint') : 'Arrow keys / A,D to move'}
               </p>
             </div>
@@ -901,17 +1272,28 @@ export function DoodleJumpGame() {
               <div className="text-2xl font-black text-rose-400 mb-1">{t('game.over')}</div>
               <div className="text-4xl font-black text-zinc-100 mb-1 tabular-nums">{score}</div>
               {score >= best && score > 0 && (
-                <span className="text-xs font-bold text-amber-400 mb-2">{t('game.newBest')}</span>
+                <span className="text-xs font-bold text-amber-400 mb-1">{t('game.newBest')}</span>
               )}
-              <div className="text-xs text-zinc-400 mb-4">
+              <div className="text-xs text-zinc-400 mb-1">
                 {t('game.best')}: <span className="text-zinc-200 font-bold tabular-nums">{best}</span>
               </div>
-              <button
-                onClick={(e) => { e.stopPropagation(); start(); }}
-                className="px-5 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white font-bold text-sm transition-all active:scale-95 mb-4"
-              >
-                {t('game.restart')}
-              </button>
+              <div className="flex items-center gap-1.5 text-amber-400 font-bold text-xs mb-3 px-3 py-1 rounded-full bg-amber-950/40 border border-amber-800/30">
+                <span className="text-sm">●</span> {shop.wallet} <span className="text-amber-600 text-[10px]">(+{score})</span>
+              </div>
+              <div className="flex gap-2 mb-4">
+                <button
+                  onClick={(e) => { e.stopPropagation(); start(); }}
+                  className="px-5 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white font-bold text-sm transition-all active:scale-95"
+                >
+                  {t('game.restart')}
+                </button>
+                <button
+                  onClick={(e) => { e.stopPropagation(); shop.setShowShop(true); }}
+                  className="px-4 py-2.5 rounded-xl bg-amber-700 hover:bg-amber-600 text-white font-bold text-sm transition-all active:scale-95"
+                >
+                  {t('skinShop.title') !== 'skinShop.title' ? t('skinShop.title') : 'Shop'}
+                </button>
+              </div>
               <div className="w-full max-w-[280px]">
                 <ScoreboardPanel
                   gameId="doodlejump"
@@ -922,6 +1304,20 @@ export function DoodleJumpGame() {
                 />
               </div>
             </div>
+          )}
+
+          {/* Skin Shop */}
+          {shop.showShop && (
+            <SkinShopOverlay
+              skins={DOODLE_SKINS}
+              wallet={shop.wallet}
+              owned={shop.owned}
+              activeSkin={shop.activeSkin}
+              onBuy={shop.buy}
+              onEquip={shop.equip}
+              onClose={() => shop.setShowShop(false)}
+              renderPreview={renderSkinPreview}
+            />
           )}
         </div>
       </div>

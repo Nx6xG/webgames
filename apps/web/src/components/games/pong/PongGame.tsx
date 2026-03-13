@@ -7,6 +7,9 @@ import { loadStats, saveStats, updateStats } from './stats';
 import type { PongStats } from './stats';
 import * as sfx from './sound';
 import { useVisibilityPause } from '@/hooks/useVisibilityPause';
+import { useSkinShop } from '@/hooks/useSkinShop';
+import { SkinShopOverlay } from '@/components/ui/SkinShopOverlay';
+import type { SkinDef } from '@/lib/skinShop';
 
 // ── Constants ────────────────────────────────────────────────────────────────
 
@@ -36,6 +39,21 @@ const BOT_CONFIG: Record<Difficulty, { speed: number; offset: number; driftFacto
 
 const GAME_KEYS = new Set(['ArrowUp', 'ArrowDown', 'w', 'W', 's', 'S', ' ', 'p', 'P', 'Escape']);
 
+// ── Skin definitions ─────────────────────────────────────────────────────────
+
+const PONG_SKINS: SkinDef[] = [
+  { id: 'default', price: 0,   nameKey: 'pong.skin.default', colors: { ball: '#b4bfff', ballCore: '#ffffff', ballEdge: '#e0e4ff', trail: '139,156,247', glow: '180,190,255', particle: '#8b9cf7', bounce: 'normal' } },
+  { id: 'ember',   price: 15,  nameKey: 'pong.skin.ember',   colors: { ball: '#ff6b35', ballCore: '#fff4e0', ballEdge: '#ff9e6b', trail: '255,107,53', glow: '255,160,80', particle: '#ff8c42', bounce: 'fire' } },
+  { id: 'frost',   price: 15,  nameKey: 'pong.skin.frost',   colors: { ball: '#7dd3fc', ballCore: '#f0f9ff', ballEdge: '#bae6fd', trail: '125,211,252', glow: '186,230,253', particle: '#38bdf8', bounce: 'ice' } },
+  { id: 'toxic',   price: 25,  nameKey: 'pong.skin.toxic',   colors: { ball: '#4ade80', ballCore: '#f0fdf4', ballEdge: '#86efac', trail: '74,222,128', glow: '134,239,172', particle: '#22c55e', bounce: 'toxic' } },
+  { id: 'solar',   price: 30,  nameKey: 'pong.skin.solar',   colors: { ball: '#fbbf24', ballCore: '#fffbeb', ballEdge: '#fcd34d', trail: '251,191,36', glow: '252,211,77', particle: '#f59e0b', bounce: 'solar' } },
+  { id: 'violet',  price: 40,  nameKey: 'pong.skin.violet',  colors: { ball: '#c084fc', ballCore: '#faf5ff', ballEdge: '#d8b4fe', trail: '192,132,252', glow: '216,180,254', particle: '#a855f7', bounce: 'electric' } },
+  { id: 'blood',   price: 60,  nameKey: 'pong.skin.blood',   colors: { ball: '#f87171', ballCore: '#fef2f2', ballEdge: '#fca5a5', trail: '248,113,113', glow: '252,165,165', particle: '#ef4444', bounce: 'blood' } },
+  { id: 'gold',    price: 80,  nameKey: 'pong.skin.gold',    colors: { ball: '#fcd34d', ballCore: '#fffdf0', ballEdge: '#fde68a', trail: '252,211,77', glow: '253,230,138', particle: '#eab308', bounce: 'gold' } },
+  { id: 'neon',    price: 120, nameKey: 'pong.skin.neon',    colors: { ball: '#22d3ee', ballCore: '#ffffff', ballEdge: '#67e8f9', trail: '34,211,238', glow: '103,232,249', particle: '#06b6d4', bounce: 'neon' } },
+  { id: 'plasma',  price: 200, nameKey: 'pong.skin.plasma',  colors: { ball: '#e879f9', ballCore: '#ffffff', ballEdge: '#f0abfc', trail: '232,121,249', glow: '240,171,252', particle: '#d946ef', bounce: 'plasma' }, requireAll: true },
+];
+
 // ── FX types ─────────────────────────────────────────────────────────────────
 
 interface TrailPoint { x: number; y: number }
@@ -60,6 +78,7 @@ interface ImpactFlash {
 export function PongGame() {
   const { t } = useI18n();
   const ach = useAchievements('pong');
+  const shop = useSkinShop('pong', PONG_SKINS);
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const wrapperRef = useRef<HTMLDivElement>(null);
   const rafRef = useRef<number>(0);
@@ -79,6 +98,12 @@ export function PongGame() {
   diffRef.current = difficulty;
   const savedRef = useRef(false);
   const rallyRef = useRef(0);
+
+  // Skin refs for frame-loop access
+  const skinColorsRef = useRef(shop.activeSkinDef.colors);
+  skinColorsRef.current = shop.activeSkinDef.colors;
+  const skinIdRef = useRef(shop.activeSkin);
+  skinIdRef.current = shop.activeSkin;
 
   // Visual FX state (mutated per-frame)
   const trailRef = useRef<TrailPoint[]>([]);
@@ -207,7 +232,10 @@ export function PongGame() {
     const updated = updateStats(s, won);
     saveStats(updated);
     setStats(updated);
-  }, [phase, winner, ach]);
+    // Award coins: player's score as coins
+    const coins = gameRef.current.pScore;
+    if (coins > 0) shop.addCoins(coins);
+  }, [phase, winner, ach, shop]);
 
   // ── FX helpers ─────────────────────────────────────────────────────────
 
@@ -234,6 +262,46 @@ export function PongGame() {
       y: (Math.random() - 0.5) * intensity,
       decay: intensity,
     };
+  }
+
+  function spawnBounceEffect(x: number, y: number, bounce: string, color: string) {
+    const parts = particlesRef.current;
+    switch (bounce) {
+      case 'fire':
+        for (let i = 0; i < 8 && parts.length < MAX_PARTICLES; i++) {
+          parts.push({ x, y: y + (Math.random() - 0.5) * 20, vx: (Math.random() - 0.3) * 3, vy: -(1 + Math.random() * 3), life: 0, maxLife: 15 + Math.random() * 10, r: 2 + Math.random() * 3, color: i % 2 === 0 ? '#ff6b35' : '#fbbf24' });
+        }
+        break;
+      case 'ice':
+        for (let i = 0; i < 6 && parts.length < MAX_PARTICLES; i++) {
+          const angle = Math.random() * Math.PI * 2;
+          parts.push({ x, y, vx: Math.cos(angle) * 2, vy: Math.sin(angle) * 2, life: 0, maxLife: 20, r: 1.5 + Math.random() * 2, color: i % 2 === 0 ? '#7dd3fc' : '#e0f2fe' });
+        }
+        break;
+      case 'toxic':
+        for (let i = 0; i < 6 && parts.length < MAX_PARTICLES; i++) {
+          parts.push({ x, y: y + (Math.random() - 0.5) * 30, vx: (Math.random() - 0.5) * 2, vy: -(0.5 + Math.random() * 2), life: 0, maxLife: 18, r: 2.5 + Math.random() * 2, color: '#4ade80' });
+        }
+        break;
+      case 'electric':
+        for (let i = 0; i < 5 && parts.length < MAX_PARTICLES; i++) {
+          const angle = (Math.random() - 0.5) * 2;
+          parts.push({ x, y, vx: Math.cos(angle) * (3 + Math.random() * 3), vy: Math.sin(angle) * (3 + Math.random() * 3), life: 0, maxLife: 8 + Math.random() * 6, r: 1 + Math.random(), color: i % 2 === 0 ? '#c084fc' : '#ffffff' });
+        }
+        break;
+      case 'plasma':
+        for (let i = 0; i < 10 && parts.length < MAX_PARTICLES; i++) {
+          const angle = (Math.PI * 2 * i) / 10 + Math.random() * 0.3;
+          const speed = 2 + Math.random() * 3;
+          const hue = (i * 36) % 360;
+          parts.push({ x, y, vx: Math.cos(angle) * speed, vy: Math.sin(angle) * speed, life: 0, maxLife: 20 + Math.random() * 10, r: 2 + Math.random() * 2, color: `hsl(${hue},80%,65%)` });
+        }
+        triggerShake(2.5);
+        break;
+      default:
+        spawnParticles(x, y, 4, color, 2);
+        break;
+    }
   }
 
   // ── Reset ball helper ──────────────────────────────────────────────────
@@ -426,17 +494,18 @@ export function PongGame() {
       g.ballY += g.ballVy;
 
       // Top/bottom wall bounce
+      const wallColor = skinColorsRef.current.particle;
       if (g.ballY - BALL_R <= 0) {
         g.ballY = BALL_R;
         g.ballVy = Math.abs(g.ballVy);
-        flashes.push({ x: g.ballX, y: 0, age: 0, kind: 'wall', color: '#8b9cf7' });
-        spawnParticles(g.ballX, 2, 4, '#8b9cf7', 2);
+        flashes.push({ x: g.ballX, y: 0, age: 0, kind: 'wall', color: wallColor });
+        spawnParticles(g.ballX, 2, 4, wallColor, 2);
         sfx.wallHit();
       } else if (g.ballY + BALL_R >= H) {
         g.ballY = H - BALL_R;
         g.ballVy = -Math.abs(g.ballVy);
-        flashes.push({ x: g.ballX, y: H, age: 0, kind: 'wall', color: '#8b9cf7' });
-        spawnParticles(g.ballX, H - 2, 4, '#8b9cf7', 2);
+        flashes.push({ x: g.ballX, y: H, age: 0, kind: 'wall', color: wallColor });
+        spawnParticles(g.ballX, H - 2, 4, wallColor, 2);
         sfx.wallHit();
       }
 
@@ -457,8 +526,10 @@ export function PongGame() {
         g.ballX = plX + PADDLE_W + BALL_R;
         g.botTargetOffset = (Math.random() - 0.5) * cfg.offset;
         g.playerHit = 10;
-        flashes.push({ x: plX + PADDLE_W, y: g.ballY, age: 0, kind: 'paddle', color: '#818cf8' });
-        spawnParticles(plX + PADDLE_W + 4, g.ballY, 6, '#818cf8', 3);
+        const hitColor = skinColorsRef.current.particle;
+        flashes.push({ x: plX + PADDLE_W, y: g.ballY, age: 0, kind: 'paddle', color: hitColor });
+        spawnParticles(plX + PADDLE_W + 4, g.ballY, 6, hitColor, 3);
+        spawnBounceEffect(plX + PADDLE_W + 4, g.ballY, skinColorsRef.current.bounce, hitColor);
         triggerShake(1.5);
         sfx.paddleHit();
         rallyRef.current++;
@@ -480,8 +551,10 @@ export function PongGame() {
         g.ballX = brX - BALL_R;
         g.botTargetOffset = (Math.random() - 0.5) * cfg.offset;
         g.botHit = 10;
-        flashes.push({ x: brX, y: g.ballY, age: 0, kind: 'paddle', color: '#fb7185' });
-        spawnParticles(brX - 4, g.ballY, 6, '#fb7185', 3);
+        const botHitColor = skinColorsRef.current.particle;
+        flashes.push({ x: brX, y: g.ballY, age: 0, kind: 'paddle', color: botHitColor });
+        spawnParticles(brX - 4, g.ballY, 6, botHitColor, 3);
+        spawnBounceEffect(brX - 4, g.ballY, skinColorsRef.current.bounce, botHitColor);
         triggerShake(1.5);
         sfx.paddleHit();
         rallyRef.current++;
@@ -500,8 +573,8 @@ export function PongGame() {
         scored = true;
         resetBall(-1);
       } else if (g.ballX - BALL_R > W) {
-        spawnParticles(W - BALL_R, g.ballY, 12, '#818cf8', 4);
-        flashes.push({ x: W, y: g.ballY, age: 0, kind: 'goal', color: '#818cf8' });
+        spawnParticles(W - BALL_R, g.ballY, 12, skinColorsRef.current.particle, 4);
+        flashes.push({ x: W, y: g.ballY, age: 0, kind: 'goal', color: skinColorsRef.current.particle });
         triggerShake(4);
         scoreFlashRef.current = { side: 'left', age: 0 };
         sfx.goalScored();
@@ -663,6 +736,7 @@ export function PongGame() {
     // ── Ball trail ──────────────────────────────────────────────────
     const trail = trailRef.current;
     const showBall = phaseRef.current !== 'countdown';
+    const sc = skinColorsRef.current;
     if (showBall && trail.length > 2) {
       ctx.lineCap = 'round';
       ctx.lineJoin = 'round';
@@ -673,7 +747,7 @@ export function PongGame() {
         ctx.beginPath();
         ctx.moveTo(trail[i - 1].x, trail[i - 1].y);
         ctx.lineTo(trail[i].x, trail[i].y);
-        ctx.strokeStyle = `rgba(139,156,247,${alpha})`;
+        ctx.strokeStyle = `rgba(${sc.trail},${alpha})`;
         ctx.lineWidth = width;
         ctx.stroke();
       }
@@ -686,11 +760,42 @@ export function PongGame() {
     // ── Ball ─────────────────────────────────────────────────────────
     if (showBall) {
       const speedFrac = Math.min((g.speed - BALL_BASE_SPEED) / 4, 1);
+      const isPremium = skinIdRef.current === 'plasma';
+      const now = performance.now();
+
+      // Premium plasma: pulsing outer ring
+      if (isPremium) {
+        const pulse = Math.sin(now * 0.005) * 0.3 + 0.7;
+        const plasmaR = BALL_R * (5 + speedFrac * 3) * pulse;
+        const plasmaGrad = ctx.createRadialGradient(g.ballX, g.ballY, 0, g.ballX, g.ballY, plasmaR);
+        plasmaGrad.addColorStop(0, `rgba(${sc.glow},${0.2 * pulse})`);
+        plasmaGrad.addColorStop(0.4, `rgba(${sc.trail},${0.1 * pulse})`);
+        plasmaGrad.addColorStop(1, 'transparent');
+        ctx.fillStyle = plasmaGrad;
+        ctx.beginPath();
+        ctx.arc(g.ballX, g.ballY, plasmaR, 0, Math.PI * 2);
+        ctx.fill();
+
+        // orbiting sparks
+        for (let i = 0; i < 4; i++) {
+          const angle = now * 0.003 + (Math.PI * 2 * i) / 4;
+          const orbitR = BALL_R * 2.2;
+          const sx = g.ballX + Math.cos(angle) * orbitR;
+          const sy = g.ballY + Math.sin(angle) * orbitR;
+          const sparkGrad = ctx.createRadialGradient(sx, sy, 0, sx, sy, 3);
+          sparkGrad.addColorStop(0, `rgba(${sc.glow},0.9)`);
+          sparkGrad.addColorStop(1, 'transparent');
+          ctx.fillStyle = sparkGrad;
+          ctx.beginPath();
+          ctx.arc(sx, sy, 3, 0, Math.PI * 2);
+          ctx.fill();
+        }
+      }
 
       const glowR = BALL_R * (3 + speedFrac * 2);
       const glowGrad = ctx.createRadialGradient(g.ballX, g.ballY, 0, g.ballX, g.ballY, glowR);
-      glowGrad.addColorStop(0, `rgba(180,190,255,${0.12 + speedFrac * 0.08})`);
-      glowGrad.addColorStop(0.5, `rgba(139,156,247,${0.04 + speedFrac * 0.03})`);
+      glowGrad.addColorStop(0, `rgba(${sc.glow},${0.12 + speedFrac * 0.08})`);
+      glowGrad.addColorStop(0.5, `rgba(${sc.trail},${0.04 + speedFrac * 0.03})`);
       glowGrad.addColorStop(1, 'transparent');
       ctx.fillStyle = glowGrad;
       ctx.beginPath();
@@ -701,9 +806,9 @@ export function PongGame() {
         g.ballX - 2, g.ballY - 2, 0,
         g.ballX, g.ballY, BALL_R,
       );
-      ballGrad.addColorStop(0, '#ffffff');
-      ballGrad.addColorStop(0.6, '#e0e4ff');
-      ballGrad.addColorStop(1, '#b4bfff');
+      ballGrad.addColorStop(0, sc.ballCore);
+      ballGrad.addColorStop(0.6, sc.ballEdge);
+      ballGrad.addColorStop(1, sc.ball);
       ctx.beginPath();
       ctx.arc(g.ballX, g.ballY, BALL_R, 0, Math.PI * 2);
       ctx.fillStyle = ballGrad;
@@ -792,6 +897,61 @@ export function PongGame() {
 
   // ── Render ─────────────────────────────────────────────────────────────
 
+  const renderSkinPreview = useCallback((ctx: CanvasRenderingContext2D, skin: SkinDef, size: number) => {
+    const cx = size / 2;
+    const cy = size / 2;
+    const r = size * 0.2;
+    const c = skin.colors;
+
+    // Background
+    ctx.fillStyle = '#0a0a12';
+    ctx.fillRect(0, 0, size, size);
+
+    // Glow
+    const glowR = r * 3;
+    const glow = ctx.createRadialGradient(cx, cy, 0, cx, cy, glowR);
+    glow.addColorStop(0, `rgba(${c.glow},0.25)`);
+    glow.addColorStop(0.5, `rgba(${c.trail},0.08)`);
+    glow.addColorStop(1, 'transparent');
+    ctx.fillStyle = glow;
+    ctx.beginPath();
+    ctx.arc(cx, cy, glowR, 0, Math.PI * 2);
+    ctx.fill();
+
+    // Ball
+    const grad = ctx.createRadialGradient(cx - 1, cy - 1, 0, cx, cy, r);
+    grad.addColorStop(0, c.ballCore);
+    grad.addColorStop(0.6, c.ballEdge);
+    grad.addColorStop(1, c.ball);
+    ctx.beginPath();
+    ctx.arc(cx, cy, r, 0, Math.PI * 2);
+    ctx.fillStyle = grad;
+    ctx.fill();
+
+    // Stroke
+    ctx.beginPath();
+    ctx.arc(cx, cy, r, 0, Math.PI * 2);
+    ctx.strokeStyle = 'rgba(255,255,255,0.15)';
+    ctx.lineWidth = 0.5;
+    ctx.stroke();
+
+    // Plasma sparkles
+    if (skin.id === 'plasma') {
+      for (let i = 0; i < 4; i++) {
+        const angle = (Math.PI * 2 * i) / 4;
+        const sx = cx + Math.cos(angle) * (r * 1.8);
+        const sy = cy + Math.sin(angle) * (r * 1.8);
+        const sg = ctx.createRadialGradient(sx, sy, 0, sx, sy, 2.5);
+        sg.addColorStop(0, `rgba(${c.glow},0.9)`);
+        sg.addColorStop(1, 'transparent');
+        ctx.fillStyle = sg;
+        ctx.beginPath();
+        ctx.arc(sx, sy, 2.5, 0, Math.PI * 2);
+        ctx.fill();
+      }
+    }
+  }, []);
+
   const isActive = phase === 'playing' || phase === 'paused' || phase === 'countdown';
 
   return (
@@ -877,12 +1037,21 @@ export function PongGame() {
                 {t('pong.start')}
               </button>
               <button
+                onClick={() => shop.setShowShop(true)}
+                className="px-4 py-3 rounded-lg border border-amber-700/50 hover:border-amber-500/50 bg-amber-950/30 hover:bg-amber-950/50 text-amber-400 font-bold transition-colors"
+              >
+                {t('pong.shop')}
+              </button>
+              <button
                 onClick={toggleMute}
                 className="px-3 py-3 rounded-lg border border-zinc-700 hover:border-zinc-500 text-zinc-400 hover:text-zinc-200 transition-colors"
                 title={muted ? t('pong.unmute') : t('pong.mute')}
               >
                 {muted ? '🔇' : '🔊'}
               </button>
+            </div>
+            <div className="flex items-center gap-1.5 mt-3 text-amber-400 text-xs font-bold">
+              <span>●</span> {shop.wallet} {t('pong.coins')}
             </div>
           </div>
         )}
@@ -920,16 +1089,44 @@ export function PongGame() {
             <h2 className={`text-4xl font-black mb-2 ${winner === 'player' ? 'text-emerald-400' : 'text-rose-400'}`}>
               {winner === 'player' ? t('pong.win') : t('pong.lose')}
             </h2>
-            <p className="text-zinc-400 text-lg mb-8 tabular-nums">
+            <p className="text-zinc-400 text-lg mb-2 tabular-nums">
               {playerScore} – {botScore}
             </p>
-            <button
-              onClick={startGame}
-              className="px-8 py-3 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-white font-bold transition-colors"
-            >
-              {t('pong.playAgain')}
-            </button>
+            {playerScore > 0 && (
+              <p className="text-amber-400 text-sm font-bold mb-6">
+                +{playerScore} ●
+              </p>
+            )}
+            {playerScore === 0 && <div className="mb-6" />}
+            <div className="flex items-center gap-3">
+              <button
+                onClick={startGame}
+                className="px-8 py-3 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-white font-bold transition-colors"
+              >
+                {t('pong.playAgain')}
+              </button>
+              <button
+                onClick={() => shop.setShowShop(true)}
+                className="px-4 py-3 rounded-lg border border-amber-700/50 hover:border-amber-500/50 bg-amber-950/30 hover:bg-amber-950/50 text-amber-400 font-bold transition-colors"
+              >
+                {t('pong.shop')}
+              </button>
+            </div>
           </div>
+        )}
+        {/* Skin Shop Overlay */}
+        {shop.showShop && (
+          <SkinShopOverlay
+            skins={PONG_SKINS}
+            wallet={shop.wallet}
+            owned={shop.owned}
+            activeSkin={shop.activeSkin}
+            onBuy={shop.buy}
+            onEquip={shop.equip}
+            onClose={() => shop.setShowShop(false)}
+            renderPreview={renderSkinPreview}
+            lockedLabel={t('pong.goldenLocked')}
+          />
         )}
         </div>
       </div>
