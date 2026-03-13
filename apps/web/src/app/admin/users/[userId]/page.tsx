@@ -15,6 +15,17 @@ interface ProgressionData {
   [key: string]: unknown;
 }
 
+interface MahjongProgress {
+  completed: string[];
+  unlocked: string[];
+}
+
+interface CrossyProgress {
+  wallet: number;
+  owned: string[];
+  activeSkin: string;
+}
+
 interface UserDetail {
   profile: { id: string; nickname: string | null; role: string; created_at: string; suspended_at: string | null };
   email: string | null;
@@ -23,6 +34,7 @@ interface UserDetail {
   cosmetics: { data: Record<string, unknown> } | null;
   unlockedCosmetics: { data: Record<string, string[]> } | null;
   progression: ProgressionData | null;
+  gameProgress: Record<string, unknown> | null;
 }
 
 const SLOT_ORDER: CosmeticSlot[] = ['frame', 'head', 'portal', 'aura', 'banner', 'cardColor', 'badge', 'title'];
@@ -30,6 +42,39 @@ const SLOT_ORDER: CosmeticSlot[] = ['frame', 'head', 'portal', 'aura', 'banner',
 const SLOT_EMOJI: Record<CosmeticSlot, string> = {
   frame: '🖼', head: '🎩', portal: '🌀', aura: '✨', banner: '🏳', cardColor: '🎨', badge: '🏅', title: '🏷',
 };
+
+// ── Game progress constants ──────────────────────────────────────────────────
+
+const MAHJONG_LAYOUTS: { id: string; difficulty: 'easy' | 'medium' | 'hard' }[] = [
+  { id: 'flat', difficulty: 'easy' }, { id: 'arena', difficulty: 'easy' }, { id: 'garden', difficulty: 'easy' },
+  { id: 'staircase', difficulty: 'easy' }, { id: 'turtle', difficulty: 'easy' }, { id: 'river', difficulty: 'easy' },
+  { id: 'meadow', difficulty: 'easy' }, { id: 'columns', difficulty: 'easy' }, { id: 'valley', difficulty: 'easy' },
+  { id: 'bricks', difficulty: 'easy' },
+  { id: 'pyramid', difficulty: 'medium' }, { id: 'fortress', difficulty: 'medium' }, { id: 'bridge', difficulty: 'medium' },
+  { id: 'temple', difficulty: 'medium' }, { id: 'waves', difficulty: 'medium' }, { id: 'hashtag', difficulty: 'medium' },
+  { id: 'wings', difficulty: 'medium' }, { id: 'spiral', difficulty: 'medium' }, { id: 'crab', difficulty: 'medium' },
+  { id: 'fan', difficulty: 'medium' },
+  { id: 'cross', difficulty: 'hard' }, { id: 'spider', difficulty: 'hard' }, { id: 'diamond', difficulty: 'hard' },
+  { id: 'pagoda', difficulty: 'hard' }, { id: 'dragon', difficulty: 'hard' }, { id: 'maze', difficulty: 'hard' },
+  { id: 'phoenix', difficulty: 'hard' }, { id: 'tower', difficulty: 'hard' }, { id: 'volcano', difficulty: 'hard' },
+  { id: 'labyrinth', difficulty: 'hard' },
+];
+
+const CROSSY_SKINS: { id: string; price: number }[] = [
+  { id: 'chicken', price: 0 }, { id: 'penguin', price: 25 }, { id: 'frog', price: 30 },
+  { id: 'pig', price: 30 }, { id: 'ghost', price: 50 }, { id: 'robot', price: 75 },
+  { id: 'ninja', price: 100 }, { id: 'lava', price: 150 }, { id: 'galaxy', price: 200 },
+  { id: 'diamond', price: 300 }, { id: 'golden', price: 500 },
+];
+
+const DIFF_COLORS = {
+  easy: { bg: 'bg-emerald-950/30', border: 'border-emerald-900/40', text: 'text-emerald-400' },
+  medium: { bg: 'bg-amber-950/30', border: 'border-amber-900/40', text: 'text-amber-400' },
+  hard: { bg: 'bg-rose-950/30', border: 'border-rose-900/40', text: 'text-rose-400' },
+};
+
+const SUDOKU_DIFFS = ['easy', 'medium', 'hard', 'expert'] as const;
+const MINESWEEPER_DIFFS = ['easy', 'medium', 'hard'] as const;
 
 export default function AdminUserDetailPage() {
   const { t } = useI18n();
@@ -172,6 +217,19 @@ export default function AdminUserDetailPage() {
           onRevoke={(id, slot) => quickAction({ action: 'revoke_cosmetic', cosmeticId: id, slot }, `revoke_cos_${slot}_${id}`)}
           onBulkGrant={(items) => doAction({ action: 'bulk_grant_cosmetics', cosmetics: items }, `bulk_grant_cos_${items.length}`)}
           onBulkRevoke={(items) => doAction({ action: 'bulk_revoke_cosmetics', cosmetics: items }, `bulk_revoke_cos_${items.length}`)}
+        />
+      </Section>
+
+      {/* Game Progress */}
+      <Section title={t('admin.gameProgress.title')}>
+        <GameProgressManager
+          gameProgress={user.gameProgress}
+          actionLoading={actionLoading}
+          confirm={confirm}
+          t={t}
+          onSetProgress={(game, data) => quickAction({ action: 'set_game_progress', game, data }, `set_gp_${game}`)}
+          onResetProgress={(game) => doAction({ action: 'reset_game_progress', game }, `reset_gp_${game}`)}
+          onCancelConfirm={() => setConfirm(null)}
         />
       </Section>
 
@@ -819,6 +877,407 @@ function StatsManager({ stats, actionLoading, confirm, t, onResetAll, onResetGam
         />
         <span className="text-[10px] text-zinc-600">Setzt alle Spiele, Siege und Einladungen auf 0</span>
       </div>
+    </div>
+  );
+}
+
+// ── Game Progress Manager ────────────────────────────────────────────────────
+
+function GameProgressManager({
+  gameProgress, actionLoading, confirm, t, onSetProgress, onResetProgress, onCancelConfirm,
+}: {
+  gameProgress: Record<string, unknown> | null;
+  actionLoading: string | null;
+  confirm: string | null;
+  t: (key: string) => string;
+  onSetProgress: (game: string, data: unknown) => void;
+  onResetProgress: (game: string) => void;
+  onCancelConfirm: () => void;
+}) {
+  const [activeTab, setActiveTab] = useState<'mahjong' | 'crossyroad' | 'sudoku' | 'minesweeper'>('mahjong');
+
+  // ── Mahjong state ──
+  const rawMahjong = gameProgress?.mahjong as MahjongProgress | string[] | undefined;
+  const mahjong: MahjongProgress = Array.isArray(rawMahjong)
+    ? { completed: rawMahjong, unlocked: rawMahjong }
+    : (rawMahjong && typeof rawMahjong === 'object' && 'completed' in rawMahjong)
+      ? { completed: rawMahjong.completed ?? [], unlocked: rawMahjong.unlocked ?? [] }
+      : { completed: [], unlocked: [] };
+
+  const completedSet = new Set(mahjong.completed);
+  const unlockedSet = new Set(mahjong.unlocked);
+
+  // ── Crossy Road state ──
+  const rawCrossy = gameProgress?.crossyroad as CrossyProgress | undefined;
+  const crossy: CrossyProgress = rawCrossy && typeof rawCrossy === 'object' && 'wallet' in rawCrossy
+    ? { wallet: rawCrossy.wallet ?? 0, owned: rawCrossy.owned ?? ['chicken'], activeSkin: rawCrossy.activeSkin ?? 'chicken' }
+    : { wallet: 0, owned: ['chicken'], activeSkin: 'chicken' };
+
+  const ownedSet = new Set(crossy.owned);
+  const [walletInput, setWalletInput] = useState('');
+
+  // ── Sudoku state ──
+  const rawSudoku = gameProgress?.sudoku as { unlockedDifficulties?: string[] } | undefined;
+  const sudokuUnlocked = new Set(rawSudoku?.unlockedDifficulties ?? []);
+
+  // ── Minesweeper state ──
+  const rawMinesweeper = gameProgress?.minesweeper as { unlockedDifficulties?: string[] } | undefined;
+  const minesweeperUnlocked = new Set(rawMinesweeper?.unlockedDifficulties ?? []);
+
+  function saveMahjong(completed: string[], unlocked: string[]) {
+    onSetProgress('mahjong', { completed, unlocked });
+  }
+
+  function toggleMahjongCompleted(layoutId: string) {
+    const newCompleted = completedSet.has(layoutId)
+      ? mahjong.completed.filter((l) => l !== layoutId)
+      : [...mahjong.completed, layoutId];
+    const newUnlocked = unlockedSet.has(layoutId) ? mahjong.unlocked : [...mahjong.unlocked, layoutId];
+    saveMahjong(newCompleted, newUnlocked);
+  }
+
+  function toggleMahjongUnlocked(layoutId: string) {
+    const newUnlocked = unlockedSet.has(layoutId)
+      ? mahjong.unlocked.filter((l) => l !== layoutId)
+      : [...mahjong.unlocked, layoutId];
+    saveMahjong(mahjong.completed, newUnlocked);
+  }
+
+  function unlockAllMahjong(difficulty?: 'easy' | 'medium' | 'hard') {
+    const targets = difficulty
+      ? MAHJONG_LAYOUTS.filter((l) => l.difficulty === difficulty).map((l) => l.id)
+      : MAHJONG_LAYOUTS.map((l) => l.id);
+    const newUnlocked = [...new Set([...mahjong.unlocked, ...targets])];
+    saveMahjong(mahjong.completed, newUnlocked);
+  }
+
+  function completeAllMahjong(difficulty?: 'easy' | 'medium' | 'hard') {
+    const targets = difficulty
+      ? MAHJONG_LAYOUTS.filter((l) => l.difficulty === difficulty).map((l) => l.id)
+      : MAHJONG_LAYOUTS.map((l) => l.id);
+    const newCompleted = [...new Set([...mahjong.completed, ...targets])];
+    const newUnlocked = [...new Set([...mahjong.unlocked, ...targets])];
+    saveMahjong(newCompleted, newUnlocked);
+  }
+
+  function saveCrossy(updates: Partial<CrossyProgress>) {
+    onSetProgress('crossyroad', { ...crossy, ...updates });
+  }
+
+  function toggleCrossySkin(skinId: string) {
+    const newOwned = ownedSet.has(skinId)
+      ? crossy.owned.filter((s) => s !== skinId)
+      : [...crossy.owned, skinId];
+    saveCrossy({ owned: newOwned });
+  }
+
+  function grantAllCrossySkins() {
+    const allIds = CROSSY_SKINS.map((s) => s.id);
+    saveCrossy({ owned: allIds });
+  }
+
+  function handleSetWallet() {
+    const val = parseInt(walletInput, 10);
+    if (isNaN(val) || val < 0) return;
+    saveCrossy({ wallet: val });
+    setWalletInput('');
+  }
+
+  function toggleDiffUnlock(game: 'sudoku' | 'minesweeper', diff: string) {
+    const current = game === 'sudoku' ? sudokuUnlocked : minesweeperUnlocked;
+    const newSet = new Set(current);
+    if (newSet.has(diff)) newSet.delete(diff);
+    else newSet.add(diff);
+    onSetProgress(game, { unlockedDifficulties: [...newSet] });
+  }
+
+  function unlockAllDiffs(game: 'sudoku' | 'minesweeper') {
+    const diffs = game === 'sudoku' ? SUDOKU_DIFFS : MINESWEEPER_DIFFS;
+    onSetProgress(game, { unlockedDifficulties: [...diffs] });
+  }
+
+  return (
+    <div className="space-y-3">
+      {/* Tabs */}
+      <div className="flex gap-0.5 bg-zinc-800/50 rounded-md p-0.5 flex-wrap">
+        {([
+          ['mahjong', 'Mahjong'],
+          ['crossyroad', 'Crossy Road'],
+          ['sudoku', 'Sudoku'],
+          ['minesweeper', 'Minesweeper'],
+        ] as const).map(([tab, label]) => (
+          <button key={tab} onClick={() => setActiveTab(tab)}
+            className={`px-3 py-1 rounded text-[11px] font-medium transition-colors ${
+              activeTab === tab ? 'bg-zinc-700 text-zinc-100' : 'text-zinc-500 hover:text-zinc-300'
+            }`}
+          >{label}</button>
+        ))}
+      </div>
+
+      {activeTab === 'mahjong' && (
+        <div className="space-y-3">
+          {/* Stats row */}
+          <div className="flex gap-3 text-xs">
+            <div className="rounded-md bg-zinc-800/30 border border-zinc-700/30 px-2.5 py-2">
+              <p className="text-[10px] text-zinc-500">{t('admin.gameProgress.completed')}</p>
+              <p className="text-zinc-200 font-semibold tabular-nums">{completedSet.size} / {MAHJONG_LAYOUTS.length}</p>
+            </div>
+            <div className="rounded-md bg-zinc-800/30 border border-zinc-700/30 px-2.5 py-2">
+              <p className="text-[10px] text-zinc-500">{t('admin.gameProgress.unlocked')}</p>
+              <p className="text-zinc-200 font-semibold tabular-nums">{unlockedSet.size} / {MAHJONG_LAYOUTS.length}</p>
+            </div>
+          </div>
+
+          {/* Bulk actions per difficulty */}
+          {(['easy', 'medium', 'hard'] as const).map((diff) => {
+            const layouts = MAHJONG_LAYOUTS.filter((l) => l.difficulty === diff);
+            const dc = DIFF_COLORS[diff];
+            const diffCompleted = layouts.filter((l) => completedSet.has(l.id)).length;
+            const diffUnlocked = layouts.filter((l) => unlockedSet.has(l.id)).length;
+
+            return (
+              <div key={diff} className={`rounded-lg ${dc.bg} border ${dc.border} p-3 space-y-2`}>
+                <div className="flex items-center gap-2 flex-wrap">
+                  <span className={`text-[11px] font-semibold ${dc.text} uppercase tracking-wider`}>
+                    {t(`admin.gameProgress.diff.${diff}`)}
+                  </span>
+                  <span className="text-[10px] text-zinc-500 tabular-nums">
+                    {diffCompleted}/{layouts.length} {t('admin.gameProgress.completed').toLowerCase()}
+                    {' · '}
+                    {diffUnlocked}/{layouts.length} {t('admin.gameProgress.unlocked').toLowerCase()}
+                  </span>
+                  <div className="ml-auto flex gap-1">
+                    <button onClick={() => unlockAllMahjong(diff)}
+                      disabled={diffUnlocked === layouts.length || actionLoading === 'set_gp_mahjong'}
+                      className="px-2 py-0.5 rounded text-[10px] font-medium border border-indigo-800/60 text-indigo-400 hover:bg-indigo-900/30 transition-colors disabled:opacity-40">
+                      {t('admin.gameProgress.unlockAll')}
+                    </button>
+                    <button onClick={() => completeAllMahjong(diff)}
+                      disabled={diffCompleted === layouts.length || actionLoading === 'set_gp_mahjong'}
+                      className="px-2 py-0.5 rounded text-[10px] font-medium border border-emerald-800/60 text-emerald-400 hover:bg-emerald-900/30 transition-colors disabled:opacity-40">
+                      {t('admin.gameProgress.completeAll')}
+                    </button>
+                  </div>
+                </div>
+
+                {/* Layout grid */}
+                <div className="grid grid-cols-2 sm:grid-cols-5 gap-1">
+                  {layouts.map((layout) => {
+                    const completed = completedSet.has(layout.id);
+                    const unlocked = unlockedSet.has(layout.id);
+                    return (
+                      <div key={layout.id}
+                        className={`rounded-md px-2 py-1.5 text-center transition-colors ${
+                          completed
+                            ? 'bg-emerald-950/40 border border-emerald-800/50'
+                            : unlocked
+                              ? 'bg-indigo-950/30 border border-indigo-800/40'
+                              : 'bg-zinc-900/50 border border-zinc-800/50'
+                        }`}
+                      >
+                        <p className="text-[10px] text-zinc-300 font-medium truncate">{t(`mahjong.layout.${layout.id}`)}</p>
+                        <p className="text-[9px] text-zinc-600 font-mono">{layout.id}</p>
+                        <div className="flex gap-1 mt-1 justify-center">
+                          <button onClick={() => toggleMahjongUnlocked(layout.id)}
+                            disabled={actionLoading === 'set_gp_mahjong'}
+                            title={unlocked ? t('admin.gameProgress.lock') : t('admin.gameProgress.unlock')}
+                            className={`px-1.5 py-0.5 rounded text-[9px] font-medium transition-colors disabled:opacity-40 ${
+                              unlocked
+                                ? 'bg-indigo-900/40 text-indigo-400 hover:bg-indigo-900/60'
+                                : 'bg-zinc-800 text-zinc-500 hover:text-zinc-300'
+                            }`}
+                          >{unlocked ? '🔓' : '🔒'}</button>
+                          <button onClick={() => toggleMahjongCompleted(layout.id)}
+                            disabled={actionLoading === 'set_gp_mahjong'}
+                            title={completed ? t('admin.gameProgress.uncomplete') : t('admin.gameProgress.complete')}
+                            className={`px-1.5 py-0.5 rounded text-[9px] font-medium transition-colors disabled:opacity-40 ${
+                              completed
+                                ? 'bg-emerald-900/40 text-emerald-400 hover:bg-emerald-900/60'
+                                : 'bg-zinc-800 text-zinc-500 hover:text-zinc-300'
+                            }`}
+                          >{completed ? '✓' : '○'}</button>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            );
+          })}
+
+          {/* Global bulk + reset */}
+          <div className="flex items-center gap-2 flex-wrap">
+            <button onClick={() => unlockAllMahjong()}
+              disabled={unlockedSet.size === MAHJONG_LAYOUTS.length || actionLoading === 'set_gp_mahjong'}
+              className="px-2.5 py-1 rounded-md text-[10px] font-semibold border border-indigo-800/60 text-indigo-400 hover:bg-indigo-900/30 transition-colors disabled:opacity-40">
+              {t('admin.gameProgress.unlockAll')} ({MAHJONG_LAYOUTS.length - unlockedSet.size})
+            </button>
+            <button onClick={() => completeAllMahjong()}
+              disabled={completedSet.size === MAHJONG_LAYOUTS.length || actionLoading === 'set_gp_mahjong'}
+              className="px-2.5 py-1 rounded-md text-[10px] font-semibold border border-emerald-800/60 text-emerald-400 hover:bg-emerald-900/30 transition-colors disabled:opacity-40">
+              {t('admin.gameProgress.completeAll')} ({MAHJONG_LAYOUTS.length - completedSet.size})
+            </button>
+            <ActionButton
+              label={t('admin.gameProgress.reset')} variant="danger"
+              loading={actionLoading === 'reset_gp_mahjong'} confirming={confirm === 'reset_gp_mahjong'}
+              onClick={() => onResetProgress('mahjong')}
+              onCancel={onCancelConfirm}
+            />
+          </div>
+        </div>
+      )}
+
+      {activeTab === 'crossyroad' && (
+        <div className="space-y-3">
+          {/* Wallet */}
+          <div className="rounded-lg bg-amber-950/20 border border-amber-900/30 p-3 space-y-2">
+            <div className="flex items-center gap-3">
+              <div>
+                <p className="text-[10px] text-zinc-500">{t('admin.gameProgress.wallet')}</p>
+                <p className="text-amber-400 font-bold text-lg tabular-nums">{crossy.wallet}</p>
+              </div>
+              <div className="ml-auto flex gap-1.5 items-center">
+                <input
+                  type="number"
+                  value={walletInput}
+                  onChange={(e) => setWalletInput(e.target.value)}
+                  placeholder={String(crossy.wallet)}
+                  min="0"
+                  className="w-24 bg-zinc-800/50 border border-zinc-700/50 rounded-md px-2.5 py-1 text-[11px] text-zinc-200 placeholder-zinc-600 focus:outline-none focus:border-amber-500/50"
+                  onKeyDown={(e) => { if (e.key === 'Enter') handleSetWallet(); }}
+                />
+                <button onClick={handleSetWallet}
+                  disabled={actionLoading === 'set_gp_crossyroad'}
+                  className="px-2.5 py-1 rounded-md text-[10px] font-medium border border-amber-800/60 text-amber-400 hover:bg-amber-900/30 transition-colors disabled:opacity-40">
+                  {t('admin.progression.apply')}
+                </button>
+              </div>
+            </div>
+            {/* Quick add buttons */}
+            <div className="flex gap-1 flex-wrap">
+              {[50, 100, 250, 500, 1000].map((amount) => (
+                <button key={amount}
+                  onClick={() => saveCrossy({ wallet: crossy.wallet + amount })}
+                  disabled={actionLoading === 'set_gp_crossyroad'}
+                  className="px-2 py-0.5 rounded text-[10px] font-medium border border-amber-800/40 text-amber-400/70 hover:bg-amber-900/20 transition-colors disabled:opacity-40">
+                  +{amount}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {/* Active skin */}
+          <div className="text-[11px] text-zinc-500">
+            {t('admin.gameProgress.activeSkin')}: <span className="text-zinc-300 font-medium">{crossy.activeSkin}</span>
+          </div>
+
+          {/* Skins grid */}
+          <div className="flex items-center gap-2 flex-wrap mb-1">
+            <button onClick={grantAllCrossySkins}
+              disabled={ownedSet.size === CROSSY_SKINS.length || actionLoading === 'set_gp_crossyroad'}
+              className="px-2.5 py-1 rounded-md text-[10px] font-semibold border border-emerald-800/60 text-emerald-400 hover:bg-emerald-900/30 transition-colors disabled:opacity-40">
+              {t('admin.gameProgress.grantAllSkins')} ({CROSSY_SKINS.length - ownedSet.size})
+            </button>
+            <ActionButton
+              label={t('admin.gameProgress.reset')} variant="danger"
+              loading={actionLoading === 'reset_gp_crossyroad'} confirming={confirm === 'reset_gp_crossyroad'}
+              onClick={() => onResetProgress('crossyroad')}
+              onCancel={onCancelConfirm}
+            />
+          </div>
+
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-1.5">
+            {CROSSY_SKINS.map((skin) => {
+              const owned = ownedSet.has(skin.id);
+              return (
+                <div key={skin.id}
+                  className={`rounded-md px-2.5 py-2 transition-colors ${
+                    owned ? 'bg-emerald-950/30 border border-emerald-800/40' : 'bg-zinc-900/50 border border-zinc-800/50'
+                  }`}
+                >
+                  <div className="flex items-center justify-between">
+                    <div className="min-w-0">
+                      <p className="text-[11px] text-zinc-200 font-medium truncate">{t(`crossyroad.skin.${skin.id}`)}</p>
+                      <p className="text-[9px] text-zinc-500 tabular-nums">{skin.price === 0 ? t('admin.gameProgress.free') : `${skin.price} coins`}</p>
+                    </div>
+                    <button onClick={() => toggleCrossySkin(skin.id)}
+                      disabled={actionLoading === 'set_gp_crossyroad'}
+                      className={`px-2 py-0.5 rounded text-[10px] font-medium border shrink-0 transition-colors disabled:opacity-40 ${
+                        owned
+                          ? 'border-rose-800/60 text-rose-400 hover:bg-rose-900/30'
+                          : 'border-emerald-800/60 text-emerald-400 hover:bg-emerald-900/30'
+                      }`}
+                    >{owned ? t('admin.gameProgress.revoke') : t('admin.gameProgress.grant')}</button>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
+
+      {(activeTab === 'sudoku' || activeTab === 'minesweeper') && (() => {
+        const game = activeTab;
+        const diffs = game === 'sudoku' ? SUDOKU_DIFFS : MINESWEEPER_DIFFS;
+        const unlocked = game === 'sudoku' ? sudokuUnlocked : minesweeperUnlocked;
+        return (
+          <div className="space-y-3">
+            <p className="text-[11px] text-zinc-500">
+              {t('admin.gameProgress.diffUnlockHint')}
+            </p>
+
+            <div className="flex items-center gap-2 flex-wrap mb-2">
+              <button onClick={() => unlockAllDiffs(game)}
+                disabled={unlocked.size === diffs.length || actionLoading === `set_gp_${game}`}
+                className="px-2.5 py-1 rounded-md text-[10px] font-semibold border border-indigo-800/60 text-indigo-400 hover:bg-indigo-900/30 transition-colors disabled:opacity-40">
+                {t('admin.gameProgress.unlockAll')}
+              </button>
+              <ActionButton
+                label={t('admin.gameProgress.reset')} variant="danger"
+                loading={actionLoading === `reset_gp_${game}`} confirming={confirm === `reset_gp_${game}`}
+                onClick={() => onResetProgress(game)}
+                onCancel={onCancelConfirm}
+              />
+            </div>
+
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+              {diffs.map((diff) => {
+                const isUnlocked = unlocked.has(diff);
+                const alwaysOpen = diff === 'easy';
+                return (
+                  <div key={diff}
+                    className={`rounded-lg px-3 py-3 text-center transition-colors ${
+                      alwaysOpen
+                        ? 'bg-emerald-950/30 border border-emerald-800/40'
+                        : isUnlocked
+                          ? 'bg-indigo-950/30 border border-indigo-800/40'
+                          : 'bg-zinc-900/50 border border-zinc-800/50'
+                    }`}
+                  >
+                    <p className={`text-[12px] font-semibold ${
+                      alwaysOpen ? 'text-emerald-400' : isUnlocked ? 'text-indigo-400' : 'text-zinc-400'
+                    }`}>
+                      {t(`admin.gameProgress.diff.${diff}`)}
+                    </p>
+                    {alwaysOpen ? (
+                      <p className="text-[9px] text-emerald-500/60 mt-1">{t('admin.gameProgress.alwaysOpen')}</p>
+                    ) : (
+                      <button onClick={() => toggleDiffUnlock(game, diff)}
+                        disabled={actionLoading === `set_gp_${game}`}
+                        className={`mt-1.5 px-2.5 py-0.5 rounded text-[10px] font-medium border transition-colors disabled:opacity-40 ${
+                          isUnlocked
+                            ? 'border-rose-800/60 text-rose-400 hover:bg-rose-900/30'
+                            : 'border-emerald-800/60 text-emerald-400 hover:bg-emerald-900/30'
+                        }`}
+                      >{isUnlocked ? t('admin.gameProgress.lock') : t('admin.gameProgress.unlock')}</button>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        );
+      })()}
     </div>
   );
 }

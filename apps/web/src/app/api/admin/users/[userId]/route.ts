@@ -28,7 +28,7 @@ export async function GET(
   const { userId } = await params;
   const sb = getSupabaseAdmin()!;
 
-  const [profileRes, statsRes, achievementsRes, cosmeticsRes, unlockedRes, progressionRes, authRes] =
+  const [profileRes, statsRes, achievementsRes, cosmeticsRes, unlockedRes, progressionRes, gameProgressRes, authRes] =
     await Promise.all([
       sb.from('profiles').select('*').eq('id', userId).single(),
       sb.from('user_stats').select('*').eq('user_id', userId).single(),
@@ -36,6 +36,7 @@ export async function GET(
       sb.from('user_cosmetics').select('*').eq('user_id', userId).single(),
       sb.from('user_unlocked_cosmetics').select('*').eq('user_id', userId).single(),
       sb.from('user_progression').select('data').eq('user_id', userId).maybeSingle(),
+      sb.from('user_game_progress').select('data').eq('user_id', userId).maybeSingle(),
       sb.auth.admin.getUserById(userId),
     ]);
 
@@ -51,6 +52,7 @@ export async function GET(
     cosmetics: cosmeticsRes.data ?? null,
     unlockedCosmetics: unlockedRes.data ?? null,
     progression: progressionRes.data?.data ?? null,
+    gameProgress: gameProgressRes.data?.data ?? null,
   });
 }
 
@@ -339,6 +341,48 @@ export async function PATCH(
       }
       await sb.from('user_unlocked_cosmetics').upsert({ user_id: userId, data: current });
       await auditLog(sb, admin.userId, 'bulk_revoke_cosmetics', userId, { count: cosmetics.length, removed });
+      return NextResponse.json({ ok: true });
+    }
+
+    case 'set_game_progress': {
+      const { game, data: progressData } = body;
+      if (!game || typeof game !== 'string' || !progressData || typeof progressData !== 'object') {
+        return NextResponse.json({ error: 'Missing game or data' }, { status: 400 });
+      }
+      const { data: row } = await sb
+        .from('user_game_progress')
+        .select('data')
+        .eq('user_id', userId)
+        .maybeSingle();
+      const current = (row?.data ?? {}) as Record<string, unknown>;
+      const prev = current[game];
+      current[game] = progressData;
+      await sb.from('user_game_progress').upsert(
+        { user_id: userId, data: current },
+        { onConflict: 'user_id' },
+      );
+      await auditLog(sb, admin.userId, 'set_game_progress', userId, { game, prev, after: progressData });
+      return NextResponse.json({ ok: true });
+    }
+
+    case 'reset_game_progress': {
+      const { game } = body;
+      if (!game || typeof game !== 'string') {
+        return NextResponse.json({ error: 'Missing game' }, { status: 400 });
+      }
+      const { data: row } = await sb
+        .from('user_game_progress')
+        .select('data')
+        .eq('user_id', userId)
+        .maybeSingle();
+      const current = (row?.data ?? {}) as Record<string, unknown>;
+      const prev = current[game];
+      delete current[game];
+      await sb.from('user_game_progress').upsert(
+        { user_id: userId, data: current },
+        { onConflict: 'user_id' },
+      );
+      await auditLog(sb, admin.userId, 'reset_game_progress', userId, { game, prev });
       return NextResponse.json({ ok: true });
     }
 

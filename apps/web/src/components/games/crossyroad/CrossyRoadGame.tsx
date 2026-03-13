@@ -1823,7 +1823,9 @@ export function CrossyRoadGame() {
               {SKINS.map(skin => {
                 const owned = ownedSkins.has(skin.id);
                 const active = activeSkin === skin.id;
-                const canAfford = wallet >= skin.price;
+                const allOthersOwned = SKINS.filter(s => s.id !== 'golden').every(s => ownedSkins.has(s.id));
+                const locked = skin.id === 'golden' && !owned && !allOthersOwned;
+                const canAfford = !locked && wallet >= skin.price;
                 const rarityBorder = active
                   ? 'border-amber-400 shadow-amber-500/20 shadow-lg'
                   : skin.price <= 0 ? 'border-zinc-700'
@@ -1855,13 +1857,13 @@ export function CrossyRoadGame() {
                         debouncedCloudSave();
                       }
                     }}
-                    disabled={!owned && !canAfford}
+                    disabled={!owned && (!canAfford || locked)}
                     className={`flex flex-col items-center gap-1 p-2.5 rounded-xl border-2 transition-all ${rarityBorder} ${
                       active
                         ? 'bg-amber-950/60'
                         : owned
                           ? 'bg-zinc-800/80 hover:bg-zinc-700/80'
-                          : canAfford
+                          : canAfford && !locked
                             ? 'bg-zinc-800/60 hover:bg-zinc-700/60 hover:scale-105'
                             : 'bg-zinc-900/60 opacity-40 cursor-not-allowed'
                     }`}
@@ -1874,7 +1876,12 @@ export function CrossyRoadGame() {
                     {owned && !active && (
                       <span className="text-[10px] text-emerald-500 font-semibold">{t('crossyroad.owned')}</span>
                     )}
-                    {!owned && (
+                    {!owned && locked && (
+                      <span className="text-[9px] font-semibold text-zinc-500 text-center leading-tight">
+                        {t('crossyroad.goldenLocked')}
+                      </span>
+                    )}
+                    {!owned && !locked && (
                       <span className={`text-[10px] font-bold flex items-center gap-1 ${canAfford ? 'text-amber-400' : 'text-zinc-600'}`}>
                         ● {skin.price}
                       </span>
@@ -1972,6 +1979,63 @@ function SkinPreview({ skin, size }: { skin: SkinDef; size: number }) {
     ctx.lineTo(p + bs * 0.5, p + bs * 0.65);
     ctx.closePath();
     ctx.fill();
+
+    // Golden extras: aura + crown
+    if (skin.id === 'golden') {
+      const cx = s / 2;
+      const cy = s / 2;
+
+      // Outer glow
+      ctx.save();
+      ctx.globalAlpha = 0.15;
+      ctx.fillStyle = '#fbbf24';
+      ctx.beginPath();
+      ctx.arc(cx, cy, bs * 0.6, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.restore();
+
+      // Metallic sheen
+      ctx.save();
+      ctx.beginPath();
+      ctx.roundRect(p, p, bs, bs, 5);
+      ctx.clip();
+      ctx.globalAlpha = 0.25;
+      const sheenGrad = ctx.createLinearGradient(p, p, p + bs, p + bs);
+      sheenGrad.addColorStop(0, 'transparent');
+      sheenGrad.addColorStop(0.4, '#fef3c7');
+      sheenGrad.addColorStop(0.5, '#ffffff');
+      sheenGrad.addColorStop(0.6, '#fef3c7');
+      sheenGrad.addColorStop(1, 'transparent');
+      ctx.fillStyle = sheenGrad;
+      ctx.fillRect(p, p, bs, bs);
+      ctx.restore();
+
+      // Crown
+      const crownY = p - 4;
+      const crownW = bs * 0.8;
+      const crownX = p + (bs - crownW) / 2;
+      ctx.fillStyle = '#b45309';
+      ctx.beginPath();
+      ctx.moveTo(crownX, crownY + 7);
+      ctx.lineTo(crownX, crownY + 3);
+      ctx.lineTo(crownX + crownW * 0.2, crownY + 5);
+      ctx.lineTo(crownX + crownW * 0.35, crownY);
+      ctx.lineTo(crownX + crownW * 0.5, crownY + 4);
+      ctx.lineTo(crownX + crownW * 0.65, crownY);
+      ctx.lineTo(crownX + crownW * 0.8, crownY + 5);
+      ctx.lineTo(crownX + crownW, crownY + 3);
+      ctx.lineTo(crownX + crownW, crownY + 7);
+      ctx.closePath();
+      ctx.fill();
+      // Gold band
+      ctx.fillStyle = '#fbbf24';
+      ctx.fillRect(crownX + 1, crownY + 5, crownW - 2, 2);
+      // Gem
+      ctx.fillStyle = '#ef4444';
+      ctx.beginPath();
+      ctx.arc(crownX + crownW * 0.5, crownY + 2.5, 1.5, 0, Math.PI * 2);
+      ctx.fill();
+    }
   }, [skin, size]);
 
   return <canvas ref={canvasRef} width={size} height={size} className="block" />;

@@ -11,6 +11,7 @@ import { createSeededRng } from '@/lib/seededRandom';
 import { useVisibilityPause } from '@/hooks/useVisibilityPause';
 import { getTodayStr } from '@/lib/dailyChallenges/definitions';
 import { saveGame, loadGame, clearSave } from '@/lib/gameSave';
+import { loadGameProgress } from '@/lib/cloudSync';
 import * as sfx from './sound';
 
 // ── Save/Load helpers ────────────────────────────────────────────────────────
@@ -495,10 +496,11 @@ export function SudokuGame() {
             </p>
             <div className="grid grid-cols-2 gap-3">
               {DIFFICULTIES.map(d => {
+                const cloudUnlocks = (loadGameProgress().sudoku as { unlockedDifficulties?: string[] } | undefined)?.unlockedDifficulties ?? [];
                 const locked =
-                  (d.value === 'medium' && stats.easy.wins < 2) ||
-                  (d.value === 'hard' && stats.medium.wins < 5) ||
-                  (d.value === 'expert' && stats.hard.wins < 5);
+                  (d.value === 'medium' && stats.easy.wins < 2 && !cloudUnlocks.includes('medium')) ||
+                  (d.value === 'hard' && stats.medium.wins < 5 && !cloudUnlocks.includes('hard')) ||
+                  (d.value === 'expert' && stats.hard.wins < 5 && !cloudUnlocks.includes('expert'));
                 const unlockLabel =
                   d.value === 'medium' ? `${stats.easy.wins}/2 Easy` :
                   d.value === 'hard' ? `${stats.medium.wins}/5 Medium` :

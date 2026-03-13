@@ -14,6 +14,7 @@ import { createSeededRng } from '@/lib/seededRandom';
 import { useVisibilityPause } from '@/hooks/useVisibilityPause';
 import { getTodayStr } from '@/lib/dailyChallenges/definitions';
 import { saveGame, loadGame, clearSave } from '@/lib/gameSave';
+import { loadGameProgress } from '@/lib/cloudSync';
 
 // ── Types ────────────────────────────────────────────────────────────────────
 
@@ -486,9 +487,10 @@ export function MinesweeperGame() {
               const cfg = DIFF_CONFIG[d];
               const easyWins = stats?.winsEasy ?? 0;
               const mediumWins = stats?.winsMedium ?? 0;
+              const cloudUnlocks = (loadGameProgress().minesweeper as { unlockedDifficulties?: string[] } | undefined)?.unlockedDifficulties ?? [];
               const locked =
-                (d === 'medium' && easyWins < 2) ||
-                (d === 'hard' && mediumWins < 5);
+                (d === 'medium' && easyWins < 2 && !cloudUnlocks.includes('medium')) ||
+                (d === 'hard' && mediumWins < 5 && !cloudUnlocks.includes('hard'));
               const unlockLabel =
                 d === 'medium' ? `🔒 ${easyWins}/2 Easy` :
                 d === 'hard' ? `🔒 ${mediumWins}/5 Medium` : null;
