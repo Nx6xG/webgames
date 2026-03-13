@@ -13,33 +13,60 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
   const pathname = usePathname();
   const [role, setRole] = useState<string | null>(null);
   const [checking, setChecking] = useState(true);
+  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     if (isLoading) return;
     if (!user || !session) {
-      router.replace('/');
+      setError('Not authenticated — no user/session found. Please log in first.');
+      setChecking(false);
       return;
     }
 
     // Check admin role via API
     fetch('/api/admin/users', {
       headers: { Authorization: `Bearer ${session.access_token}` },
-    }).then((res) => {
+    }).then(async (res) => {
       if (res.status === 403) {
-        router.replace('/');
+        let detail = '';
+        try { const body = await res.json(); detail = body.error ?? ''; } catch {}
+        setError(`Access denied (403). ${detail}`);
+        setChecking(false);
+      } else if (!res.ok) {
+        let detail = '';
+        try { const body = await res.json(); detail = body.error ?? ''; } catch {}
+        setError(`API error ${res.status}. ${detail}`);
+        setChecking(false);
       } else {
         setRole('admin');
         setChecking(false);
       }
-    }).catch(() => {
-      router.replace('/');
+    }).catch((err) => {
+      setError(`Network error: ${err.message}`);
+      setChecking(false);
     });
   }, [user, session, isLoading, router]);
 
-  if (isLoading || checking || role !== 'admin') {
+  if (isLoading || checking) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-zinc-950">
         <div className="text-zinc-500 text-sm">{t('admin.loading')}</div>
+      </div>
+    );
+  }
+
+  if (error || role !== 'admin') {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-zinc-950">
+        <div className="max-w-md mx-auto text-center flex flex-col gap-4">
+          <p className="text-red-400 text-sm font-semibold">Admin Panel Error</p>
+          <p className="text-zinc-400 text-xs font-mono bg-zinc-900 rounded-lg p-4 text-left break-all">
+            {error ?? 'Unknown error'}
+          </p>
+          <Link href="/" className="text-indigo-400 hover:text-indigo-300 text-xs underline">
+            Back to home
+          </Link>
+        </div>
       </div>
     );
   }
