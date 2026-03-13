@@ -448,11 +448,13 @@ function OpponentZone({
         </span>
         {player.calledUno && (
           <span
-            className="font-black uppercase text-[8px] tracking-wider px-1.5 py-px rounded-full"
+            className="font-black uppercase tracking-wider px-2 py-0.5 rounded-full"
             style={{
-              background: 'rgba(234,179,8,0.15)',
+              fontSize: 10,
+              background: 'rgba(234,179,8,0.18)',
               color: '#fbbf24',
-              border: '1px solid rgba(234,179,8,0.2)',
+              border: '1.5px solid rgba(234,179,8,0.3)',
+              boxShadow: '0 0 8px rgba(234,179,8,0.15)',
             }}
           >
             UNO
@@ -463,12 +465,14 @@ function OpponentZone({
       {/* UNO danger */}
       {hasUno && !player.calledUno && (
         <span
-          className="font-black uppercase text-[8px] tracking-wider px-2 py-0.5 rounded-full"
+          className="font-black uppercase tracking-wider px-3 py-1 rounded-full"
           style={{
-            background: 'rgba(244,63,94,0.12)',
+            fontSize: 11,
+            background: 'rgba(244,63,94,0.18)',
             color: '#fb7185',
-            border: '1px solid rgba(244,63,94,0.2)',
-            animation: 'uno-glow-pulse 1.5s ease-in-out infinite',
+            border: '1.5px solid rgba(244,63,94,0.35)',
+            boxShadow: '0 0 12px rgba(244,63,94,0.2)',
+            animation: 'uno-uno-throb 1.5s ease-in-out infinite',
           }}
         >
           UNO!
@@ -480,11 +484,12 @@ function OpponentZone({
 
 // ── Draw Pile Stack ─────────────────────────────────────────────────────────
 
-function DrawPileStack({ compact, isMyTurn, canDraw = true, onClick }: { compact: boolean; isMyTurn: boolean; canDraw?: boolean; onClick: () => void }) {
+function DrawPileStack({ compact, isMyTurn, mustDraw, canDraw = true, onClick }: { compact: boolean; isMyTurn: boolean; mustDraw?: boolean; canDraw?: boolean; onClick: () => void }) {
   const w = compact ? 62 : 76;
   const h = compact ? 92 : 112;
   const r = compact ? 10 : 12;
   const enabled = isMyTurn && canDraw;
+  const highlighted = isMyTurn && mustDraw;
 
   return (
     <button
@@ -493,6 +498,17 @@ function DrawPileStack({ compact, isMyTurn, canDraw = true, onClick }: { compact
       className={`relative group transition-all duration-200 ${enabled ? 'cursor-pointer' : 'cursor-not-allowed'}`}
       style={{ opacity: enabled ? 1 : 0.4 }}
     >
+      {/* Pulsing highlight ring when must draw */}
+      {highlighted && (
+        <div
+          className="absolute -inset-3 rounded-2xl pointer-events-none z-0"
+          style={{
+            border: '2px solid rgba(251,191,36,0.5)',
+            boxShadow: '0 0 20px rgba(251,191,36,0.25), inset 0 0 20px rgba(251,191,36,0.08)',
+            animation: 'uno-glow-pulse 1.2s ease-in-out infinite',
+          }}
+        />
+      )}
       {/* Stack layers */}
       {[3, 2, 1].map((layer) => (
         <div
@@ -521,9 +537,11 @@ function DrawPileStack({ compact, isMyTurn, canDraw = true, onClick }: { compact
           borderRadius: r,
           background: 'linear-gradient(145deg, #323237 0%, #232326 50%, #18181b 100%)',
           border: '1px solid rgba(82,82,91,0.7)',
-          boxShadow: isMyTurn
-            ? '0 4px 16px rgba(0,0,0,0.5), 0 0 20px rgba(99,102,241,0.08)'
-            : '0 4px 16px rgba(0,0,0,0.5)',
+          boxShadow: highlighted
+            ? '0 4px 16px rgba(0,0,0,0.5), 0 0 24px rgba(251,191,36,0.2), 0 0 8px rgba(251,191,36,0.15)'
+            : isMyTurn
+              ? '0 4px 16px rgba(0,0,0,0.5), 0 0 20px rgba(99,102,241,0.08)'
+              : '0 4px 16px rgba(0,0,0,0.5)',
         }}
       >
         {/* Inner decorative frame */}
@@ -856,6 +874,54 @@ export function UnoGame({ wsUrl, gameId, initialRoomCode, quickPlay: isQuickPlay
           {/* Spectator banner */}
           {mp.isSpectator && <SpectatorBanner spectatorCount={mp.spectatorCount} />}
 
+          {/* ── In-round scoreboard ─────────────────────────────────── */}
+          {gs && gs.phase !== 'lobby' && gs.matchTargetScore > 0 && (
+            <div
+              className="w-full max-w-md mx-auto flex items-center justify-center gap-3 flex-wrap"
+              style={{
+                padding: compact ? '6px 10px' : '8px 14px',
+                borderRadius: 12,
+                background: 'rgba(24,24,27,0.5)',
+                border: '1px solid rgba(63,63,70,0.25)',
+              }}
+            >
+              {[...gs.players].sort((a, b) => b.matchScore - a.matchScore).map((p, rank) => {
+                const isMe = myIdx !== null && p.token === gs.playerIds[myIdx];
+                const isLeading = rank === 0 && p.matchScore > 0;
+                return (
+                  <div
+                    key={p.token}
+                    className="flex items-center gap-1.5"
+                    style={{
+                      padding: '2px 8px',
+                      borderRadius: 8,
+                      background: isMe ? 'rgba(99,102,241,0.1)' : 'transparent',
+                      border: isMe ? '1px solid rgba(129,140,248,0.15)' : '1px solid transparent',
+                    }}
+                  >
+                    {isLeading && <span style={{ fontSize: 10 }}>{'\u{1F451}'}</span>}
+                    <span
+                      className="font-medium truncate max-w-[80px]"
+                      style={{ fontSize: 11, color: isMe ? '#c7d2fe' : '#a1a1aa' }}
+                    >
+                      {p.nickname || `P${gs.players.indexOf(p) + 1}`}
+                    </span>
+                    <span
+                      className="font-black"
+                      style={{
+                        fontSize: 12,
+                        color: isLeading ? '#fbbf24' : '#71717a',
+                      }}
+                    >
+                      {p.matchScore}
+                    </span>
+                    <span style={{ fontSize: 9, color: '#52525b' }}>/{gs.matchTargetScore}</span>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+
           {/* ── Turn status banner ─────────────────────────────────────── */}
           {gs && gs.phase === 'playing' && (
             <div
@@ -1059,13 +1125,18 @@ export function UnoGame({ wsUrl, gameId, initialRoomCode, quickPlay: isQuickPlay
                         {t('uno.pass')}
                       </button>
                     ) : (
-                      <DrawPileStack compact={compact} isMyTurn={isMyTurn} canDraw={!gs.rules.forcedPlay || gs.mustDraw || gs.pendingDraw > 0} onClick={handleDraw} />
+                      <DrawPileStack compact={compact} isMyTurn={isMyTurn} mustDraw={isMyTurn && (gs.mustDraw || gs.pendingDraw > 0)} canDraw={!gs.rules.forcedPlay || gs.mustDraw || gs.pendingDraw > 0} onClick={handleDraw} />
                     )}
                     <span
                       className="font-semibold uppercase tracking-wider"
-                      style={{ fontSize: 9, color: '#71717a', letterSpacing: '0.1em' }}
+                      style={{
+                        fontSize: 9,
+                        color: isMyTurn && (gs.mustDraw || gs.pendingDraw > 0) ? '#fbbf24' : '#71717a',
+                        letterSpacing: '0.1em',
+                        animation: isMyTurn && (gs.mustDraw || gs.pendingDraw > 0) ? 'uno-glow-pulse 1.2s ease-in-out infinite' : 'none',
+                      }}
                     >
-                      {gs.drawnCardId !== null && isMyTurn ? t('uno.pass') : t('uno.drawPile')}
+                      {gs.drawnCardId !== null && isMyTurn ? t('uno.pass') : isMyTurn && gs.pendingDraw > 0 ? `+${gs.pendingDraw} ${t('uno.drawPile')}` : t('uno.drawPile')}
                     </span>
                   </div>
 

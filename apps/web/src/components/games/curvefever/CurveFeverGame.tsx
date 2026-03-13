@@ -598,7 +598,7 @@ export function CurveFeverGame({ wsUrl, gameId, initialRoomCode, quickPlay: auto
       const rect = container.getBoundingClientRect();
       const scaleX = rect.width / ARENA_W;
       const scaleY = rect.height / ARENA_H;
-      const scale = Math.min(scaleX, scaleY, 1);
+      const scale = Math.min(scaleX, scaleY);
       canvas.style.width = `${ARENA_W * scale}px`;
       canvas.style.height = `${ARENA_H * scale}px`;
     };
@@ -806,7 +806,7 @@ export function CurveFeverGame({ wsUrl, gameId, initialRoomCode, quickPlay: auto
       <div className="flex-1 flex flex-col items-center gap-3">
         <div
           ref={containerRef}
-          className="w-full max-w-[800px] aspect-[4/3] relative bg-zinc-950 rounded-xl overflow-hidden border border-zinc-800"
+          className="w-full aspect-[4/3] relative bg-zinc-950 rounded-xl overflow-hidden border border-zinc-800"
         >
           <canvas
             ref={canvasRef}
