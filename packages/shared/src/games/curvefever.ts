@@ -114,19 +114,19 @@ export const ARENA_W = 800;
 export const ARENA_H = 600;
 
 // ── Movement / steering ──────────────────────────────────────────────────────
-export const BASE_SPEED = 2;               // px per tick at round start
-export const SPEED_INCREASE_PER_SEC = 0.06; // px/tick gained per second of gameplay
-export const MAX_SPEED = 4.5;              // hard cap
-export const TURN_RATE = 0.05;             // radians per tick (base)
+export const BASE_SPEED = 2.2;             // px per tick at round start
+export const SPEED_INCREASE_PER_SEC = 0.1; // px/tick gained per second of gameplay
+export const MAX_SPEED = 5.5;              // hard cap
+export const TURN_RATE = 0.055;            // radians per tick (base)
 export const PLAYER_RADIUS = 3;
 
 // ── Gaps ─────────────────────────────────────────────────────────────────────
 // Intervals / durations expressed in ticks (20 tps).
-// Classic Curve Fever feel: gap every ~4-8s, gap lasts ~0.4-0.7s
-export const GAP_INTERVAL_MIN = 80;   // 4s
-export const GAP_INTERVAL_MAX = 160;  // 8s
-export const GAP_DURATION_MIN = 8;    // 0.4s
-export const GAP_DURATION_MAX = 14;   // 0.7s
+// Gaps come more frequently as speed increases (handled in engine).
+export const GAP_INTERVAL_MIN = 60;   // 3s
+export const GAP_INTERVAL_MAX = 140;  // 7s
+export const GAP_DURATION_MIN = 6;    // 0.3s
+export const GAP_DURATION_MAX = 12;   // 0.6s
 
 // ── Timing ───────────────────────────────────────────────────────────────────
 export const COUNTDOWN_TICKS = 60;     // 3s at 20 tps
@@ -135,9 +135,9 @@ export const ROUND_END_TICKS = 80;     // 4s pause between rounds
 export const TICKS_PER_SEC = 20;
 
 // ── Power-ups ───────────────────────────────────────────────────────────────
-export const POWERUP_SPAWN_INTERVAL_MIN = 100;  // 5s at 20 tps
-export const POWERUP_SPAWN_INTERVAL_MAX = 200;  // 10s
-export const POWERUP_MAX_ACTIVE = 3;            // max items on arena
+export const POWERUP_SPAWN_INTERVAL_MIN = 70;   // 3.5s at 20 tps
+export const POWERUP_SPAWN_INTERVAL_MAX = 150;  // 7.5s
+export const POWERUP_MAX_ACTIVE = 4;            // max items on arena
 export const POWERUP_LIFETIME = 200;            // 10s before despawn
 export const POWERUP_PICKUP_RADIUS = 12;        // px from center
 export const POWERUP_SPEED_DURATION = 40;       // 2s at 20 tps

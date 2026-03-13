@@ -325,10 +325,21 @@ export function CurveFeverGame({ wsUrl, gameId, initialRoomCode, quickPlay: auto
       if (!state) return;
       if (state.phase === 'lobby') return;
 
+      // Size canvas to fill its CSS dimensions at native resolution
+      const cssW = canvas.clientWidth;
+      const cssH = canvas.clientHeight;
+      if (cssW === 0 || cssH === 0) return;
+
       const dpr = window.devicePixelRatio || 1;
-      canvas.width = ARENA_W * dpr;
-      canvas.height = ARENA_H * dpr;
-      ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+      const bufW = Math.round(cssW * dpr);
+      const bufH = Math.round(cssH * dpr);
+      if (canvas.width !== bufW) canvas.width = bufW;
+      if (canvas.height !== bufH) canvas.height = bufH;
+
+      // Scale all drawing from arena coords (800x600) to actual pixel buffer
+      const sx = bufW / ARENA_W;
+      const sy = bufH / ARENA_H;
+      ctx.setTransform(sx, 0, 0, sy, 0, 0);
 
       // Screen shake offset
       const shake = shakeRef.current;
@@ -483,37 +494,102 @@ export function CurveFeverGame({ wsUrl, gameId, initialRoomCode, quickPlay: auto
       ctx.shadowBlur = 0;
 
       // ── Overlays ────────────────────────────────────────────────────────
+      const cx = ARENA_W / 2;
+      const cy = ARENA_H / 2;
+
+      // Speed indicator (subtle, bottom-center during play)
+      if (state.phase === 'playing') {
+        const seconds = state.ticksElapsed / TICKS_PER_SEC;
+        const spd = Math.min(2.2 + seconds * 0.1, 5.5);
+        const pct = (spd - 2.2) / (5.5 - 2.2);
+        const barW = 120;
+        const barH = 3;
+        const barX = cx - barW / 2;
+        const barY = ARENA_H - 18;
+        ctx.globalAlpha = 0.35;
+        ctx.fillStyle = '#333';
+        ctx.fillRect(barX, barY, barW, barH);
+        const r = Math.round(80 + pct * 175);
+        const g = Math.round(180 - pct * 140);
+        ctx.fillStyle = `rgb(${r},${g},50)`;
+        ctx.fillRect(barX, barY, barW * pct, barH);
+        ctx.globalAlpha = 1;
+      }
 
       // Countdown
       if (state.phase === 'countdown') {
         const secondsLeft = Math.ceil(state.countdownTimer / TICKS_PER_SEC);
-        const text = secondsLeft > 0 ? String(secondsLeft) : t('curvefever.countdown.go');
+        const text = secondsLeft > 0 ? String(secondsLeft) : 'GO';
+        const progress = 1 - state.countdownTimer / 60; // 0→1
 
         const isLast = state.round === state.bestOf;
         const roundLabel = isLast
           ? t('curvefever.finalRound')
           : `${t('curvefever.round')} ${state.round}`;
 
-        ctx.fillStyle = 'rgba(0,0,0,0.5)';
+        // Darkening vignette
+        const grad = ctx.createRadialGradient(cx, cy, 50, cx, cy, 400);
+        grad.addColorStop(0, 'rgba(0,0,0,0.3)');
+        grad.addColorStop(1, 'rgba(0,0,0,0.7)');
+        ctx.fillStyle = grad;
         ctx.fillRect(0, 0, ARENA_W, ARENA_H);
+
         ctx.textAlign = 'center';
         ctx.textBaseline = 'middle';
 
-        ctx.fillStyle = 'rgba(255,255,255,0.5)';
-        ctx.font = 'bold 24px system-ui, sans-serif';
-        ctx.fillText(roundLabel, ARENA_W / 2, ARENA_H / 2 - 70);
+        // Round label
+        ctx.fillStyle = isLast ? 'rgba(241,196,15,0.8)' : 'rgba(255,255,255,0.5)';
+        ctx.font = `bold ${isLast ? 28 : 22}px system-ui, sans-serif`;
+        ctx.fillText(roundLabel, cx, cy - 80);
 
-        ctx.fillStyle = '#fff';
-        ctx.font = 'bold 96px system-ui, sans-serif';
-        ctx.shadowColor = '#fff';
-        ctx.shadowBlur = 20;
-        ctx.fillText(text, ARENA_W / 2, ARENA_H / 2);
+        // Score bar under round label
+        if (state.players.length > 0) {
+          const sorted = state.players.slice().sort((a, b) => b.score - a.score);
+          ctx.font = '14px system-ui, sans-serif';
+          const scoreY = cy - 52;
+          sorted.forEach((p, idx) => {
+            const totalW = sorted.length * 70;
+            const px = cx - totalW / 2 + idx * 70 + 35;
+            ctx.fillStyle = p.color;
+            ctx.globalAlpha = 0.8;
+            ctx.beginPath();
+            ctx.arc(px - 20, scoreY, 4, 0, Math.PI * 2);
+            ctx.fill();
+            ctx.fillStyle = 'rgba(255,255,255,0.7)';
+            ctx.fillText(`${p.score}`, px, scoreY);
+            ctx.globalAlpha = 1;
+          });
+        }
+
+        // Big countdown number
+        const countSize = 100 + (1 - progress) * 20;
+        ctx.fillStyle = text === 'GO' ? '#2ecc71' : '#fff';
+        ctx.font = `bold ${countSize}px system-ui, sans-serif`;
+        ctx.shadowColor = text === 'GO' ? '#2ecc71' : '#fff';
+        ctx.shadowBlur = 30;
+        ctx.fillText(text, cx, cy + 20);
         ctx.shadowBlur = 0;
+
+        // Circular progress ring
+        const ringR = 70;
+        ctx.lineWidth = 3;
+        ctx.strokeStyle = 'rgba(255,255,255,0.1)';
+        ctx.beginPath();
+        ctx.arc(cx, cy + 20, ringR, 0, Math.PI * 2);
+        ctx.stroke();
+        ctx.strokeStyle = text === 'GO' ? '#2ecc71' : 'rgba(255,255,255,0.6)';
+        ctx.lineCap = 'round';
+        ctx.beginPath();
+        ctx.arc(cx, cy + 20, ringR, -Math.PI / 2, -Math.PI / 2 + progress * Math.PI * 2);
+        ctx.stroke();
       }
 
       // Round end overlay
       if (state.phase === 'round_end') {
-        ctx.fillStyle = 'rgba(0,0,0,0.6)';
+        const grad = ctx.createRadialGradient(cx, cy, 30, cx, cy, 400);
+        grad.addColorStop(0, 'rgba(0,0,0,0.4)');
+        grad.addColorStop(1, 'rgba(0,0,0,0.75)');
+        ctx.fillStyle = grad;
         ctx.fillRect(0, 0, ARENA_W, ARENA_H);
         ctx.textAlign = 'center';
         ctx.textBaseline = 'middle';
@@ -521,64 +597,139 @@ export function CurveFeverGame({ wsUrl, gameId, initialRoomCode, quickPlay: auto
         if (state.roundWinner) {
           const rw = state.players.find(p => p.token === state.roundWinner);
           if (rw) {
+            // Winner color glow
+            const winGrad = ctx.createRadialGradient(cx, cy - 20, 0, cx, cy - 20, 200);
+            winGrad.addColorStop(0, rw.color + '15');
+            winGrad.addColorStop(1, 'transparent');
+            ctx.fillStyle = winGrad;
+            ctx.fillRect(0, 0, ARENA_W, ARENA_H);
+
             ctx.fillStyle = rw.color;
-            ctx.font = 'bold 40px system-ui, sans-serif';
+            ctx.font = 'bold 44px system-ui, sans-serif';
             ctx.shadowColor = rw.color;
-            ctx.shadowBlur = 12;
-            ctx.fillText(`${rw.nickname} ${t('curvefever.winsRound')}`, ARENA_W / 2, ARENA_H / 2 - 20);
+            ctx.shadowBlur = 20;
+            ctx.fillText(rw.nickname, cx, cy - 30);
             ctx.shadowBlur = 0;
+
+            ctx.fillStyle = 'rgba(255,255,255,0.6)';
+            ctx.font = '20px system-ui, sans-serif';
+            ctx.fillText(t('curvefever.winsRound'), cx, cy + 10);
           }
         } else {
           ctx.fillStyle = '#fff';
           ctx.font = 'bold 36px system-ui, sans-serif';
-          ctx.fillText(t('curvefever.roundEnd'), ARENA_W / 2, ARENA_H / 2 - 20);
+          ctx.fillText(t('curvefever.roundEnd'), cx, cy - 20);
         }
 
-        ctx.font = '20px system-ui, sans-serif';
-        ctx.fillStyle = 'rgba(255,255,255,0.6)';
-        const scoreLine = state.players
-          .slice().sort((a, b) => b.score - a.score)
-          .map(p => `${p.nickname}: ${p.score}`)
-          .join('  ·  ');
-        ctx.fillText(scoreLine, ARENA_W / 2, ARENA_H / 2 + 30);
+        // Scoreboard
+        const sorted = state.players.slice().sort((a, b) => b.score - a.score);
+        const rowH = 28;
+        const startY = cy + 50;
+        sorted.forEach((p, idx) => {
+          const y = startY + idx * rowH;
+          // Bar background
+          ctx.fillStyle = 'rgba(255,255,255,0.04)';
+          ctx.beginPath();
+          ctx.roundRect(cx - 100, y - 10, 200, 24, 6);
+          ctx.fill();
+          // Color dot
+          ctx.fillStyle = p.color;
+          ctx.beginPath();
+          ctx.arc(cx - 80, y + 2, 5, 0, Math.PI * 2);
+          ctx.fill();
+          // Name
+          ctx.fillStyle = 'rgba(255,255,255,0.8)';
+          ctx.font = '14px system-ui, sans-serif';
+          ctx.textAlign = 'left';
+          ctx.fillText(p.nickname || 'Player', cx - 68, y + 5);
+          // Score
+          ctx.textAlign = 'right';
+          ctx.font = 'bold 16px system-ui, sans-serif';
+          ctx.fillStyle = p.color;
+          ctx.fillText(String(p.score), cx + 88, y + 5);
+          ctx.textAlign = 'center';
+        });
       }
 
       // Match end overlay
       if (state.phase === 'finished') {
-        ctx.fillStyle = 'rgba(0,0,0,0.75)';
+        // Dark overlay with winner color accent
+        const wp = state.winner ? state.players.find(p => p.token === state.winner) : null;
+        const winColor = wp?.color ?? '#f1c40f';
+
+        ctx.fillStyle = 'rgba(0,0,0,0.8)';
         ctx.fillRect(0, 0, ARENA_W, ARENA_H);
+
+        // Winner color radial glow
+        const winGrad = ctx.createRadialGradient(cx, cy - 40, 0, cx, cy - 40, 300);
+        winGrad.addColorStop(0, winColor + '20');
+        winGrad.addColorStop(1, 'transparent');
+        ctx.fillStyle = winGrad;
+        ctx.fillRect(0, 0, ARENA_W, ARENA_H);
+
         ctx.textAlign = 'center';
         ctx.textBaseline = 'middle';
 
+        // Crown
+        ctx.font = '56px system-ui, sans-serif';
+        ctx.fillText('\u{1F451}', cx, cy - 100);
+
+        // "Match End" title
         ctx.fillStyle = '#f1c40f';
-        ctx.font = 'bold 52px system-ui, sans-serif';
-        ctx.shadowColor = '#f1c40f';
-        ctx.shadowBlur = 25;
-        ctx.fillText(t('curvefever.matchEnd'), ARENA_W / 2, ARENA_H / 2 - 70);
-        ctx.shadowBlur = 0;
+        ctx.font = 'bold 18px system-ui, sans-serif';
+        ctx.fillText(t('curvefever.matchEnd').toUpperCase(), cx, cy - 60);
 
-        if (state.winner) {
-          const wp = state.players.find(p => p.token === state.winner);
-          if (wp) {
-            ctx.fillStyle = wp.color;
-            ctx.font = 'bold 42px system-ui, sans-serif';
-            ctx.shadowColor = wp.color;
-            ctx.shadowBlur = 20;
-            ctx.fillText(wp.nickname, ARENA_W / 2, ARENA_H / 2 - 10);
-            ctx.shadowBlur = 0;
-
-            ctx.font = '48px system-ui, sans-serif';
-            ctx.fillText('\u{1F451}', ARENA_W / 2, ARENA_H / 2 - 55);
-          }
+        // Winner name
+        if (wp) {
+          ctx.fillStyle = wp.color;
+          ctx.font = 'bold 48px system-ui, sans-serif';
+          ctx.shadowColor = wp.color;
+          ctx.shadowBlur = 30;
+          ctx.fillText(wp.nickname, cx, cy - 15);
+          ctx.shadowBlur = 0;
         }
 
-        ctx.font = '18px system-ui, sans-serif';
-        ctx.fillStyle = 'rgba(255,255,255,0.5)';
-        const finalScores = state.players
-          .slice().sort((a, b) => b.score - a.score)
-          .map(p => `${p.nickname}: ${p.score}`)
-          .join('  ·  ');
-        ctx.fillText(finalScores, ARENA_W / 2, ARENA_H / 2 + 40);
+        // Final scoreboard
+        const sorted = state.players.slice().sort((a, b) => b.score - a.score);
+        const rowH = 32;
+        const startY = cy + 40;
+        sorted.forEach((p, idx) => {
+          const y = startY + idx * rowH;
+          const isWin = p.token === state.winner;
+          // Row bg
+          ctx.fillStyle = isWin ? 'rgba(255,255,255,0.06)' : 'rgba(255,255,255,0.02)';
+          ctx.beginPath();
+          ctx.roundRect(cx - 120, y - 12, 240, 28, 6);
+          ctx.fill();
+          if (isWin) {
+            ctx.strokeStyle = winColor + '40';
+            ctx.lineWidth = 1;
+            ctx.stroke();
+          }
+          // Color dot
+          ctx.fillStyle = p.color;
+          ctx.shadowColor = isWin ? p.color : 'transparent';
+          ctx.shadowBlur = isWin ? 8 : 0;
+          ctx.beginPath();
+          ctx.arc(cx - 100, y + 2, 5, 0, Math.PI * 2);
+          ctx.fill();
+          ctx.shadowBlur = 0;
+          // Rank
+          ctx.fillStyle = 'rgba(255,255,255,0.3)';
+          ctx.font = '12px system-ui, sans-serif';
+          ctx.textAlign = 'left';
+          ctx.fillText(`#${idx + 1}`, cx - 112, y + 4);
+          // Name
+          ctx.fillStyle = isWin ? '#fff' : 'rgba(255,255,255,0.7)';
+          ctx.font = `${isWin ? 'bold ' : ''}15px system-ui, sans-serif`;
+          ctx.fillText(p.nickname || 'Player', cx - 80, y + 5);
+          // Score
+          ctx.textAlign = 'right';
+          ctx.font = 'bold 17px system-ui, sans-serif';
+          ctx.fillStyle = p.color;
+          ctx.fillText(String(p.score), cx + 108, y + 5);
+          ctx.textAlign = 'center';
+        });
       }
 
       ctx.restore(); // end shake transform
@@ -588,26 +739,7 @@ export function CurveFeverGame({ wsUrl, gameId, initialRoomCode, quickPlay: auto
     return () => cancelAnimationFrame(animFrame);
   }, [gs, t, myToken]);
 
-  // ── Responsive canvas sizing ────────────────────────────────────────────
-  useEffect(() => {
-    const container = containerRef.current;
-    const canvas = canvasRef.current;
-    if (!container || !canvas) return;
-
-    const resize = () => {
-      const rect = container.getBoundingClientRect();
-      const scaleX = rect.width / ARENA_W;
-      const scaleY = rect.height / ARENA_H;
-      const scale = Math.min(scaleX, scaleY);
-      canvas.style.width = `${ARENA_W * scale}px`;
-      canvas.style.height = `${ARENA_H * scale}px`;
-    };
-
-    resize();
-    const observer = new ResizeObserver(resize);
-    observer.observe(container);
-    return () => observer.disconnect();
-  }, []);
+  // Canvas sizing is handled inside the draw loop now (no separate effect needed)
 
   // ── Helpers ─────────────────────────────────────────────────────────────
   const getNickname = (token: string) => {
@@ -800,23 +932,129 @@ export function CurveFeverGame({ wsUrl, gameId, initialRoomCode, quickPlay: auto
 
   // ── Game UI ─────────────────────────────────────────────────────────────
   return (
-    <div className="flex flex-col lg:flex-row gap-4 p-4 max-w-6xl mx-auto relative">
+    <div className="relative w-full px-4 py-2">
       <ReconnectBanner mp={mp} />
-      {/* Arena */}
-      <div className="flex-1 flex flex-col items-center gap-3">
+
+      {/* Arena — fills viewport height, centered */}
+      <div className="flex justify-center">
         <div
           ref={containerRef}
-          className="w-full aspect-[4/3] relative bg-zinc-950 rounded-xl overflow-hidden border border-zinc-800"
+          className="relative bg-zinc-950 rounded-xl overflow-hidden border border-zinc-800"
+          style={{
+            width: `min(100%, calc((100vh - 120px) * ${ARENA_W / ARENA_H}))`,
+            height: `min(calc(100vw * ${ARENA_H / ARENA_W}), calc(100vh - 120px))`,
+            maxWidth: '100%',
+          }}
         >
           <canvas
             ref={canvasRef}
-            className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2"
-            style={{ imageRendering: 'auto' }}
+            className="absolute inset-0 w-full h-full"
           />
+
+          {/* Scoreboard overlay (top-left) */}
+          <div className="absolute top-3 left-3 z-10 pointer-events-none">
+            <div
+              className="rounded-xl p-3 space-y-1.5 pointer-events-auto"
+              style={{
+                background: 'rgba(0,0,0,0.7)',
+                backdropFilter: 'blur(8px)',
+                border: '1px solid rgba(255,255,255,0.08)',
+                minWidth: 160,
+              }}
+            >
+              <div className="flex items-center justify-between gap-4">
+                <span className="text-[10px] font-semibold text-zinc-400 uppercase tracking-wider">{t('curvefever.scoreboard')}</span>
+                {gs && (
+                  <span className="text-[9px] text-zinc-500">
+                    {gs.round === gs.bestOf
+                      ? t('curvefever.finalRound')
+                      : `${t('curvefever.round')} ${gs.round}`
+                    } · Bo{gs.bestOf}
+                  </span>
+                )}
+              </div>
+              <div className="space-y-0.5">
+                {sortedPlayers.map((p) => {
+                  const isLeader = p.score > 0 && p.score === topScore && gs?.phase === 'playing';
+                  const isDead = !p.alive && gs?.phase === 'playing';
+                  const isMe = p.token === myToken;
+                  const isWinner = isMatchWinner && p.token === gs?.winner;
+
+                  return (
+                    <div
+                      key={p.token}
+                      className="flex items-center gap-1.5 px-2 py-1 rounded-md text-xs"
+                      style={{
+                        opacity: isDead ? 0.4 : 1,
+                        background: isMe ? 'rgba(255,255,255,0.06)' : isWinner ? 'rgba(245,158,11,0.1)' : 'transparent',
+                      }}
+                    >
+                      <div
+                        className="w-2.5 h-2.5 rounded-full shrink-0"
+                        style={{
+                          backgroundColor: p.color,
+                          boxShadow: (isLeader || isWinner) ? `0 0 6px ${p.color}` : 'none',
+                        }}
+                      />
+                      {(isWinner || isLeader) && (
+                        <span className="text-[9px] shrink-0">{'\u{1F451}'}</span>
+                      )}
+                      <span className={`truncate flex-1 ${isWinner ? 'text-amber-300 font-semibold' : 'text-zinc-300'}`}>
+                        {p.nickname || 'Player'}
+                      </span>
+                      <div className="flex gap-0.5 shrink-0">
+                        {Array.from({ length: winsNeeded }).map((_, wi) => (
+                          <div
+                            key={wi}
+                            className="w-1.5 h-1.5 rounded-full"
+                            style={{ backgroundColor: wi < p.score ? p.color : 'rgba(113,113,122,0.5)' }}
+                          />
+                        ))}
+                      </div>
+                      {isDead && <span className="text-red-500 text-[9px]">{'\u2715'}</span>}
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          </div>
+
+          {/* Active effects overlay (bottom-left) */}
+          {gs && gs.phase === 'playing' && (() => {
+            const me = gs.players.find(p => p.token === myToken);
+            if (!me || me.effects.length === 0) return null;
+            return (
+              <div className="absolute bottom-3 left-3 z-10 pointer-events-none">
+                <div
+                  className="rounded-lg p-2 space-y-1"
+                  style={{
+                    background: 'rgba(0,0,0,0.7)',
+                    backdropFilter: 'blur(8px)',
+                    border: '1px solid rgba(255,255,255,0.08)',
+                  }}
+                >
+                  {me.effects.map((eff, ei) => (
+                    <div
+                      key={`${eff.type}-${ei}`}
+                      className="flex items-center gap-1.5 px-1.5 py-0.5 rounded text-[10px]"
+                    >
+                      <span>{POWERUP_ICONS[eff.type]}</span>
+                      <span style={{ color: POWERUP_COLORS[eff.type] }}>
+                        {t(`curvefever.powerup.${eff.type}`)}
+                      </span>
+                      <span className="text-zinc-500 ml-1">
+                        {(eff.remainingTicks / TICKS_PER_SEC).toFixed(1)}s
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            );
+          })()}
 
           {/* Kill feed overlay (top-right) */}
           {killFeedItems.length > 0 && (
-            <div className="absolute top-2 right-2 flex flex-col gap-1 pointer-events-none z-10 max-w-[280px]">
+            <div className="absolute top-3 right-3 flex flex-col gap-1 pointer-events-none z-10 max-w-[280px]">
               {killFeedItems.map((item, idx) => {
                 const age = Date.now() - item.addedAt;
                 const opacity = Math.max(0, 1 - age / KILL_FEED_DISPLAY_MS);
@@ -858,10 +1096,28 @@ export function CurveFeverGame({ wsUrl, gameId, initialRoomCode, quickPlay: auto
               })}
             </div>
           )}
+
+          {/* Room code overlay (bottom-right) */}
+          {mp.roomCode && (
+            <div className="absolute bottom-3 right-3 z-10 pointer-events-none">
+              <span
+                className="text-[10px] font-mono px-2 py-1 rounded-md"
+                style={{
+                  background: 'rgba(0,0,0,0.6)',
+                  color: '#818cf8',
+                  border: '1px solid rgba(255,255,255,0.06)',
+                }}
+              >
+                {mp.roomCode}
+              </span>
+            </div>
+          )}
         </div>
+      </div>
 
+      {/* Bottom bar: controls hint + rematch */}
+      <div className="flex items-center justify-center gap-4 mt-2">
         <p className="text-xs text-zinc-600">{t('curvefever.controls')}</p>
-
         {gs?.phase === 'finished' && (
           <button
             onClick={() => mp.requestRematch()}
@@ -870,129 +1126,6 @@ export function CurveFeverGame({ wsUrl, gameId, initialRoomCode, quickPlay: auto
             Rematch
           </button>
         )}
-      </div>
-
-      {/* Scoreboard sidebar */}
-      <div className="w-full lg:w-60 shrink-0 space-y-3">
-        <div className="bg-zinc-900 rounded-xl p-4 border border-zinc-800 space-y-3">
-          {/* Header */}
-          <div className="flex items-center justify-between">
-            <h3 className="text-sm font-semibold text-zinc-300">{t('curvefever.scoreboard')}</h3>
-            {gs && (
-              <span className="text-xs text-zinc-500 bg-zinc-800 px-2 py-0.5 rounded-md">
-                Bo{gs.bestOf}
-              </span>
-            )}
-          </div>
-
-          {/* Round indicator */}
-          {gs && gs.phase !== 'finished' && (
-            <div className="text-xs text-zinc-500 text-center">
-              {gs.round === gs.bestOf
-                ? t('curvefever.finalRound')
-                : `${t('curvefever.round')} ${gs.round}`
-              }
-              {' · '}
-              {t('curvefever.firstTo')} {gs.winsNeeded}
-            </div>
-          )}
-
-          {/* Player rows */}
-          <div className="space-y-1">
-            {sortedPlayers.map((p) => {
-              const isLeader = p.score > 0 && p.score === topScore && gs?.phase === 'playing';
-              const isDead = !p.alive && gs?.phase === 'playing';
-              const isMe = p.token === myToken;
-              const isWinner = isMatchWinner && p.token === gs?.winner;
-
-              return (
-                <div
-                  key={p.token}
-                  className={`flex items-center gap-2 px-2.5 py-2 rounded-lg text-sm transition-all ${
-                    isDead ? 'opacity-40' : ''
-                  } ${isMe ? 'bg-zinc-800/80 ring-1 ring-zinc-700' : 'bg-zinc-800/30'} ${
-                    isLeader ? 'ring-1 ring-amber-700/50' : ''
-                  } ${isWinner ? 'ring-2 ring-amber-500/70 bg-amber-950/20' : ''}`}
-                >
-                  <div
-                    className="w-3 h-3 rounded-full shrink-0"
-                    style={{
-                      backgroundColor: p.color,
-                      boxShadow: (isLeader || isWinner) ? `0 0 8px ${p.color}` : 'none',
-                    }}
-                  />
-
-                  {/* Crown for match winner or current leader */}
-                  {(isWinner || isLeader) && (
-                    <span
-                      className={`text-xs shrink-0 ${isWinner ? 'animate-bounce' : ''}`}
-                      style={{ fontSize: isWinner ? '14px' : '11px' }}
-                    >
-                      {'\u{1F451}'}
-                    </span>
-                  )}
-
-                  <span className={`truncate flex-1 ${isWinner ? 'text-amber-300 font-semibold' : 'text-zinc-300'}`}>
-                    {p.nickname || 'Player'}
-                  </span>
-
-                  {/* Win dots */}
-                  <div className="flex gap-0.5 shrink-0">
-                    {Array.from({ length: winsNeeded }).map((_, wi) => (
-                      <div
-                        key={wi}
-                        className={`w-2 h-2 rounded-full ${
-                          wi < p.score
-                            ? ''
-                            : 'bg-zinc-700'
-                        }`}
-                        style={wi < p.score ? { backgroundColor: p.color } : undefined}
-                      />
-                    ))}
-                  </div>
-
-                  {isDead && (
-                    <span className="text-red-500 text-xs ml-1">{'\u2715'}</span>
-                  )}
-                </div>
-              );
-            })}
-          </div>
-
-          {/* Active effects for local player */}
-          {gs && gs.phase === 'playing' && (() => {
-            const me = gs.players.find(p => p.token === myToken);
-            if (!me || me.effects.length === 0) return null;
-            return (
-              <div className="pt-2 border-t border-zinc-800 space-y-1">
-                <p className="text-xs text-zinc-500 font-medium">Active</p>
-                {me.effects.map((eff, ei) => (
-                  <div
-                    key={`${eff.type}-${ei}`}
-                    className="flex items-center gap-2 px-2 py-1 rounded-md text-xs"
-                    style={{ backgroundColor: POWERUP_COLORS[eff.type] + '20' }}
-                  >
-                    <span>{POWERUP_ICONS[eff.type]}</span>
-                    <span style={{ color: POWERUP_COLORS[eff.type] }}>
-                      {t(`curvefever.powerup.${eff.type}`)}
-                    </span>
-                    <span className="text-zinc-500 ml-auto">
-                      {(eff.remainingTicks / TICKS_PER_SEC).toFixed(1)}s
-                    </span>
-                  </div>
-                ))}
-              </div>
-            );
-          })()}
-
-          {mp.roomCode && (
-            <div className="pt-2 border-t border-zinc-800">
-              <p className="text-xs text-zinc-500">
-                {t('game.lobby.roomCode')}: <span className="font-mono text-indigo-400">{mp.roomCode}</span>
-              </p>
-            </div>
-          )}
-        </div>
       </div>
     </div>
   );

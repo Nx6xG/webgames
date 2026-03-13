@@ -4,15 +4,15 @@ import type { CurveFeverState, CurveFeverAction, CurveFeverPlayer, TrailSegment,
 // Constants (mirrored from shared to avoid CJS import issues)
 const ARENA_W = 800;
 const ARENA_H = 600;
-const BASE_SPEED = 2;
-const SPEED_INCREASE_PER_SEC = 0.06;
-const MAX_SPEED = 4.5;
-const TURN_RATE = 0.05;
+const BASE_SPEED = 2.2;
+const SPEED_INCREASE_PER_SEC = 0.1;
+const MAX_SPEED = 5.5;
+const TURN_RATE = 0.055;
 const PLAYER_RADIUS = 3;
-const GAP_INTERVAL_MIN = 80;
-const GAP_INTERVAL_MAX = 160;
-const GAP_DURATION_MIN = 8;
-const GAP_DURATION_MAX = 14;
+const GAP_INTERVAL_MIN = 60;
+const GAP_INTERVAL_MAX = 140;
+const GAP_DURATION_MIN = 6;
+const GAP_DURATION_MAX = 12;
 const COUNTDOWN_TICKS = 60;
 const TICK_INTERVAL = 50;
 const ROUND_END_TICKS = 80;
@@ -20,9 +20,9 @@ const TICKS_PER_SEC = 20;
 const PLAYER_COLORS = ['#e74c3c', '#3498db', '#2ecc71', '#f1c40f', '#9b59b6', '#e67e22'];
 
 // Power-up constants
-const POWERUP_SPAWN_INTERVAL_MIN = 100;
-const POWERUP_SPAWN_INTERVAL_MAX = 200;
-const POWERUP_MAX_ACTIVE = 3;
+const POWERUP_SPAWN_INTERVAL_MIN = 70;
+const POWERUP_SPAWN_INTERVAL_MAX = 150;
+const POWERUP_MAX_ACTIVE = 4;
 const POWERUP_LIFETIME = 200;
 const POWERUP_PICKUP_RADIUS = 12;
 const POWERUP_SPEED_DURATION = 40;
@@ -64,6 +64,16 @@ function currentSpeed(ticksElapsed: number): number {
 /** Compute turn rate that scales slightly with speed so steering stays responsive. */
 function currentTurnRate(speed: number): number {
   return TURN_RATE * (0.7 + 0.3 * (speed / BASE_SPEED));
+}
+
+/** Gap intervals get shorter as speed increases — tighter play. */
+function scaledGapCounter(ticksElapsed: number): number {
+  const seconds = ticksElapsed / TICKS_PER_SEC;
+  const factor = Math.max(0.5, 1 - seconds * 0.008); // down to 50% at ~60s
+  return randRange(
+    Math.round(GAP_INTERVAL_MIN * factor),
+    Math.round(GAP_INTERVAL_MAX * factor),
+  );
 }
 
 function emptyEffects(): CfActiveEffect[] { return []; }
@@ -463,7 +473,7 @@ export const curveFeverEngine: GameEngine<CurveFeverState, CurveFeverAction> & {
         p.inGap = true;
         if (newGapRemaining[i] <= 0) {
           p.inGap = false;
-          newGapCounters[i] = newGapCounter();
+          newGapCounters[i] = scaledGapCounter(ticks);
         }
       } else {
         p.inGap = false;
