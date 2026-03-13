@@ -58,7 +58,7 @@ export default async function GameRoutePage({ params, searchParams }: Props) {
   const wsUrl = process.env.NEXT_PUBLIC_WS_URL ?? '';
 
   return (
-    <GamePage title={manifest.name}>
+    <GamePage title={manifest.name} fullWidth={entry.fullWidth}>
       <Component wsUrl={wsUrl} gameId={id as GameId} initialRoomCode={room} quickPlay={quickplay === 'true'} />
     </GamePage>
   );

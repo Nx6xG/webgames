@@ -9,9 +9,11 @@ import { OnlineNavChip } from '@/components/social/OnlineNavChip';
 interface Props {
   title: string;
   children: ReactNode;
+  /** When true, the main content area has no max-width constraint (e.g. for full-screen arena games). */
+  fullWidth?: boolean;
 }
 
-export function GamePage({ title, children }: Props) {
+export function GamePage({ title, children, fullWidth }: Props) {
   const { t } = useI18n();
   const [muted, setMuted] = useState(false);
 
@@ -62,7 +64,7 @@ export function GamePage({ title, children }: Props) {
       </header>
 
       {/* Main */}
-      <main className="flex-1 min-h-0 max-w-6xl mx-auto w-full px-4 sm:px-6 py-2 lg:py-3 flex flex-col overflow-auto scrollbar-none">
+      <main className={`flex-1 min-h-0 ${fullWidth ? '' : 'max-w-6xl'} mx-auto w-full px-4 sm:px-6 py-2 lg:py-3 flex flex-col overflow-auto scrollbar-none`}>
         {children}
       </main>
     </div>

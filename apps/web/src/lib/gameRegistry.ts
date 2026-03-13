@@ -37,6 +37,8 @@ type WebGameEntry =
       comingSoon?: false;
       /** Top-level game component rendered inside GamePage. */
       Component: ComponentType<GameComponentProps>;
+      /** When true, GamePage uses full viewport width (no max-w-6xl). */
+      fullWidth?: boolean;
     }
   | {
       manifest: GameManifest;
@@ -45,6 +47,7 @@ type WebGameEntry =
       /** Mark as coming-soon: card is shown but Play is disabled; /games/[id] shows a placeholder. */
       comingSoon: true;
       Component?: never;
+      fullWidth?: boolean;
     };
 
 export type { WebGameEntry };
@@ -166,6 +169,7 @@ export const webRegistry: Record<GameId, WebGameEntry> = {
     titleKey: 'lobby.games.curvefever.title',
     descKey:  'lobby.games.curvefever.desc',
     Component: CurveFeverGame,
+    fullWidth: true,
   },
   uno: {
     manifest: {

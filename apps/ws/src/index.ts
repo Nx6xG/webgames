@@ -207,7 +207,7 @@ function allSeatedPlayersPresent(room: Room): boolean {
 }
 
 function tryStartCountdown(room: Room) {
-  if (room.gameId === 'liarsbar' || room.gameId === 'uno') return; // lobby games use host-start instead of countdown
+  if (room.gameId === 'liarsbar' || room.gameId === 'uno' || room.gameId === 'curvefever') return; // lobby games use host-start instead of countdown
   if (room.players.length < room.minPlayers) return; // not enough players yet
   if (!allSeatedPlayersPresent(room)) return; // all must be on the game page
   if (room.matchStartsAt) return; // already issued
