@@ -6,36 +6,37 @@ import { getSupabaseAdmin } from './supabaseAdmin';
  * Extracts the Supabase access token from the Authorization header,
  * validates it, then checks `profiles.role === 'admin'`.
  *
- * Returns `{ userId }` on success, or `null` if not admin.
+ * Returns `{ userId }` on success, or `{ error: string }` on failure.
  */
 export async function verifyAdmin(
   request: NextRequest,
-): Promise<{ userId: string } | null> {
+): Promise<{ userId: string } | { error: string }> {
   const sb = getSupabaseAdmin();
-  if (!sb) return null;
+  if (!sb) return { error: 'Server misconfigured: SUPABASE_SERVICE_ROLE_KEY is missing' };
 
   // Extract Bearer token from Authorization header
   const authHeader = request.headers.get('Authorization');
-  if (!authHeader?.startsWith('Bearer ')) return null;
+  if (!authHeader?.startsWith('Bearer ')) return { error: 'No Authorization header' };
 
   const token = authHeader.slice(7);
-  if (!token) return null;
+  if (!token) return { error: 'Empty Bearer token' };
 
   // Verify JWT and get user
   const {
     data: { user },
     error,
   } = await sb.auth.getUser(token);
-  if (error || !user) return null;
+  if (error || !user) return { error: `JWT verification failed: ${error?.message ?? 'no user'}` };
 
   // Check admin role in profiles table
-  const { data: profile } = await sb
+  const { data: profile, error: profileError } = await sb
     .from('profiles')
     .select('role')
     .eq('id', user.id)
     .single();
 
-  if (!profile || profile.role !== 'admin') return null;
+  if (profileError) return { error: `Profile lookup failed: ${profileError.message}` };
+  if (!profile || profile.role !== 'admin') return { error: `Role is '${profile?.role ?? 'null'}', not 'admin'. User: ${user.id}` };
 
   return { userId: user.id };
 }

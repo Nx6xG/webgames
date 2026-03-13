@@ -7,7 +7,7 @@ function getWsInternalUrl(): string {
 
 export async function GET(request: NextRequest) {
   const admin = await verifyAdmin(request);
-  if (!admin) return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+  if ('error' in admin) return NextResponse.json({ error: admin.error }, { status: 403 });
 
   const secret = process.env.ADMIN_API_SECRET;
   if (!secret) return NextResponse.json({ error: 'Admin API not configured' }, { status: 500 });
@@ -26,7 +26,7 @@ export async function GET(request: NextRequest) {
 
 export async function DELETE(request: NextRequest) {
   const admin = await verifyAdmin(request);
-  if (!admin) return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+  if ('error' in admin) return NextResponse.json({ error: admin.error }, { status: 403 });
 
   const secret = process.env.ADMIN_API_SECRET;
   if (!secret) return NextResponse.json({ error: 'Admin API not configured' }, { status: 500 });

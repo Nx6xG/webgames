@@ -23,7 +23,7 @@ export async function GET(
   { params }: { params: Promise<{ userId: string }> },
 ) {
   const admin = await verifyAdmin(request);
-  if (!admin) return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+  if ('error' in admin) return NextResponse.json({ error: admin.error }, { status: 403 });
 
   const { userId } = await params;
   const sb = getSupabaseAdmin()!;
@@ -59,7 +59,7 @@ export async function PATCH(
   { params }: { params: Promise<{ userId: string }> },
 ) {
   const admin = await verifyAdmin(request);
-  if (!admin) return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+  if ('error' in admin) return NextResponse.json({ error: admin.error }, { status: 403 });
 
   const { userId } = await params;
   const sb = getSupabaseAdmin()!;
