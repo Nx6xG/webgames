@@ -25,6 +25,8 @@ export interface UnoRuleConfig {
   allowDraw2OnDraw4?: boolean;
   allowDraw4OnDraw2?: boolean;
   playDrawnCardImmediately?: boolean;
+  drawUntilPlayable?: boolean;
+  forcedPlay?: boolean;
 }
 
 /** @deprecated Use UnoRuleConfig instead */
@@ -40,6 +42,8 @@ export const UNO_DEFAULT_RULES: Required<UnoRuleConfig> = {
   allowDraw2OnDraw4: false,
   allowDraw4OnDraw2: false,
   playDrawnCardImmediately: true,
+  drawUntilPlayable: false,
+  forcedPlay: false,
 };
 
 export interface UnoState {

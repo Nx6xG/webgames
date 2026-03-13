@@ -120,6 +120,7 @@ const CATEGORY_TAG_KEYS: Record<string, string> = {
   'arcade':       'lobby.tags.arcade',
   'cards':        'lobby.tags.cards',
   'bluff':        'lobby.tags.bluff',
+  'vs bot':       'lobby.tags.vsBot',
 };
 
 const CATEGORY_COLORS: Record<string, string> = {
@@ -133,6 +134,7 @@ const CATEGORY_COLORS: Record<string, string> = {
   'arcade':       'bg-fuchsia-900/40 text-fuchsia-300 border-fuchsia-800',
   'cards':        'bg-orange-900/40 text-orange-300 border-orange-800',
   'bluff':        'bg-pink-900/40 text-pink-300 border-pink-800',
+  'vs bot':       'bg-cyan-900/40 text-cyan-300 border-cyan-800',
 };
 
 // ── Per-game controls i18n keys ──────────────────────────────────────────────
@@ -392,7 +394,10 @@ function GameCard({
 }) {
   const { manifest: game, titleKey, descKey, comingSoon } = entry;
   const { t } = useI18n();
-  const { isHost, launchGame } = usePartyCtx();
+  const { isHost, launchGame, party } = usePartyCtx();
+  const partySize = party?.members.length ?? 0;
+  const maxPlayers = game.maxPlayers;
+  const partyTooLarge = isHost && partySize > maxPlayers;
 
   if (comingSoon) {
     return (
@@ -440,10 +445,17 @@ function GameCard({
         <div className="flex gap-2">
           {isHost ? (
             <button
-              onClick={() => launchGame(game.id as import('shared').GameId)}
-              className="flex-1 py-2 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-white text-sm font-semibold text-center transition-colors"
+              onClick={() => !partyTooLarge && launchGame(game.id as import('shared').GameId)}
+              disabled={partyTooLarge}
+              className={`flex-1 py-2 rounded-lg text-sm font-semibold text-center transition-colors ${
+                partyTooLarge
+                  ? 'bg-red-900/60 text-red-300 border border-red-800/60 cursor-not-allowed'
+                  : 'bg-indigo-600 hover:bg-indigo-500 text-white'
+              }`}
             >
-              {t('party.launchGame')}
+              {partyTooLarge
+                ? `${t('party.tooLarge')} (${partySize}/${maxPlayers})`
+                : t('party.launchGame')}
             </button>
           ) : (
             <Link
@@ -461,7 +473,7 @@ function GameCard({
             {t('lobby.customGame')}
           </Link>
         </div>
-        {isHost && (
+        {isHost && !partyTooLarge && (
           <p className="text-[10px] text-indigo-400/70 text-center">{t('party.launchHint')}</p>
         )}
       </div>
@@ -546,6 +558,7 @@ export default function HomePage() {
       mode: 'multiplayer',
       playHref: `/games/${entry.manifest.routeSlug}?quickplay=true`,
       customHref: `/games/${entry.manifest.routeSlug}`,
+      maxPlayers: entry.manifest.maxPlayers,
       plays: s?.plays ?? 0,
       wins: s?.wins ?? 0,
       winRate: s?.winRate ?? 0,

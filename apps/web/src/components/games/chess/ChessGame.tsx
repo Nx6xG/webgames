@@ -18,6 +18,8 @@ import { RoomInviteButton } from '@/components/social/RoomInviteButton';
 import { useAchievements } from '@/hooks/useAchievements';
 import { SpectatorBanner } from '@/components/ui/SpectatorBanner';
 import { ReconnectBanner } from '@/components/ui/ReconnectBanner';
+import { useChessBot, type ChessBotState } from './useChessBot';
+import type { BotDifficulty } from './botEngine';
 
 // ── Piece rendering ────────────────────────────────────────────────────────────
 
@@ -273,9 +275,17 @@ function buildPGN(gs: ChessState, p0nick: string, p1nick: string): string {
 
 export function ChessGame({ wsUrl, gameId, initialRoomCode, quickPlay: isQuickPlay }: GameComponentProps) {
   const router = useRouter();
-  const mp = useMultiplayer<ChessState>(wsUrl, gameId);
+  const mpRaw = useMultiplayer<ChessState>(wsUrl, gameId);
   const { t } = useI18n();
-  const ach = useAchievements('chess', mp.roomCode);
+
+  // ── Bot mode state ──────────────────────────────────────────────────────────
+  const [botMode, setBotMode]                   = useState(false);
+  const [botDifficulty, setBotDifficulty]       = useState<BotDifficulty>('medium');
+  const [botColorChoice, setBotColorChoice]     = useState<ChessColor | 'random'>('w');
+
+  const bot = useChessBot(botDifficulty);
+
+  const ach = useAchievements('chess', mpRaw.roomCode);
   const [joinInput, setJoinInput]               = useState(initialRoomCode ?? '');
   const [copied, setCopied]                     = useState(false);
   const [pgnCopied, setPgnCopied]               = useState(false);
@@ -304,6 +314,34 @@ export function ChessGame({ wsUrl, gameId, initialRoomCode, quickPlay: isQuickPl
     { key: '15+10',label: '15+10',            time: 900, inc: 10 },
   ];
   const selectedPreset = TIME_PRESETS.find(p => p.key === timePreset) ?? TIME_PRESETS[0];
+
+  // ── Unified game interface — proxy to either mp (multiplayer) or bot ────────
+  const mp = botMode ? {
+    ...mpRaw,
+    phase: bot.phase as 'lobby' | 'waiting' | 'playing' | 'ended',
+    gameState: bot.gameState,
+    connection: bot.connection as 'connected',
+    playerIndex: bot.playerIndex,
+    playerCount: bot.playerCount,
+    roomMaxPlayers: bot.roomMaxPlayers,
+    isSpectator: bot.isSpectator,
+    spectatorCount: bot.spectatorCount,
+    roomCode: bot.roomCode,
+    roomReady: bot.roomReady,
+    countdown: bot.countdown,
+    matchCountdown: null as number | null,
+    players: bot.players,
+    sendAction: bot.sendAction as (action: Record<string, unknown>) => void,
+    leaveRoom: bot.leaveGame,
+    requestRematch: bot.requestRematch,
+    rematchVotes: bot.rematchVotes,
+    myVotedRematch: false,
+    rematchError: null as string | null,
+    roomMessages: [] as typeof mpRaw.roomMessages,
+    globalMessages: [] as typeof mpRaw.globalMessages,
+    error: bot.error,
+    clearError: bot.clearError,
+  } : mpRaw;
 
   const prevTotalRef    = useRef<number | null>(null);
   const autoJoined      = useRef(false);
@@ -369,7 +407,10 @@ export function ChessGame({ wsUrl, gameId, initialRoomCode, quickPlay: isQuickPl
     }
   }, [mp.gameState?.status]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // ── Reset selection on state update; sync replay step to latest move ─────────
+  // ── Reset selection when a move is made (not on every gameState reference change,
+  //    because timed games receive frequent state updates from the tick loop) ───
+  const moveCount = mp.gameState?.moves?.length ?? 0;
+  const gameStatus = mp.gameState?.status ?? 'ongoing';
 
   useEffect(() => {
     setSelectedSq(null);
@@ -377,7 +418,7 @@ export function ChessGame({ wsUrl, gameId, initialRoomCode, quickPlay: isQuickPl
     if (!replayMode && mp.gameState) {
       setReplayStep(mp.gameState.moves.length);
     }
-  }, [mp.gameState]); // eslint-disable-line
+  }, [moveCount, gameStatus]); // eslint-disable-line
 
   // ── Exit replay when leaving room ─────────────────────────────────────────────
 
@@ -1016,18 +1057,18 @@ export function ChessGame({ wsUrl, gameId, initialRoomCode, quickPlay: isQuickPl
     <div className="grid grid-cols-1 lg:grid-cols-[minmax(0,1fr)_360px] gap-6 w-full items-start">
       {/* ── Game area ───────────────────────────────────────────────────── */}
       <div className="relative min-w-0 flex flex-col items-center justify-center gap-2 min-h-[520px]">
-        <CountdownOverlay countdown={mp.matchCountdown} />
+        <CountdownOverlay countdown={botMode ? null : mpRaw.matchCountdown} />
         <WaitingForConnectionOverlay
-          show={mp.phase === 'playing' && !mp.roomReady && !mp.isSpectator}
+          show={!botMode && mp.phase === 'playing' && !mp.roomReady && !mp.isSpectator}
           label={t('game.ready.waiting')}
         />
-        <ReconnectBanner mp={mp} />
+        {!botMode && <ReconnectBanner mp={mpRaw} />}
 
-        {mp.phase !== 'lobby' && <PlayerLabel color={flipped ? 'w' : 'b'} />}
-        {mp.phase !== 'lobby' && <Board />}
-        {mp.phase !== 'lobby' && myColor && <PlayerLabel color={myColor} />}
+        {mp.phase !== 'lobby' && PlayerLabel({ color: flipped ? 'w' : 'b' })}
+        {mp.phase !== 'lobby' && Board()}
+        {mp.phase !== 'lobby' && myColor && PlayerLabel({ color: myColor })}
 
-        <StatusBanner />
+        {StatusBanner()}
 
         {mp.isSpectator && <SpectatorBanner spectatorCount={mp.spectatorCount} />}
 
@@ -1060,10 +1101,10 @@ export function ChessGame({ wsUrl, gameId, initialRoomCode, quickPlay: isQuickPl
 
         {(mp.phase === 'ended' || mp.phase === 'playing') && (
           <button
-            onClick={mp.leaveRoom}
+            onClick={botMode ? bot.leaveGame : mpRaw.leaveRoom}
             className="mt-1 px-4 py-2 text-sm rounded-lg border border-zinc-700 text-zinc-400 hover:border-zinc-500 hover:text-zinc-200 transition-colors"
           >
-            {t('game.actions.leaveRoom')}
+            {botMode ? t('chess.bot.backToLobby') : t('game.actions.leaveRoom')}
           </button>
         )}
       </div>
@@ -1074,12 +1115,21 @@ export function ChessGame({ wsUrl, gameId, initialRoomCode, quickPlay: isQuickPl
         {/* Connection status */}
         <div className="rounded-xl border border-zinc-800 bg-zinc-900 px-4 py-3">
           <div className="flex items-center gap-2 text-xs">
-            <span className={`w-2 h-2 rounded-full ${
-              mp.connection === 'connected'  ? 'bg-emerald-400' :
-              mp.connection === 'connecting' ? 'bg-amber-400 animate-pulse' :
-              'bg-rose-500'
-            }`} />
-            <span className="text-zinc-400">{t(`status.${mp.connection}`)}</span>
+            {botMode ? (
+              <>
+                <span className="w-2 h-2 rounded-full bg-indigo-400" />
+                <span className="text-zinc-400">vs Bot ({t(`chess.bot.${botDifficulty}`)})</span>
+              </>
+            ) : (
+              <>
+                <span className={`w-2 h-2 rounded-full ${
+                  mpRaw.connection === 'connected'  ? 'bg-emerald-400' :
+                  mpRaw.connection === 'connecting' ? 'bg-amber-400 animate-pulse' :
+                  'bg-rose-500'
+                }`} />
+                <span className="text-zinc-400">{t(`status.${mpRaw.connection}`)}</span>
+              </>
+            )}
           </div>
         </div>
 
@@ -1096,82 +1146,173 @@ export function ChessGame({ wsUrl, gameId, initialRoomCode, quickPlay: isQuickPl
           <div className="rounded-xl border border-zinc-800 bg-zinc-900 p-4 flex flex-col items-center gap-3">
             <div className="flex items-center gap-2 text-amber-400 text-sm">
               <span className="w-2 h-2 rounded-full bg-amber-400 animate-pulse" />
-              {mp.connection !== 'connected' ? t('status.connecting') : t('game.lobby.findingMatch')}
+              {mpRaw.connection !== 'connected' ? t('status.connecting') : t('game.lobby.findingMatch')}
             </div>
             <Link href={`/games/${gameId}`} className="text-xs text-zinc-500 hover:text-zinc-300 transition-colors">
               {t('common.cancel')}
             </Link>
           </div>
         ) : mp.phase === 'lobby' ? (
-          <div className="rounded-xl border border-zinc-800 bg-zinc-900 p-4 flex flex-col gap-3">
+          <div className="flex flex-col gap-3">
+            {/* Mode toggle: Online / vs Bot */}
             <div className="flex gap-1 p-1 bg-zinc-800 rounded-lg">
-              {(['private', 'public'] as const).map((v) => (
-                <button
-                  key={v}
-                  onClick={() => setRoomVisibility(v)}
-                  className={`flex-1 py-1.5 text-xs rounded-md font-medium transition-colors ${
-                    roomVisibility === v ? 'bg-zinc-700 text-zinc-100' : 'text-zinc-500 hover:text-zinc-300'
-                  }`}
-                >
-                  {t(`game.lobby.${v}`)}
-                </button>
-              ))}
-            </div>
-            {roomVisibility === 'public' && (
-              <input
-                value={roomName}
-                onChange={(e) => setRoomName(e.target.value.slice(0, 24))}
-                placeholder={t('game.lobby.roomName')}
-                maxLength={24}
-                className="bg-zinc-800 border border-zinc-700 rounded-lg px-3 py-2 text-sm text-zinc-100 placeholder-zinc-500 focus:outline-none focus:border-indigo-500"
-              />
-            )}
-            {/* Time control selector */}
-            <div>
-              <p className="text-xs text-zinc-500 uppercase tracking-wider font-semibold mb-1.5">{t('chess.timeControl')}</p>
-              <div className="flex flex-wrap gap-1.5">
-                {TIME_PRESETS.map((p) => (
-                  <button
-                    key={p.key}
-                    onClick={() => setTimePreset(p.key)}
-                    className={`px-2.5 py-1.5 rounded-md text-xs font-medium transition-colors ${
-                      timePreset === p.key ? 'bg-indigo-600 text-white' : 'bg-zinc-800 text-zinc-400 hover:bg-zinc-700 hover:text-zinc-200'
-                    }`}
-                  >
-                    {p.label}
-                  </button>
-                ))}
-              </div>
-            </div>
-            <button
-              onClick={() => mp.createRoom({
-                visibility: roomVisibility,
-                roomName: roomName.trim() || undefined,
-                chessConfig: selectedPreset.time > 0
-                  ? { timeSeconds: selectedPreset.time, incrementSeconds: selectedPreset.inc }
-                  : undefined,
-              })}
-              disabled={mp.connection !== 'connected'}
-              className="w-full py-2.5 rounded-lg bg-indigo-600 hover:bg-indigo-500 disabled:opacity-40 disabled:cursor-not-allowed text-white font-semibold text-sm transition-colors"
-            >
-              {t('game.lobby.createRoom')}
-            </button>
-            <div className="flex gap-2">
-              <input
-                value={joinInput}
-                onChange={(e) => setJoinInput(e.target.value.toUpperCase().slice(0, 6))}
-                placeholder={t('game.lobby.roomCode')}
-                maxLength={6}
-                className="flex-1 bg-zinc-800 border border-zinc-700 rounded-lg px-3 py-2 text-sm text-zinc-100 placeholder-zinc-500 focus:outline-none focus:border-indigo-500 uppercase tracking-widest font-mono"
-              />
               <button
-                onClick={() => mp.joinRoom(joinInput)}
-                disabled={joinInput.length < 4 || mp.connection !== 'connected'}
-                className="px-4 py-2 rounded-lg bg-zinc-700 hover:bg-zinc-600 disabled:opacity-40 disabled:cursor-not-allowed text-white text-sm font-semibold transition-colors"
+                onClick={() => setBotMode(false)}
+                className={`flex-1 py-1.5 text-xs rounded-md font-medium transition-colors ${!botMode ? 'bg-zinc-700 text-zinc-100' : 'text-zinc-500 hover:text-zinc-300'}`}
               >
-                {t('game.lobby.join')}
+                Online
+              </button>
+              <button
+                onClick={() => setBotMode(true)}
+                className={`flex-1 py-1.5 text-xs rounded-md font-medium transition-colors ${botMode ? 'bg-zinc-700 text-zinc-100' : 'text-zinc-500 hover:text-zinc-300'}`}
+              >
+                vs Bot
               </button>
             </div>
+
+            {botMode ? (
+              /* ── Bot lobby ─────────────────────────────────────────── */
+              <div className="rounded-xl border border-zinc-800 bg-zinc-900 p-4 flex flex-col gap-3">
+                {/* Difficulty */}
+                <div>
+                  <p className="text-xs text-zinc-500 uppercase tracking-wider font-semibold mb-1.5">{t('chess.bot.difficulty')}</p>
+                  <div className="flex gap-1.5">
+                    {(['easy', 'medium', 'hard'] as const).map((d) => (
+                      <button
+                        key={d}
+                        onClick={() => setBotDifficulty(d)}
+                        className={`flex-1 py-1.5 rounded-md text-xs font-medium transition-colors ${
+                          botDifficulty === d ? 'bg-indigo-600 text-white' : 'bg-zinc-800 text-zinc-400 hover:bg-zinc-700 hover:text-zinc-200'
+                        }`}
+                      >
+                        {t(`chess.bot.${d}`)}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+                {/* Color choice */}
+                <div>
+                  <p className="text-xs text-zinc-500 uppercase tracking-wider font-semibold mb-1.5">{t('chess.bot.color')}</p>
+                  <div className="flex gap-1.5">
+                    {([['w', t('chess.white')], ['b', t('chess.black')], ['random', t('chess.bot.random')]] as const).map(([val, label]) => (
+                      <button
+                        key={val}
+                        onClick={() => setBotColorChoice(val as ChessColor | 'random')}
+                        className={`flex-1 py-1.5 rounded-md text-xs font-medium transition-colors ${
+                          botColorChoice === val ? 'bg-indigo-600 text-white' : 'bg-zinc-800 text-zinc-400 hover:bg-zinc-700 hover:text-zinc-200'
+                        }`}
+                      >
+                        {label}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+                {/* Time control */}
+                <div>
+                  <p className="text-xs text-zinc-500 uppercase tracking-wider font-semibold mb-1.5">{t('chess.timeControl')}</p>
+                  <div className="flex flex-wrap gap-1.5">
+                    {TIME_PRESETS.map((p) => (
+                      <button
+                        key={p.key}
+                        onClick={() => setTimePreset(p.key)}
+                        className={`px-2.5 py-1.5 rounded-md text-xs font-medium transition-colors ${
+                          timePreset === p.key ? 'bg-indigo-600 text-white' : 'bg-zinc-800 text-zinc-400 hover:bg-zinc-700 hover:text-zinc-200'
+                        }`}
+                      >
+                        {p.label}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+                {/* Start */}
+                <button
+                  onClick={() => {
+                    const color: ChessColor = botColorChoice === 'random'
+                      ? (Math.random() < 0.5 ? 'w' : 'b')
+                      : botColorChoice;
+                    const clockCfg = selectedPreset.time > 0
+                      ? { timeSeconds: selectedPreset.time, incrementSeconds: selectedPreset.inc }
+                      : undefined;
+                    bot.startGame(color, clockCfg);
+                  }}
+                  className="w-full py-2.5 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-white font-semibold text-sm transition-colors"
+                >
+                  {t('chess.bot.play')}
+                </button>
+              </div>
+            ) : (
+              /* ── Multiplayer lobby ─────────────────────────────────── */
+              <div className="rounded-xl border border-zinc-800 bg-zinc-900 p-4 flex flex-col gap-3">
+                <div className="flex gap-1 p-1 bg-zinc-800 rounded-lg">
+                  {(['private', 'public'] as const).map((v) => (
+                    <button
+                      key={v}
+                      onClick={() => setRoomVisibility(v)}
+                      className={`flex-1 py-1.5 text-xs rounded-md font-medium transition-colors ${
+                        roomVisibility === v ? 'bg-zinc-700 text-zinc-100' : 'text-zinc-500 hover:text-zinc-300'
+                      }`}
+                    >
+                      {t(`game.lobby.${v}`)}
+                    </button>
+                  ))}
+                </div>
+                {roomVisibility === 'public' && (
+                  <input
+                    value={roomName}
+                    onChange={(e) => setRoomName(e.target.value.slice(0, 24))}
+                    placeholder={t('game.lobby.roomName')}
+                    maxLength={24}
+                    className="bg-zinc-800 border border-zinc-700 rounded-lg px-3 py-2 text-sm text-zinc-100 placeholder-zinc-500 focus:outline-none focus:border-indigo-500"
+                  />
+                )}
+                {/* Time control selector */}
+                <div>
+                  <p className="text-xs text-zinc-500 uppercase tracking-wider font-semibold mb-1.5">{t('chess.timeControl')}</p>
+                  <div className="flex flex-wrap gap-1.5">
+                    {TIME_PRESETS.map((p) => (
+                      <button
+                        key={p.key}
+                        onClick={() => setTimePreset(p.key)}
+                        className={`px-2.5 py-1.5 rounded-md text-xs font-medium transition-colors ${
+                          timePreset === p.key ? 'bg-indigo-600 text-white' : 'bg-zinc-800 text-zinc-400 hover:bg-zinc-700 hover:text-zinc-200'
+                        }`}
+                      >
+                        {p.label}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+                <button
+                  onClick={() => mpRaw.createRoom({
+                    visibility: roomVisibility,
+                    roomName: roomName.trim() || undefined,
+                    chessConfig: selectedPreset.time > 0
+                      ? { timeSeconds: selectedPreset.time, incrementSeconds: selectedPreset.inc }
+                      : undefined,
+                  })}
+                  disabled={mpRaw.connection !== 'connected'}
+                  className="w-full py-2.5 rounded-lg bg-indigo-600 hover:bg-indigo-500 disabled:opacity-40 disabled:cursor-not-allowed text-white font-semibold text-sm transition-colors"
+                >
+                  {t('game.lobby.createRoom')}
+                </button>
+                <div className="flex gap-2">
+                  <input
+                    value={joinInput}
+                    onChange={(e) => setJoinInput(e.target.value.toUpperCase().slice(0, 6))}
+                    placeholder={t('game.lobby.roomCode')}
+                    maxLength={6}
+                    className="flex-1 bg-zinc-800 border border-zinc-700 rounded-lg px-3 py-2 text-sm text-zinc-100 placeholder-zinc-500 focus:outline-none focus:border-indigo-500 uppercase tracking-widest font-mono"
+                  />
+                  <button
+                    onClick={() => mpRaw.joinRoom(joinInput)}
+                    disabled={joinInput.length < 4 || mpRaw.connection !== 'connected'}
+                    className="px-4 py-2 rounded-lg bg-zinc-700 hover:bg-zinc-600 disabled:opacity-40 disabled:cursor-not-allowed text-white text-sm font-semibold transition-colors"
+                  >
+                    {t('game.lobby.join')}
+                  </button>
+                </div>
+              </div>
+            )}
           </div>
         ) : null}
 
@@ -1220,9 +1361,9 @@ export function ChessGame({ wsUrl, gameId, initialRoomCode, quickPlay: isQuickPl
                   const isMe = !mp.isSpectator && mp.playerIndex === idx;
                   return (
                     <div key={idx} className="flex items-center gap-2 text-xs">
-                      <AvatarBubble avatarId={p.avatarId} avatarFrame={p.avatarFrame} nickname={p.nickname} size="sm" cosmetics={p.cosmetics} />
+                      <AvatarBubble avatarId={p.avatarId} avatarFrame={p.avatarFrame} nickname={p.nickname} size="sm" cosmetics={'cosmetics' in p ? p.cosmetics : undefined} />
                       <span className={`w-3 h-3 rounded-sm border ${idx === 0 ? 'bg-white border-zinc-400' : 'bg-zinc-900 border-zinc-600'}`} />
-                      <span className={`truncate ${getNameColorClass(p.cosmetics?.nameColor ?? p.nameColor) || 'text-zinc-300'}`}>{p.nickname}</span>
+                      <span className={`truncate ${getNameColorClass(('cosmetics' in p ? p.cosmetics?.nameColor : undefined) ?? p.nameColor) || 'text-zinc-300'}`}>{p.nickname}</span>
                       {isMe && <span className="text-zinc-600 shrink-0">{t('game.common.you')}</span>}
                     </div>
                   );
@@ -1234,13 +1375,13 @@ export function ChessGame({ wsUrl, gameId, initialRoomCode, quickPlay: isQuickPl
         )}
 
         {/* Move history — shown once in a game */}
-        {mp.phase !== 'lobby' && <MoveHistoryPanel />}
+        {mp.phase !== 'lobby' && MoveHistoryPanel()}
 
         {/* Nickname */}
-        <NicknameEditor nickname={mp.myNickname} onSave={mp.setNickname} />
+        {!botMode && <NicknameEditor nickname={mpRaw.myNickname} onSave={mpRaw.setNickname} />}
 
         {/* Chat */}
-        <ChatPanel
+        {!botMode && <ChatPanel
           mode="both"
           roomCode={mp.roomCode}
           roomMessages={mp.roomMessages}
@@ -1254,7 +1395,7 @@ export function ChessGame({ wsUrl, gameId, initialRoomCode, quickPlay: isQuickPl
           showUnreadBadge
           unreadCount={unread}
           className="rounded-xl border border-zinc-800 bg-zinc-900"
-        />
+        />}
 
         {/* PGN export */}
         {gs && gs.moves.length > 0 && (

@@ -15,6 +15,7 @@ import { ScoreboardPanel } from '@/components/ui/ScoreboardPanel';
 import { useAuth } from '@/components/providers/AuthProvider';
 import { useNickname } from '@/components/providers/NicknameProvider';
 import { useSwipe } from '@/hooks/useSwipe';
+import * as sfx from './sound';
 
 // ── Best-score persistence ────────────────────────────────────────────────────
 
@@ -147,7 +148,30 @@ export function Game2048() {
 
   // ── Actions ─────────────────────────────────────────────────────────────────
   const handleMove = useCallback((dir: Direction) => {
-    setState((prev) => move(prev, dir));
+    setState((prev) => {
+      const next = move(prev, dir);
+      if (next === prev) return prev; // no-op, no sound
+
+      // Determine merge info for sound selection
+      const hasMerge = next.tiles.some(tile => tile.isMerged);
+      const hasBigMerge = next.tiles.some(tile => tile.isMerged && tile.value >= 512);
+
+      if (hasBigMerge) {
+        sfx.bigMergeSound();
+      } else if (hasMerge) {
+        sfx.mergeSound();
+      } else {
+        sfx.slideSound();
+      }
+
+      if (next.status === 'won' && prev.status !== 'won') {
+        sfx.winSound();
+      } else if (next.status === 'over' && prev.status !== 'over') {
+        sfx.gameOverSound();
+      }
+
+      return next;
+    });
   }, []);
 
   const handleNewGame = useCallback(() => {

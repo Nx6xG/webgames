@@ -58,68 +58,6 @@ function resetAllLocalData() {
   }
 }
 
-// ── Icons ──────────────────────────────────────────────────────────────────────
-
-function IconUser({ className }: { className?: string }) {
-  return (
-    <svg className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.75}>
-      <path strokeLinecap="round" strokeLinejoin="round" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
-    </svg>
-  );
-}
-
-function IconTrophy({ className }: { className?: string }) {
-  return (
-    <svg className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.75}>
-      <path strokeLinecap="round" strokeLinejoin="round" d="M8 21h8m-4-4v4m-4.5-8a4.5 4.5 0 019 0v0H7.5zM6 3h12v4a2 2 0 01-2 2h-1.5m-5 0H8a2 2 0 01-2-2V3zm0 0H4a1 1 0 00-1 1v2a3 3 0 003 3m12-6h2a1 1 0 011 1v2a3 3 0 01-3 3" />
-    </svg>
-  );
-}
-
-function IconStats({ className }: { className?: string }) {
-  return (
-    <svg className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.75}>
-      <path strokeLinecap="round" strokeLinejoin="round" d="M3 13h2v8H3zm6-4h2v12H9zm6-6h2v18h-2zm6 10h2v8h-2z" />
-    </svg>
-  );
-}
-
-function IconChevron({ className, open }: { className?: string; open?: boolean }) {
-  return (
-    <svg
-      className={`${className ?? ''} transition-transform duration-200 ${open ? 'rotate-180' : ''}`}
-      fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}
-    >
-      <path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" />
-    </svg>
-  );
-}
-
-function IconGear({ className }: { className?: string }) {
-  return (
-    <svg className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.75}>
-      <path strokeLinecap="round" strokeLinejoin="round" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.066 2.573c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.573 1.066c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.066-2.573c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.573-1.066z" />
-      <path strokeLinecap="round" strokeLinejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
-    </svg>
-  );
-}
-
-function IconRefresh({ className }: { className?: string }) {
-  return (
-    <svg className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-      <path strokeLinecap="round" strokeLinejoin="round" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
-    </svg>
-  );
-}
-
-function IconTrash({ className }: { className?: string }) {
-  return (
-    <svg className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.75}>
-      <path strokeLinecap="round" strokeLinejoin="round" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-    </svg>
-  );
-}
-
 // ── Main component ───────────────────────────────────────────────────────────
 
 export function ProfileMenu() {
@@ -137,9 +75,6 @@ export function ProfileMenu() {
   const [quickStats, setQuickStats] = useState<QuickStats | null>(null);
   const { levelProgress, isHydrated } = useProgression();
 
-  // Settings accordion
-  const [settingsOpen, setSettingsOpen] = useState(false);
-
   // Nickname edit mode
   const [editingNick, setEditingNick] = useState(false);
   const [nickValue, setNickValue] = useState('');
@@ -152,6 +87,9 @@ export function ProfileMenu() {
   // Reset confirm
   const [confirmReset, setConfirmReset] = useState(false);
 
+  // Active section for settings
+  const [activeSection, setActiveSection] = useState<'main' | 'settings'>('main');
+
   const containerRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => { setTheme(getStoredTheme()); }, []);
@@ -162,6 +100,7 @@ export function ProfileMenu() {
     setEditingNick(false);
     setNickError(null);
     setConfirmReset(false);
+    setActiveSection('main');
   }
 
   function closeMenu() {
@@ -169,6 +108,7 @@ export function ProfileMenu() {
     setEditingNick(false);
     setNickError(null);
     setConfirmReset(false);
+    setActiveSection('main');
   }
 
   useClickOutside(containerRef, closeMenu, open && !studioOpen && !showcaseOpen);
@@ -221,6 +161,8 @@ export function ProfileMenu() {
     setQuickStats(loadQuickStats());
   }
 
+  const xpPercent = Math.max(2, levelProgress.progress * 100);
+
   return (
     <div ref={containerRef} className="relative">
       {/* Trigger */}
@@ -246,309 +188,349 @@ export function ProfileMenu() {
       {/* Dropdown */}
       {open && (
         <div
-          className="fixed top-12 right-3 z-50 w-[300px] rounded-xl border border-zinc-700 bg-zinc-900 shadow-2xl flex flex-col"
-          style={{ maxHeight: 'min(72vh, calc(100dvh - 56px))' }}
+          className="fixed top-12 right-3 z-50 w-[320px] rounded-2xl border border-zinc-800/80 bg-zinc-950/95 backdrop-blur-xl shadow-[0_20px_60px_-12px_rgba(0,0,0,0.8)] flex flex-col overflow-hidden"
+          style={{
+            maxHeight: 'min(78vh, calc(100dvh - 56px))',
+            animation: 'wg-profile-menu-in 0.2s ease-out',
+          }}
         >
+          {/* Ambient glow at top */}
+          <div className="absolute top-0 inset-x-0 h-32 bg-gradient-to-b from-indigo-500/[0.04] to-transparent pointer-events-none" />
 
-          {/* ═══ Header — ProfileCard compact ═══ */}
-          <div className="shrink-0 p-2">
-            <ProfileCard nickname={nickname} cosmetics={cosmetics} compact />
-            <div className="flex items-center justify-between mt-1.5 px-1">
-              <p className="text-[10px] text-emerald-400 flex items-center gap-1">
-                <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 shrink-0" />
-                {t('menu.online')}
-              </p>
-              <button
-                onClick={closeMenu}
-                aria-label={t('common.close')}
-                className="text-zinc-600 hover:text-zinc-300 transition-colors p-0.5 rounded shrink-0"
-              >
-                <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                  <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
-                </svg>
-              </button>
-            </div>
+          {/* ═══ MAIN VIEW ═══ */}
+          {activeSection === 'main' && (
+            <>
+              {/* Header — ProfileCard */}
+              <div className="shrink-0 p-3 relative">
+                <ProfileCard nickname={nickname} cosmetics={cosmetics} compact />
 
-            {quickStats && quickStats.playsTotal > 0 && (
-              <div className="mt-1 flex items-center gap-1.5 text-[10px] text-zinc-500 px-1">
-                <span>{quickStats.playsTotal} {t('menu.gamesCount')}</span>
-                <span className="text-zinc-700">&middot;</span>
-                <span>{quickStats.winsTotal} {t('menu.winsCount')}</span>
-                <span className="text-zinc-700">&middot;</span>
-                <Link href="/achievements" onClick={closeMenu} className="hover:text-yellow-400 transition-colors">
-                  {quickStats.achievementsUnlocked}/{quickStats.achievementsTotal} {t('menu.achievementsCount')}
-                </Link>
-              </div>
-            )}
-
-            {/* ═══ Progression card (clickable) ═══ */}
-            {(
-              <button
-                onClick={() => { setProgressionOpen(true); closeMenu(); }}
-                className="mt-2 mx-1 rounded-lg border border-indigo-500/20 bg-indigo-950/20 px-3 py-2.5 w-[calc(100%-0.5rem)] text-left hover:border-indigo-500/35 hover:bg-indigo-950/30 transition-all cursor-pointer group"
-              >
-                <div className="flex items-center gap-2.5 mb-2">
-                  <div className="w-8 h-8 rounded-lg bg-indigo-500/15 border border-indigo-500/25 flex items-center justify-center shrink-0">
-                    <span className="text-indigo-300 font-black text-xs">{levelProgress.level}</span>
-                  </div>
-                  <div className="flex-1 min-w-0">
-                    <div className="flex items-center gap-1.5">
-                      <span className="text-xs font-bold text-indigo-300 leading-tight">Lv. {levelProgress.level}</span>
-                      <span className="text-[10px] text-indigo-500/80 font-medium">{t(`progression.rank.${levelProgress.rank.toLowerCase()}`)}</span>
+                {/* Quick stats row */}
+                {quickStats && quickStats.playsTotal > 0 && (
+                  <div className="mt-2.5 flex items-center gap-3 px-0.5">
+                    <div className="flex items-center gap-1.5 text-[11px]">
+                      <span className="text-zinc-600 font-medium">{quickStats.playsTotal}</span>
+                      <span className="text-zinc-500">{t('menu.gamesCount')}</span>
                     </div>
-                    <span className="text-[10px] text-zinc-500 tabular-nums leading-tight">
-                      {levelProgress.currentXp}/{levelProgress.requiredXp} {t('progression.xp')}
-                    </span>
+                    <div className="w-px h-3 bg-zinc-800" />
+                    <div className="flex items-center gap-1.5 text-[11px]">
+                      <span className="text-zinc-600 font-medium">{quickStats.winsTotal}</span>
+                      <span className="text-zinc-500">{t('menu.winsCount')}</span>
+                    </div>
+                    <div className="w-px h-3 bg-zinc-800" />
+                    <Link href="/achievements" onClick={closeMenu} className="flex items-center gap-1.5 text-[11px] hover:text-amber-400/80 transition-colors">
+                      <span className="text-zinc-600 font-medium">{quickStats.achievementsUnlocked}/{quickStats.achievementsTotal}</span>
+                      <span className="text-zinc-500">{t('menu.achievementsCount')}</span>
+                    </Link>
                   </div>
-                  <svg className="w-3.5 h-3.5 text-zinc-700 group-hover:text-indigo-400 transition-colors shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                    <path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" />
-                  </svg>
-                </div>
-                <div className="h-1.5 rounded-full bg-zinc-800 overflow-hidden">
-                  <div
-                    className="h-full rounded-full bg-gradient-to-r from-indigo-600 to-indigo-400 transition-all duration-500"
-                    style={{ width: `${Math.max(2, levelProgress.progress * 100)}%` }}
-                  />
-                </div>
-                {levelProgress.totalTokens > 0 && (
-                  <p className="text-[10px] text-amber-400/60 mt-1.5 flex items-center gap-1">
-                    <TokenIcon size="xs" />
-                    <span className="font-medium">{levelProgress.totalTokens} {t('progression.tokens')}</span>
-                  </p>
                 )}
-              </button>
-            )}
-          </div>
+              </div>
 
-          {/* ═══ Scrollable body ═══ */}
-          <div className="overflow-y-auto overscroll-contain flex-1 min-h-0">
+              {/* ═══ Scrollable body ═══ */}
+              <div className="overflow-y-auto overscroll-contain flex-1 min-h-0">
 
-            {/* Customize + Showcase buttons */}
-            <div className="px-1 py-0.5 space-y-0.5">
-              <button
-                onClick={() => setStudioOpen(true)}
-                className="flex items-center gap-2 px-2.5 py-1.5 rounded-lg hover:bg-zinc-800 transition-colors w-full text-left"
-              >
-                <span className="text-sm shrink-0">🎨</span>
-                <span className="text-xs text-zinc-200">{t('studio.customize')}</span>
-              </button>
-              <button
-                onClick={() => setShowcaseOpen(true)}
-                className="flex items-center gap-2 px-2.5 py-1.5 rounded-lg hover:bg-zinc-800 transition-colors w-full text-left"
-              >
-                <span className="text-sm shrink-0">🪟</span>
-                <span className="text-xs text-zinc-200">{t('showcase.edit')}</span>
-              </button>
-            </div>
-
-            {/* Auth section */}
-            {isSupabaseConfigured && (
-              <>
-                <div className="h-px bg-zinc-800 mx-1.5" />
-                <div className="px-1 py-0.5">
-                  {user ? (
-                    <div className="px-2.5 py-1.5 space-y-1">
-                      <div className="flex items-center gap-1.5">
-                        <span className="text-[10px] text-emerald-400">●</span>
-                        <span className="text-[10px] text-zinc-400 truncate">{t('auth.signedInAs')} {user.email}</span>
+                {/* Progression card */}
+                <div className="px-3 pb-2">
+                  <button
+                    onClick={() => { setProgressionOpen(true); closeMenu(); }}
+                    className="w-full rounded-xl bg-zinc-900/80 border border-zinc-800/60 p-3 text-left hover:border-indigo-500/30 hover:bg-zinc-900 transition-all group"
+                  >
+                    <div className="flex items-center gap-3 mb-2.5">
+                      <div className="w-9 h-9 rounded-lg bg-gradient-to-br from-indigo-500/20 to-indigo-600/10 border border-indigo-500/20 flex items-center justify-center shrink-0">
+                        <span className="text-indigo-300 font-black text-sm">{levelProgress.level}</span>
                       </div>
-                      {isSyncing && (
-                        <p className="text-[10px] text-indigo-400">{t('auth.syncing')}</p>
-                      )}
-                      <button
-                        onClick={() => { signOut(); closeMenu(); }}
-                        className="text-[10px] text-zinc-500 hover:text-zinc-300 transition-colors"
-                      >
-                        {t('auth.signOut')}
-                      </button>
-                    </div>
-                  ) : (
-                    <button
-                      onClick={() => setAuthOpen(true)}
-                      className="flex items-center gap-2 px-2.5 py-1.5 rounded-lg hover:bg-zinc-800 transition-colors w-full text-left"
-                    >
-                      <span className="text-sm shrink-0">🔑</span>
-                      <span className="text-xs text-zinc-200">{t('auth.signIn')}</span>
-                    </button>
-                  )}
-                </div>
-              </>
-            )}
-
-            <div className="h-px bg-zinc-800 mx-1.5" />
-
-            {/* Nav links */}
-            <div className="px-1 py-0.5">
-              <Link href="/profile" onClick={closeMenu} className="flex items-center gap-2 px-2.5 py-1.5 rounded-lg hover:bg-zinc-800 transition-colors">
-                <IconUser className="w-3.5 h-3.5 text-zinc-400 shrink-0" />
-                <span className="text-xs text-zinc-200">{t('nav.profile')}</span>
-              </Link>
-              <Link href="/achievements" onClick={closeMenu} className="flex items-center gap-2 px-2.5 py-1.5 rounded-lg hover:bg-zinc-800 transition-colors">
-                <IconTrophy className="w-3.5 h-3.5 text-zinc-400 shrink-0" />
-                <span className="text-xs text-zinc-200">{t('menu.achievements')}</span>
-              </Link>
-              <Link href="/leaderboards" onClick={closeMenu} className="flex items-center gap-2 px-2.5 py-1.5 rounded-lg hover:bg-zinc-800 transition-colors">
-                <IconStats className="w-3.5 h-3.5 text-zinc-400 shrink-0" />
-                <span className="text-xs text-zinc-200">{t('menu.stats')}</span>
-              </Link>
-              {role === 'admin' && (
-                <Link href="/admin" onClick={closeMenu} className="flex items-center gap-2 px-2.5 py-1.5 rounded-lg hover:bg-red-950/30 transition-colors">
-                  <svg className="w-3.5 h-3.5 text-red-400 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.75}>
-                    <path strokeLinecap="round" strokeLinejoin="round" d="M10.5 6h9.75M10.5 6a1.5 1.5 0 11-3 0m3 0a1.5 1.5 0 10-3 0M3.75 6H7.5m3 12h9.75m-9.75 0a1.5 1.5 0 01-3 0m3 0a1.5 1.5 0 00-3 0m-3.75 0H7.5m9-6h3.75m-3.75 0a1.5 1.5 0 01-3 0m3 0a1.5 1.5 0 00-3 0m-9.75 0h9.75" />
-                  </svg>
-                  <span className="text-xs text-red-400 font-medium">{t('nav.admin')}</span>
-                </Link>
-              )}
-            </div>
-
-            <div className="h-px bg-zinc-800 mx-1.5" />
-
-            {/* Settings accordion */}
-            <div className="px-1 py-0.5">
-              <button
-                onClick={() => setSettingsOpen(!settingsOpen)}
-                aria-expanded={settingsOpen}
-                className="flex items-center gap-2 px-2.5 py-1.5 rounded-lg hover:bg-zinc-800 transition-colors w-full text-left"
-              >
-                <IconGear className="w-3.5 h-3.5 text-zinc-400 shrink-0" />
-                <span className="text-xs text-zinc-200 flex-1">{t('profile.settings')}</span>
-                <IconChevron className="w-3 h-3 text-zinc-500 shrink-0" open={settingsOpen} />
-              </button>
-
-              {settingsOpen && (
-                <div className="px-2.5 pt-1.5 pb-0.5 space-y-2.5">
-
-                  {/* Nickname */}
-                  <div>
-                    <div className="flex items-center justify-between mb-1">
-                      <span className="text-[10px] text-zinc-500 uppercase tracking-wider font-semibold">
-                        {t('settings.nickname')}
-                      </span>
-                      {!editingNick && (
-                        <button onClick={startEditNick} className="text-[10px] text-indigo-400 hover:text-indigo-300 font-medium transition-colors">
-                          {t('menu.editNickname')}
-                        </button>
-                      )}
-                    </div>
-                    {editingNick ? (
-                      <div className="space-y-1.5">
-                        <input
-                          ref={nickInputRef}
-                          value={nickValue}
-                          onChange={(e) => { setNickValue(e.target.value.slice(0, 18)); setNickError(null); }}
-                          onKeyDown={(e) => {
-                            if (e.key === 'Enter') saveNick();
-                            if (e.key === 'Escape') cancelNick();
-                          }}
-                          maxLength={18}
-                          placeholder="Enter nickname…"
-                          className="w-full bg-zinc-800 border border-zinc-700 rounded-md px-2.5 py-1 text-xs text-zinc-100 placeholder-zinc-600 focus:outline-none focus:border-indigo-500"
-                        />
-                        {nickError && <p className="text-[10px] text-rose-400">{nickError}</p>}
-                        <div className="flex gap-1.5">
-                          <button onClick={saveNick} className="flex-1 py-0.5 rounded-md bg-indigo-600 hover:bg-indigo-500 text-white text-[10px] font-semibold transition-colors">
-                            {t('common.save')}
-                          </button>
-                          <button onClick={cancelNick} className="flex-1 py-0.5 rounded-md border border-zinc-700 text-zinc-400 hover:text-zinc-200 text-[10px] transition-colors">
-                            {t('common.cancel')}
-                          </button>
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center gap-2">
+                          <span className="text-xs font-bold text-zinc-200">Lv. {levelProgress.level}</span>
+                          <span className="text-[10px] text-indigo-400/70 font-medium px-1.5 py-0.5 rounded-full bg-indigo-500/10">{t(`progression.rank.${levelProgress.rank.toLowerCase()}`)}</span>
                         </div>
+                        <span className="text-[10px] text-zinc-500 tabular-nums">
+                          {levelProgress.currentXp}/{levelProgress.requiredXp} {t('progression.xp')}
+                        </span>
+                      </div>
+                      <svg className="w-4 h-4 text-zinc-700 group-hover:text-indigo-400 group-hover:translate-x-0.5 transition-all shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                        <path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" />
+                      </svg>
+                    </div>
+
+                    {/* XP bar */}
+                    <div className="h-1.5 rounded-full bg-zinc-800 overflow-hidden">
+                      <div
+                        className="h-full rounded-full bg-gradient-to-r from-indigo-600 via-indigo-500 to-indigo-400 transition-all duration-700"
+                        style={{ width: `${xpPercent}%` }}
+                      />
+                    </div>
+
+                    {levelProgress.totalTokens > 0 && (
+                      <div className="flex items-center gap-1.5 mt-2">
+                        <TokenIcon size="xs" />
+                        <span className="text-[10px] text-amber-400/70 font-medium">{levelProgress.totalTokens} {t('progression.tokens')}</span>
+                      </div>
+                    )}
+                  </button>
+                </div>
+
+                {/* Action grid — Customize + Showcase */}
+                <div className="px-3 pb-2 grid grid-cols-2 gap-2">
+                  <button
+                    onClick={() => setStudioOpen(true)}
+                    className="flex flex-col items-center gap-1.5 px-3 py-3 rounded-xl bg-zinc-900/60 border border-zinc-800/50 hover:border-zinc-700/80 hover:bg-zinc-900 transition-all group"
+                  >
+                    <span className="text-lg group-hover:scale-110 transition-transform">🎨</span>
+                    <span className="text-[11px] text-zinc-400 group-hover:text-zinc-200 font-medium transition-colors">{t('studio.customize')}</span>
+                  </button>
+                  <button
+                    onClick={() => setShowcaseOpen(true)}
+                    className="flex flex-col items-center gap-1.5 px-3 py-3 rounded-xl bg-zinc-900/60 border border-zinc-800/50 hover:border-zinc-700/80 hover:bg-zinc-900 transition-all group"
+                  >
+                    <span className="text-lg group-hover:scale-110 transition-transform">🪟</span>
+                    <span className="text-[11px] text-zinc-400 group-hover:text-zinc-200 font-medium transition-colors">{t('showcase.edit')}</span>
+                  </button>
+                </div>
+
+                {/* Auth section */}
+                {isSupabaseConfigured && (
+                  <div className="px-3 pb-1">
+                    {user ? (
+                      <div className="flex items-center justify-between px-1 py-1.5">
+                        <div className="flex items-center gap-2 min-w-0">
+                          <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 shrink-0 shadow-sm shadow-emerald-400/40" />
+                          <span className="text-[11px] text-zinc-500 truncate">{user.email}</span>
+                          {isSyncing && (
+                            <span className="text-[10px] text-indigo-400/80 shrink-0">{t('auth.syncing')}</span>
+                          )}
+                        </div>
+                        <button
+                          onClick={() => { signOut(); closeMenu(); }}
+                          className="text-[11px] text-zinc-600 hover:text-zinc-300 transition-colors shrink-0 ml-2"
+                        >
+                          {t('auth.signOut')}
+                        </button>
                       </div>
                     ) : (
-                      <p className="text-xs text-zinc-300 truncate">{nickname}</p>
+                      <button
+                        onClick={() => setAuthOpen(true)}
+                        className="flex items-center gap-2.5 px-3 py-2 rounded-xl bg-zinc-900/60 border border-zinc-800/50 hover:border-zinc-700/80 hover:bg-zinc-900 transition-all w-full"
+                      >
+                        <span className="text-sm">🔑</span>
+                        <span className="text-[11px] text-zinc-300 font-medium">{t('auth.signIn')}</span>
+                      </button>
                     )}
                   </div>
+                )}
 
-                  {/* Random name */}
+                {/* Divider */}
+                <div className="h-px bg-gradient-to-r from-transparent via-zinc-800 to-transparent mx-4 my-1" />
+
+                {/* Nav links */}
+                <div className="px-2 py-1 space-y-0.5">
+                  <Link href="/profile" onClick={closeMenu} className="flex items-center gap-3 px-3 py-2 rounded-xl hover:bg-zinc-900/80 transition-colors group">
+                    <svg className="w-4 h-4 text-zinc-600 group-hover:text-zinc-400 transition-colors shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.75}>
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
+                    </svg>
+                    <span className="text-[12px] text-zinc-300 group-hover:text-zinc-100 font-medium transition-colors">{t('nav.profile')}</span>
+                  </Link>
+                  <Link href="/achievements" onClick={closeMenu} className="flex items-center gap-3 px-3 py-2 rounded-xl hover:bg-zinc-900/80 transition-colors group">
+                    <svg className="w-4 h-4 text-zinc-600 group-hover:text-amber-400/80 transition-colors shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.75}>
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M8 21h8m-4-4v4m-4.5-8a4.5 4.5 0 019 0v0H7.5zM6 3h12v4a2 2 0 01-2 2h-1.5m-5 0H8a2 2 0 01-2-2V3zm0 0H4a1 1 0 00-1 1v2a3 3 0 003 3m12-6h2a1 1 0 011 1v2a3 3 0 01-3 3" />
+                    </svg>
+                    <span className="text-[12px] text-zinc-300 group-hover:text-zinc-100 font-medium transition-colors">{t('menu.achievements')}</span>
+                  </Link>
+                  <Link href="/leaderboards" onClick={closeMenu} className="flex items-center gap-3 px-3 py-2 rounded-xl hover:bg-zinc-900/80 transition-colors group">
+                    <svg className="w-4 h-4 text-zinc-600 group-hover:text-zinc-400 transition-colors shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.75}>
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M3 13h2v8H3zm6-4h2v12H9zm6-6h2v18h-2zm6 10h2v8h-2z" />
+                    </svg>
+                    <span className="text-[12px] text-zinc-300 group-hover:text-zinc-100 font-medium transition-colors">{t('menu.stats')}</span>
+                  </Link>
+                  {role === 'admin' && (
+                    <Link href="/admin" onClick={closeMenu} className="flex items-center gap-3 px-3 py-2 rounded-xl hover:bg-red-950/30 transition-colors group">
+                      <svg className="w-4 h-4 text-red-500/60 group-hover:text-red-400 transition-colors shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.75}>
+                        <path strokeLinecap="round" strokeLinejoin="round" d="M10.5 6h9.75M10.5 6a1.5 1.5 0 11-3 0m3 0a1.5 1.5 0 10-3 0M3.75 6H7.5m3 12h9.75m-9.75 0a1.5 1.5 0 01-3 0m3 0a1.5 1.5 0 00-3 0m-3.75 0H7.5m9-6h3.75m-3.75 0a1.5 1.5 0 01-3 0m3 0a1.5 1.5 0 00-3 0m-9.75 0h9.75" />
+                      </svg>
+                      <span className="text-[12px] text-red-400/80 group-hover:text-red-400 font-medium transition-colors">{t('nav.admin')}</span>
+                    </Link>
+                  )}
+                </div>
+
+                {/* Divider */}
+                <div className="h-px bg-gradient-to-r from-transparent via-zinc-800 to-transparent mx-4 my-1" />
+
+                {/* Settings + Support row */}
+                <div className="px-2 py-1 space-y-0.5">
                   <button
-                    onClick={randomName}
-                    className="flex items-center gap-1.5 w-full px-2 py-1 rounded-md border border-zinc-700/70 hover:border-zinc-600 text-zinc-400 hover:text-zinc-100 text-[10px] font-medium transition-colors text-left"
+                    onClick={() => setActiveSection('settings')}
+                    className="flex items-center gap-3 px-3 py-2 rounded-xl hover:bg-zinc-900/80 transition-colors w-full text-left group"
                   >
-                    <IconRefresh className="w-3 h-3 shrink-0" />
-                    {t('settings.randomName')}
+                    <svg className="w-4 h-4 text-zinc-600 group-hover:text-zinc-400 transition-colors shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.75}>
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.066 2.573c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.573 1.066c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.066-2.573c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.573-1.066z" />
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                    </svg>
+                    <span className="text-[12px] text-zinc-300 group-hover:text-zinc-100 font-medium flex-1 transition-colors">{t('profile.settings')}</span>
+                    <svg className="w-3.5 h-3.5 text-zinc-700 group-hover:text-zinc-500 transition-colors shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" />
+                    </svg>
                   </button>
 
-                  <div className="h-px bg-zinc-800" />
-
-                  {/* Theme toggle */}
-                  <div className="flex items-center justify-between">
-                    <span className="text-[10px] text-zinc-500 font-medium">{t('settings.theme')}</span>
-                    <div className="flex gap-0.5 p-0.5 bg-zinc-800 rounded-md">
-                      {(['dark', 'light'] as Theme[]).map((th) => (
-                        <button
-                          key={th}
-                          onClick={() => handleTheme(th)}
-                          className={`px-2 py-0.5 rounded text-[10px] font-semibold transition-colors ${
-                            theme === th ? 'bg-zinc-700 text-zinc-100' : 'text-zinc-500 hover:text-zinc-300'
-                          }`}
-                        >
-                          {th === 'dark' ? t('settings.dark') : t('settings.light')}
-                        </button>
-                      ))}
-                    </div>
-                  </div>
-
-                  {/* Language toggle */}
-                  <div className="flex items-center justify-between">
-                    <span className="text-[10px] text-zinc-500 font-medium">{t('profile.language')}</span>
-                    <div className="flex gap-0.5 p-0.5 bg-zinc-800 rounded-md">
-                      {(['de', 'en'] as const).map((l) => (
-                        <button
-                          key={l}
-                          onClick={() => setLang(l)}
-                          className={`px-2 py-0.5 rounded text-[10px] font-semibold uppercase transition-colors ${
-                            lang === l ? 'bg-zinc-700 text-zinc-100' : 'text-zinc-500 hover:text-zinc-300'
-                          }`}
-                        >
-                          {l}
-                        </button>
-                      ))}
-                    </div>
-                  </div>
+                  <a
+                    href="https://ko-fi.com/nicogrim"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="flex items-center gap-3 px-3 py-2 rounded-xl hover:bg-zinc-900/80 transition-colors w-full group"
+                  >
+                    <span className="text-sm shrink-0 leading-none w-4 text-center">☕</span>
+                    <span className="text-[12px] text-zinc-300 group-hover:text-zinc-100 font-medium transition-colors">{t('support.label')}</span>
+                  </a>
                 </div>
-              )}
-            </div>
 
-            {/* Support */}
-            <div className="h-px bg-zinc-800 mx-1.5" />
-            <div className="px-1 py-0.5">
-              <a
-                href="https://ko-fi.com/nicogrim"
-                target="_blank"
-                rel="noopener noreferrer"
-                className="flex items-center gap-2 px-2.5 py-1.5 rounded-lg hover:bg-zinc-800 transition-colors w-full"
-              >
-                <span className="text-sm shrink-0 leading-none">☕</span>
-                <span className="text-xs text-zinc-200">{t('support.label')}</span>
-              </a>
-            </div>
+                {/* Bottom padding */}
+                <div className="h-2" />
+              </div>
+            </>
+          )}
 
-            {/* Danger zone */}
-            <div className="h-px bg-zinc-800 mx-1.5" />
-            <div className="px-1 py-0.5">
-              {!confirmReset ? (
+          {/* ═══ SETTINGS VIEW ═══ */}
+          {activeSection === 'settings' && (
+            <div className="flex flex-col flex-1 min-h-0">
+              {/* Settings header */}
+              <div className="shrink-0 flex items-center gap-2 px-3 py-3 border-b border-zinc-800/60">
                 <button
-                  onClick={() => setConfirmReset(true)}
-                  className="flex items-center gap-2 px-2.5 py-1.5 rounded-lg hover:bg-rose-950/30 transition-colors w-full text-left"
+                  onClick={() => setActiveSection('main')}
+                  className="p-1.5 -ml-1 rounded-lg hover:bg-zinc-800 transition-colors text-zinc-500 hover:text-zinc-200"
                 >
-                  <IconTrash className="w-3.5 h-3.5 text-zinc-600 shrink-0" />
-                  <span className="text-[10px] text-zinc-500">{t('menu.resetData')}</span>
+                  <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M15 19l-7-7 7-7" />
+                  </svg>
                 </button>
-              ) : (
-                <div className="px-2.5 py-1.5 space-y-1.5">
-                  <p className="text-[10px] text-rose-400">{t('menu.resetConfirm')}</p>
-                  <div className="flex gap-1.5">
-                    <button onClick={handleReset} className="flex-1 py-0.5 rounded-md bg-rose-600 hover:bg-rose-500 text-white text-[10px] font-semibold transition-colors">
-                      {t('menu.resetData')}
-                    </button>
-                    <button onClick={() => setConfirmReset(false)} className="flex-1 py-0.5 rounded-md border border-zinc-700 text-zinc-400 hover:text-zinc-200 text-[10px] transition-colors">
-                      {t('common.cancel')}
-                    </button>
+                <span className="text-sm font-semibold text-zinc-200">{t('profile.settings')}</span>
+              </div>
+
+              <div className="overflow-y-auto overscroll-contain flex-1 min-h-0 px-3 py-3 space-y-4">
+
+                {/* Nickname section */}
+                <div>
+                  <div className="flex items-center justify-between mb-2">
+                    <span className="text-[11px] text-zinc-500 uppercase tracking-wider font-bold">{t('settings.nickname')}</span>
+                    {!editingNick && (
+                      <button onClick={startEditNick} className="text-[11px] text-indigo-400 hover:text-indigo-300 font-semibold transition-colors">
+                        {t('menu.editNickname')}
+                      </button>
+                    )}
+                  </div>
+                  {editingNick ? (
+                    <div className="space-y-2">
+                      <input
+                        ref={nickInputRef}
+                        value={nickValue}
+                        onChange={(e) => { setNickValue(e.target.value.slice(0, 18)); setNickError(null); }}
+                        onKeyDown={(e) => {
+                          if (e.key === 'Enter') saveNick();
+                          if (e.key === 'Escape') cancelNick();
+                        }}
+                        maxLength={18}
+                        placeholder="Enter nickname…"
+                        className="w-full bg-zinc-900 border border-zinc-700/80 rounded-lg px-3 py-2 text-sm text-zinc-100 placeholder-zinc-600 focus:outline-none focus:border-indigo-500/60 focus:ring-1 focus:ring-indigo-500/20 transition-all"
+                      />
+                      {nickError && <p className="text-[11px] text-rose-400 px-0.5">{nickError}</p>}
+                      <div className="flex gap-2">
+                        <button onClick={saveNick} className="flex-1 py-1.5 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-white text-[11px] font-bold transition-colors">
+                          {t('common.save')}
+                        </button>
+                        <button onClick={cancelNick} className="flex-1 py-1.5 rounded-lg border border-zinc-700 text-zinc-400 hover:text-zinc-200 hover:border-zinc-600 text-[11px] font-medium transition-all">
+                          {t('common.cancel')}
+                        </button>
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="flex items-center justify-between bg-zinc-900/60 border border-zinc-800/50 rounded-lg px-3 py-2">
+                      <span className="text-sm text-zinc-200 truncate font-medium">{nickname}</span>
+                      <button
+                        onClick={randomName}
+                        className="p-1 rounded-md hover:bg-zinc-800 text-zinc-600 hover:text-zinc-300 transition-all shrink-0"
+                        title={t('settings.randomName')}
+                      >
+                        <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                          <path strokeLinecap="round" strokeLinejoin="round" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                        </svg>
+                      </button>
+                    </div>
+                  )}
+                </div>
+
+                {/* Divider */}
+                <div className="h-px bg-zinc-800/60" />
+
+                {/* Theme toggle */}
+                <div className="flex items-center justify-between">
+                  <span className="text-[11px] text-zinc-500 uppercase tracking-wider font-bold">{t('settings.theme')}</span>
+                  <div className="flex gap-1 p-1 bg-zinc-900/80 border border-zinc-800/50 rounded-lg">
+                    {(['dark', 'light'] as Theme[]).map((th) => (
+                      <button
+                        key={th}
+                        onClick={() => handleTheme(th)}
+                        className={`px-3 py-1 rounded-md text-[11px] font-semibold transition-all ${
+                          theme === th
+                            ? 'bg-zinc-700/80 text-zinc-100 shadow-sm'
+                            : 'text-zinc-500 hover:text-zinc-300'
+                        }`}
+                      >
+                        {th === 'dark' ? t('settings.dark') : t('settings.light')}
+                      </button>
+                    ))}
                   </div>
                 </div>
-              )}
+
+                {/* Language toggle */}
+                <div className="flex items-center justify-between">
+                  <span className="text-[11px] text-zinc-500 uppercase tracking-wider font-bold">{t('profile.language')}</span>
+                  <div className="flex gap-1 p-1 bg-zinc-900/80 border border-zinc-800/50 rounded-lg">
+                    {(['de', 'en'] as const).map((l) => (
+                      <button
+                        key={l}
+                        onClick={() => setLang(l)}
+                        className={`px-3 py-1 rounded-md text-[11px] font-semibold uppercase transition-all ${
+                          lang === l
+                            ? 'bg-zinc-700/80 text-zinc-100 shadow-sm'
+                            : 'text-zinc-500 hover:text-zinc-300'
+                        }`}
+                      >
+                        {l}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                {/* Divider */}
+                <div className="h-px bg-zinc-800/60" />
+
+                {/* Danger zone */}
+                <div>
+                  <span className="text-[11px] text-zinc-600 uppercase tracking-wider font-bold block mb-2">{t('menu.resetData')}</span>
+                  {!confirmReset ? (
+                    <button
+                      onClick={() => setConfirmReset(true)}
+                      className="flex items-center gap-2.5 w-full px-3 py-2 rounded-lg border border-zinc-800/50 hover:border-rose-500/30 hover:bg-rose-950/20 transition-all group"
+                    >
+                      <svg className="w-4 h-4 text-zinc-700 group-hover:text-rose-400/80 transition-colors shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.75}>
+                        <path strokeLinecap="round" strokeLinejoin="round" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                      </svg>
+                      <span className="text-[11px] text-zinc-500 group-hover:text-rose-300/80 font-medium transition-colors">{t('menu.resetData')}</span>
+                    </button>
+                  ) : (
+                    <div className="rounded-lg border border-rose-500/30 bg-rose-950/20 p-3 space-y-2.5">
+                      <p className="text-[11px] text-rose-400/90 font-medium">{t('menu.resetConfirm')}</p>
+                      <div className="flex gap-2">
+                        <button onClick={handleReset} className="flex-1 py-1.5 rounded-lg bg-rose-600 hover:bg-rose-500 text-white text-[11px] font-bold transition-colors">
+                          {t('menu.resetData')}
+                        </button>
+                        <button onClick={() => setConfirmReset(false)} className="flex-1 py-1.5 rounded-lg border border-zinc-700 text-zinc-400 hover:text-zinc-200 text-[11px] font-medium transition-all">
+                          {t('common.cancel')}
+                        </button>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              </div>
             </div>
-          </div>
+          )}
         </div>
       )}
 
@@ -572,6 +554,7 @@ export function ProfileMenu() {
       {progressionOpen && (
         <ProgressionModal onClose={() => setProgressionOpen(false)} />
       )}
+
     </div>
   );
 }

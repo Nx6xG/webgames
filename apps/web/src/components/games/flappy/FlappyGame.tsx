@@ -8,6 +8,7 @@ import { useVisibilityPause } from '@/hooks/useVisibilityPause';
 import { ScoreboardPanel } from '@/components/ui/ScoreboardPanel';
 import { useAuth } from '@/components/providers/AuthProvider';
 import { useNickname } from '@/components/providers/NicknameProvider';
+import * as sfx from './sound';
 
 // ── Constants ────────────────────────────────────────────────────────────────
 
@@ -17,25 +18,38 @@ const GAME_H = 640;
 const BIRD_SIZE = 28;
 const BIRD_X = 80;
 
-const GRAVITY = 0.32;
-const FLAP_VELOCITY = -6.5;    // set (not additive)
-const MAX_FALL_SPEED = 7;      // terminal velocity
-
 const PIPE_WIDTH = 52;
-const PIPE_GAP = 160;
-const PIPE_SPEED_BASE = 2.0;
-const PIPE_SPEED_INC = 0.025;  // per score point
-const PIPE_SPEED_CAP = 3.6;
 
 const COUNTDOWN_STEPS = 3;
 const COUNTDOWN_STEP_MS = 700;
-const PIPE_SPAWN_INTERVAL = 90; // frames (~1.5 s at 60 fps)
 const PIPE_MIN_TOP = 60;
 const PIPE_MAX_BOTTOM = 60;
 
 const GROUND_H = 40;
 
 const BEST_KEY = 'webgames.flappy.bestScore';
+
+// ── Difficulty ──────────────────────────────────────────────────────────────
+
+type FlappyDifficulty = 'easy' | 'normal' | 'hard' | 'insane';
+
+const DIFFICULTIES: FlappyDifficulty[] = ['easy', 'normal', 'hard', 'insane'];
+
+const DIFF_CONFIG: Record<FlappyDifficulty, {
+  gravity: number;
+  flapVel: number;
+  maxVel: number;
+  pipeGap: number;
+  pipeSpeedBase: number;
+  pipeSpeedInc: number;
+  pipeSpeedCap: number;
+  pipeInterval: number;
+}> = {
+  easy:   { gravity: 0.25, flapVel: -6.0, maxVel: 6,   pipeGap: 190, pipeSpeedBase: 1.6, pipeSpeedInc: 0.015, pipeSpeedCap: 2.8, pipeInterval: 100 },
+  normal: { gravity: 0.32, flapVel: -6.5, maxVel: 7,   pipeGap: 160, pipeSpeedBase: 2.0, pipeSpeedInc: 0.025, pipeSpeedCap: 3.6, pipeInterval: 90 },
+  hard:   { gravity: 0.38, flapVel: -7.0, maxVel: 8,   pipeGap: 130, pipeSpeedBase: 2.4, pipeSpeedInc: 0.035, pipeSpeedCap: 4.2, pipeInterval: 80 },
+  insane: { gravity: 0.42, flapVel: -7.5, maxVel: 9,   pipeGap: 105, pipeSpeedBase: 2.8, pipeSpeedInc: 0.045, pipeSpeedCap: 5.0, pipeInterval: 70 },
+};
 
 // ── Types ────────────────────────────────────────────────────────────────────
 
@@ -70,6 +84,9 @@ export function FlappyGame() {
   const pb = usePersonalScores('flappy', user ? { userId: user.id, nickname } : undefined);
 
   // ── State ────────────────────────────────────────────────────────────────
+  const [difficulty, setDifficulty] = useState<FlappyDifficulty>('normal');
+  const diffRef = useRef<FlappyDifficulty>('normal');
+
   const [phase, setPhase] = useState<Phase>('idle');
   const [score, setScore] = useState(0);
   const [best, setBest] = useState(0);
@@ -119,12 +136,13 @@ export function FlappyGame() {
   const tick = useCallback(() => {
     if (phaseRef.current !== 'playing') return;
 
+    const cfg = DIFF_CONFIG[diffRef.current];
     const currentScore = scoreRef.current;
-    const speed = Math.min(PIPE_SPEED_BASE + currentScore * PIPE_SPEED_INC, PIPE_SPEED_CAP);
+    const speed = Math.min(cfg.pipeSpeedBase + currentScore * cfg.pipeSpeedInc, cfg.pipeSpeedCap);
 
     // Bird physics
-    let vel = birdVelRef.current + GRAVITY;
-    if (vel > MAX_FALL_SPEED) vel = MAX_FALL_SPEED;
+    let vel = birdVelRef.current + cfg.gravity;
+    if (vel > cfg.maxVel) vel = cfg.maxVel;
     let y = birdYRef.current + vel;
     birdVelRef.current = vel;
     birdYRef.current = y;
@@ -135,9 +153,9 @@ export function FlappyGame() {
     // Pipe spawning
     frameRef.current += 1;
     let currentPipes = pipesRef.current;
-    if (frameRef.current % PIPE_SPAWN_INTERVAL === 0) {
-      const minGapCenter = PIPE_MIN_TOP + PIPE_GAP / 2;
-      const maxGapCenter = GAME_H - GROUND_H - PIPE_MAX_BOTTOM - PIPE_GAP / 2;
+    if (frameRef.current % cfg.pipeInterval === 0) {
+      const minGapCenter = PIPE_MIN_TOP + cfg.pipeGap / 2;
+      const maxGapCenter = GAME_H - GROUND_H - PIPE_MAX_BOTTOM - cfg.pipeGap / 2;
       const gapY = minGapCenter + Math.random() * (maxGapCenter - minGapCenter);
       pipeIdRef.current += 1;
       currentPipes = [...currentPipes, { x: GAME_W + 10, gapY, scored: false, id: pipeIdRef.current }];
@@ -180,8 +198,8 @@ export function FlappyGame() {
         const pipeLeft = pipe.x;
         const pipeRight = pipe.x + PIPE_WIDTH;
         if (birdRight > pipeLeft && birdLeft < pipeRight) {
-          const gapTop = pipe.gapY - PIPE_GAP / 2;
-          const gapBottom = pipe.gapY + PIPE_GAP / 2;
+          const gapTop = pipe.gapY - cfg.pipeGap / 2;
+          const gapBottom = pipe.gapY + cfg.pipeGap / 2;
           if (birdTop < gapTop || birdBottom > gapBottom) {
             dead = true;
             break;
@@ -192,6 +210,7 @@ export function FlappyGame() {
 
     // Update score state
     if (newScore !== currentScore) {
+      sfx.scoreSound();
       scoreRef.current = newScore;
       setScore(newScore);
       setScoreFlash(true);
@@ -205,6 +224,7 @@ export function FlappyGame() {
     setPipes(updatedPipes);
 
     if (dead) {
+      sfx.hitSound();
       phaseRef.current = 'over';
       setPhase('over');
       // Save best
@@ -263,20 +283,24 @@ export function FlappyGame() {
     setPhase('countdown');
     phaseRef.current = 'countdown';
     setCountdownNum(COUNTDOWN_STEPS);
+    sfx.countdownBeep();
 
     let step = COUNTDOWN_STEPS;
     const advance = () => {
       step -= 1;
       if (step > 0) {
+        sfx.countdownBeep();
         setCountdownNum(step);
         countdownTimerRef.current = setTimeout(advance, COUNTDOWN_STEP_MS);
       } else {
         // Go!
+        sfx.countdownGo();
         setCountdownNum(0);
         countdownTimerRef.current = null;
         if (thenFlap) {
-          birdVelRef.current = FLAP_VELOCITY;
-          setBirdVel(FLAP_VELOCITY);
+          const fv = DIFF_CONFIG[diffRef.current].flapVel;
+          birdVelRef.current = fv;
+          setBirdVel(fv);
         }
         phaseRef.current = 'playing';
         setPhase('playing');
@@ -297,8 +321,10 @@ export function FlappyGame() {
       return;
     }
     if (phaseRef.current === 'playing') {
-      birdVelRef.current = FLAP_VELOCITY;
-      setBirdVel(FLAP_VELOCITY);
+      sfx.flapSound();
+      const fv = DIFF_CONFIG[diffRef.current].flapVel;
+      birdVelRef.current = fv;
+      setBirdVel(fv);
     }
   }, [startCountdown]);
 
@@ -400,8 +426,9 @@ export function FlappyGame() {
 
             {/* Pipes */}
             {pipes.map((pipe) => {
-              const gapTop = pipe.gapY - PIPE_GAP / 2;
-              const gapBottom = pipe.gapY + PIPE_GAP / 2;
+              const renderGap = DIFF_CONFIG[difficulty].pipeGap;
+              const gapTop = pipe.gapY - renderGap / 2;
+              const gapBottom = pipe.gapY + renderGap / 2;
               return (
                 <div key={pipe.id}>
                   {/* Top pipe */}
@@ -483,7 +510,28 @@ export function FlappyGame() {
             {phase === 'idle' && (
               <div className="absolute inset-0 flex flex-col items-center justify-center bg-black/50 backdrop-blur-[2px] z-20">
                 <div className="text-3xl font-black text-amber-400 mb-2 drop-shadow-lg">{t('game.name.flappy')}</div>
-                <p className="text-sm text-zinc-300 mb-6">{t('lobby.games.flappy.desc')}</p>
+                <p className="text-sm text-zinc-300 mb-4">{t('lobby.games.flappy.desc')}</p>
+
+                {/* Difficulty selector */}
+                <div className="flex flex-col items-center gap-1.5 mb-5">
+                  <span className="text-[11px] text-zinc-400 uppercase tracking-wider font-semibold">{t('flappy.difficulty')}</span>
+                  <div className="flex gap-1.5">
+                    {DIFFICULTIES.map((d) => (
+                      <button
+                        key={d}
+                        onClick={(e) => { e.stopPropagation(); setDifficulty(d); diffRef.current = d; }}
+                        className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all active:scale-95 ${
+                          difficulty === d
+                            ? 'bg-indigo-600 text-white shadow-md shadow-indigo-900/40'
+                            : 'bg-zinc-800 text-zinc-400 hover:bg-zinc-700 hover:text-zinc-200'
+                        }`}
+                      >
+                        {t(`flappy.diff.${d}`)}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
                 <button
                   onClick={(e) => { e.stopPropagation(); flap(); }}
                   className="px-6 py-3 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white font-bold text-sm transition-all active:scale-95 shadow-lg shadow-indigo-900/40"

@@ -439,7 +439,7 @@ export interface ClientToServerEvents {
   identify: (data: { playerToken: string; nickname: string; avatarId?: string; nameColor?: string; avatarFrame?: string; cosmetics?: CosmeticsSelection; userId?: string; level?: number; showcase?: ProfileShowcase }) => void;
 
   /** playerToken is stored server-side so the seat can survive a refresh */
-  create_room: (data: { playerToken: string; gameId?: GameId; nickname: string; visibility?: RoomVisibility; roomName?: string; rpsConfig?: { mode: string; bestOf?: number }; ldConfig?: { mode: string }; battleshipConfig?: { fleetPreset: string }; cfConfig?: { bestOf?: number }; unoConfig?: { targetScore?: number; stackDraw2?: boolean; stackDraw4?: boolean; allowDraw2OnDraw4?: boolean; allowDraw4OnDraw2?: boolean; playDrawnCardImmediately?: boolean }; chessConfig?: { timeSeconds: number; incrementSeconds: number }; maxPlayers?: number }) => void;
+  create_room: (data: { playerToken: string; gameId?: GameId; nickname: string; visibility?: RoomVisibility; roomName?: string; rpsConfig?: { mode: string; bestOf?: number }; ldConfig?: { mode: string }; battleshipConfig?: { fleetPreset: string; boardSize?: number; salvoMode?: boolean; shotTimerSec?: number }; cfConfig?: { bestOf?: number }; unoConfig?: { targetScore?: number; stackDraw2?: boolean; stackDraw4?: boolean; allowDraw2OnDraw4?: boolean; allowDraw4OnDraw2?: boolean; playDrawnCardImmediately?: boolean; drawUntilPlayable?: boolean; forcedPlay?: boolean }; chessConfig?: { timeSeconds: number; incrementSeconds: number }; maxPlayers?: number }) => void;
 
   /** If the room is full the socket joins as spectator instead */
   join_room: (data: { roomCode: string; playerToken: string; nickname: string }) => void;

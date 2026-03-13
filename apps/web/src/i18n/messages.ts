@@ -363,6 +363,7 @@ export const messages: Record<Lang, Record<string, string>> = {
     'lobby.tags.arcade':           'Arcade',
     'lobby.tags.cards':            'Karten',
     'lobby.tags.bluff':            'Bluff',
+    'lobby.tags.vsBot':            'vs Bot',
 
     // ── 2048 ───────────────────────────────────────────────────────────────
     'lobby.games.2048.title':      '2048',
@@ -621,6 +622,8 @@ export const messages: Record<Lang, Record<string, string>> = {
     'uno.rules.allowDraw2OnDraw4': '+2 auf +4 erlauben',
     'uno.rules.allowDraw4OnDraw2': '+4 auf +2 erlauben',
     'uno.rules.playDrawnCard': 'Gezogene Karte direkt legen',
+    'uno.rules.drawUntilPlayable': 'Ziehen bis es passt',
+    'uno.rules.forcedPlay': 'Spielpflicht',
 
     // ── Rooms page ─────────────────────────────────────────────────────────
     'rooms.title':               'Offene Räume',
@@ -705,6 +708,19 @@ export const messages: Record<Lang, Record<string, string>> = {
     'chess.rules.8':                 'Remis durch 50-Züge-Regel (kein Bauernzug oder Schlagzug in 50 Zügen) oder Dreifachwiederholung.',
     'chess.rules.9':                 '⏮◀▶⏭ im Züge-Panel oder Klick auf einen Zug für Wiedergabe. PGN exportieren für die Notation.',
 
+    // ── Chess Bot ──────────────────────────────────────────────────────────
+    'chess.bot.title':               'Gegen Bot spielen',
+    'chess.bot.play':                'Spiel starten',
+    'chess.bot.difficulty':          'Schwierigkeit',
+    'chess.bot.easy':                'Leicht',
+    'chess.bot.medium':              'Mittel',
+    'chess.bot.hard':                'Schwer',
+    'chess.bot.color':               'Farbe',
+    'chess.bot.random':              'Zufällig',
+    'chess.bot.thinking':            'Bot denkt nach…',
+    'chess.bot.newGame':             'Neues Spiel',
+    'chess.bot.backToLobby':         'Zurück zur Lobby',
+
     // ── Shared game UI ─────────────────────────────────────────────────────
     'game.common.player1':           'Spieler 1',
     'game.common.player2':           'Spieler 2',
@@ -763,6 +779,18 @@ export const messages: Record<Lang, Record<string, string>> = {
 
     // ── Snake ─────────────────────────────────────────────────────────────
     'snake.controls':                'Pfeiltasten oder WASD zum Bewegen · Friss Futter um zu wachsen · Vermeide Wände und dich selbst',
+    'snake.mode':                    'Modus',
+    'snake.mode.classic':            'Klassisch',
+    'snake.mode.noWalls':            'Keine Wände',
+    'snake.mode.speed':              'Speed',
+    'snake.mode.classic.desc':       'Wände sind tödlich — das klassische Snake-Erlebnis.',
+    'snake.mode.noWalls.desc':       'Die Schlange wickelt sich um die Ränder herum.',
+    'snake.mode.speed.desc':         'Doppelte Startgeschwindigkeit, schnellere Beschleunigung.',
+    'snake.gridSize':                'Gittergröße',
+    'snake.gridSize.small':          'Klein (12×12)',
+    'snake.gridSize.medium':         'Normal (20×20)',
+    'snake.gridSize.large':          'Groß (28×28)',
+    'snake.start':                   'Start',
 
     // ── 2048 ──────────────────────────────────────────────────────────────
     '2048.controls':                 'Pfeiltasten oder WASD zum Bewegen · Gleiche Kacheln verschmelzen lassen, um 2048 zu erreichen',
@@ -774,6 +802,11 @@ export const messages: Record<Lang, Record<string, string>> = {
     'flappy.controls.flap':          'Leertaste/↑/Klick = Flap',
     'flappy.controls.pause':         'P = Pause',
     'flappy.controls.restart':       'R = Neustart',
+    'flappy.difficulty':             'Schwierigkeit',
+    'flappy.diff.easy':              'Leicht',
+    'flappy.diff.normal':            'Normal',
+    'flappy.diff.hard':              'Schwer',
+    'flappy.diff.insane':            'Extrem',
 
     // ── Rock Paper Scissors ────────────────────────────────────────────────
     'rps.pick.rock':                 'Stein',
@@ -856,6 +889,7 @@ export const messages: Record<Lang, Record<string, string>> = {
 
     'battleship.fleet.label':          'Flotte:',
     'battleship.fleet.random':         'Zufällig',
+    'battleship.fleet.randomHint':     'Zufälliges Preset wird beim Start gewählt',
     'battleship.fleet.classic':        'Klassisch',
     'battleship.fleet.compact':        'Kompakt',
     'battleship.fleet.wide':           'Breit',
@@ -884,6 +918,18 @@ export const messages: Record<Lang, Record<string, string>> = {
     'battleship.end.defeat':           'Niederlage',
     'battleship.end.defeatSubtitle':   'Deine Flotte wurde zerstört',
     'battleship.end.showBoards':       'Bretter ansehen',
+
+    'battleship.config.boardSize':     'Feldgröße',
+    'battleship.config.boardSize.8':   '8×8',
+    'battleship.config.boardSize.10':  '10×10',
+    'battleship.config.boardSize.12':  '12×12',
+    'battleship.config.salvo':         'Salven-Modus',
+    'battleship.config.salvoDesc':     'Pro Runde so viele Schüsse wie Schiffe übrig',
+    'battleship.config.timer':         'Schuss-Timer',
+    'battleship.config.timer.off':     'Aus',
+    'battleship.setup.autoPlace':      'Zufällig',
+    'battleship.play.salvoShots':      'Schüsse',
+    'battleship.play.timerExpired':    'Zeit abgelaufen!',
 
     // ── Chat ───────────────────────────────────────────────────────────────
     'chat.title':           'Chat',
@@ -1208,6 +1254,7 @@ export const messages: Record<Lang, Record<string, string>> = {
     'party.join':           'Beitreten',
     'party.launchGame':     'Spiel starten',
     'party.launchHint':     'Startet das Spiel für deine gesamte Party',
+    'party.tooLarge':       'Party zu groß',
 
     // ── Replay ──────────────────────────────────────────────────────────
     'replay.button': 'Replay',
@@ -1851,6 +1898,7 @@ export const messages: Record<Lang, Record<string, string>> = {
     'lobby.tags.arcade':           'Arcade',
     'lobby.tags.cards':            'Cards',
     'lobby.tags.bluff':            'Bluff',
+    'lobby.tags.vsBot':            'vs Bot',
 
     // ── 2048 ───────────────────────────────────────────────────────────────
     'lobby.games.2048.title':      '2048',
@@ -2109,6 +2157,8 @@ export const messages: Record<Lang, Record<string, string>> = {
     'uno.rules.allowDraw2OnDraw4': 'Allow +2 on +4',
     'uno.rules.allowDraw4OnDraw2': 'Allow +4 on +2',
     'uno.rules.playDrawnCard': 'Play drawn card immediately',
+    'uno.rules.drawUntilPlayable': 'Draw until playable',
+    'uno.rules.forcedPlay': 'Forced play',
 
     // ── Rooms page ─────────────────────────────────────────────────────────
     'rooms.title':               'Open Rooms',
@@ -2193,6 +2243,19 @@ export const messages: Record<Lang, Record<string, string>> = {
     'chess.rules.8':                 "Draw by 50-move rule (no pawn move or capture in 50 moves) or threefold repetition.",
     'chess.rules.9':                 "Use ⏮◀▶⏭ in the Moves panel or click any move to replay the game. Export PGN to copy the notation.",
 
+    // ── Chess Bot ──────────────────────────────────────────────────────────
+    'chess.bot.title':               'Play vs Bot',
+    'chess.bot.play':                'Start Game',
+    'chess.bot.difficulty':          'Difficulty',
+    'chess.bot.easy':                'Easy',
+    'chess.bot.medium':              'Medium',
+    'chess.bot.hard':                'Hard',
+    'chess.bot.color':               'Color',
+    'chess.bot.random':              'Random',
+    'chess.bot.thinking':            'Bot is thinking…',
+    'chess.bot.newGame':             'New Game',
+    'chess.bot.backToLobby':         'Back to Lobby',
+
     // ── Shared game UI ─────────────────────────────────────────────────────
     'game.common.player1':           'Player 1',
     'game.common.player2':           'Player 2',
@@ -2251,6 +2314,18 @@ export const messages: Record<Lang, Record<string, string>> = {
 
     // ── Snake ─────────────────────────────────────────────────────────────
     'snake.controls':                'Arrow keys or WASD to move · Eat food to grow · Avoid walls and yourself',
+    'snake.mode':                    'Mode',
+    'snake.mode.classic':            'Classic',
+    'snake.mode.noWalls':            'No Walls',
+    'snake.mode.speed':              'Speed',
+    'snake.mode.classic.desc':       'Walls are deadly — the classic Snake experience.',
+    'snake.mode.noWalls.desc':       'Snake wraps around the edges.',
+    'snake.mode.speed.desc':         'Double starting speed, faster acceleration.',
+    'snake.gridSize':                'Grid Size',
+    'snake.gridSize.small':          'Small (12×12)',
+    'snake.gridSize.medium':         'Normal (20×20)',
+    'snake.gridSize.large':          'Large (28×28)',
+    'snake.start':                   'Start',
 
     // ── 2048 ──────────────────────────────────────────────────────────────
     '2048.controls':                 'Arrow keys or WASD to move · Merge matching tiles to reach 2048',
@@ -2262,6 +2337,11 @@ export const messages: Record<Lang, Record<string, string>> = {
     'flappy.controls.flap':          'Space/↑/Click = Flap',
     'flappy.controls.pause':         'P = Pause',
     'flappy.controls.restart':       'R = Restart',
+    'flappy.difficulty':             'Difficulty',
+    'flappy.diff.easy':              'Easy',
+    'flappy.diff.normal':            'Normal',
+    'flappy.diff.hard':              'Hard',
+    'flappy.diff.insane':            'Insane',
 
     // ── Rock Paper Scissors ────────────────────────────────────────────────
     'rps.pick.rock':                 'Rock',
@@ -2344,6 +2424,7 @@ export const messages: Record<Lang, Record<string, string>> = {
 
     'battleship.fleet.label':          'Fleet:',
     'battleship.fleet.random':         'Random',
+    'battleship.fleet.randomHint':     'Random preset chosen at game start',
     'battleship.fleet.classic':        'Classic',
     'battleship.fleet.compact':        'Compact',
     'battleship.fleet.wide':           'Wide',
@@ -2372,6 +2453,18 @@ export const messages: Record<Lang, Record<string, string>> = {
     'battleship.end.defeat':           'Defeat',
     'battleship.end.defeatSubtitle':   'Your fleet has been destroyed',
     'battleship.end.showBoards':       'Show Boards',
+
+    'battleship.config.boardSize':     'Board Size',
+    'battleship.config.boardSize.8':   '8×8',
+    'battleship.config.boardSize.10':  '10×10',
+    'battleship.config.boardSize.12':  '12×12',
+    'battleship.config.salvo':         'Salvo Mode',
+    'battleship.config.salvoDesc':     'Fire as many shots per turn as ships you have',
+    'battleship.config.timer':         'Shot Timer',
+    'battleship.config.timer.off':     'Off',
+    'battleship.setup.autoPlace':      'Random',
+    'battleship.play.salvoShots':      'Shots',
+    'battleship.play.timerExpired':    'Time expired!',
 
     // ── Chat ───────────────────────────────────────────────────────────────
     'chat.title':           'Chat',
@@ -2696,6 +2789,7 @@ export const messages: Record<Lang, Record<string, string>> = {
     'party.join':           'Join',
     'party.launchGame':     'Launch Game',
     'party.launchHint':     'Launches the game for your entire party',
+    'party.tooLarge':       'Party too large',
 
     // ── Replay ──────────────────────────────────────────────────────────
     'replay.button': 'Replay',

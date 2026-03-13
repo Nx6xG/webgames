@@ -1,6 +1,7 @@
 // ── Battleship — shared types, constants, and initial-state factory ──────────
 
 export const BOARD_SIZE = 10;
+export type BoardSize = 8 | 10 | 12;
 
 /** Ship IDs are now dynamic strings (fleet presets define them). */
 export type ShipId = string;
@@ -158,6 +159,18 @@ export interface BattleshipState {
   shipDefs:    ShipDef[];
   /** Fleet preset id for display purposes. */
   fleetId:     string;
+  /** Dynamic board size (8, 10, or 12). */
+  boardSize:   number;
+  /** Salvo mode: fire N shots per turn where N = surviving ships. */
+  salvoMode:   boolean;
+  /** Shots remaining in the current salvo (0 when salvoMode is off). */
+  salvoShotsRemaining: number;
+  /** Total shots in the current salvo (for UI display). */
+  salvoTotal:  number;
+  /** Shot timer in seconds (0 = disabled). */
+  shotTimerSec: number;
+  /** Unix ms timestamp when the current turn/shot started. null when timer disabled or in setup. */
+  turnStartedAt: number | null;
 }
 
 // ── Actions ───────────────────────────────────────────────────────────────────
@@ -182,8 +195,13 @@ export interface BsFireAction {
   at:   Coord;
 }
 
+export interface BsAutoPlaceAction {
+  type: 'BS_AUTO_PLACE';
+}
+
 export type BattleshipAction =
   | BsPlaceShipAction
   | BsResetPlacementAction
   | BsReadyAction
-  | BsFireAction;
+  | BsFireAction
+  | BsAutoPlaceAction;

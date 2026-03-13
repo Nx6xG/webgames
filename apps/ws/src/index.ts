@@ -1744,6 +1744,16 @@ io.on('connection', (socket) => {
       socket.emit('party_error', { code: 'NOT_HOST', message: 'Only the host can launch a game.' });
       return;
     }
+    // Check party size vs game capacity
+    const capacity = getGameCapacity(gameId);
+    if (party.members.length > capacity.max) {
+      socket.emit('party_error', {
+        code: 'PARTY_FULL' as const,
+        message: `Party has ${party.members.length} members but ${gameId} supports max ${capacity.max}.`,
+      });
+      return;
+    }
+
     // Leave any existing rooms for all party members first
     // Then create a room for the host
     const handleLeaveForToken = (memberToken: string) => {
@@ -1769,7 +1779,6 @@ io.on('connection', (socket) => {
 
     // Create room with host (mirrors create_room handler)
     const nickname = presence.get(token)?.nickname ?? 'Player';
-    const capacity = getGameCapacity(gameId);
     const effectiveMax = Math.min(party.members.length, capacity.max);
     const room = roomManager.createRoom(socket.id, token, gameId, nickname, 'private', undefined, undefined, capacity.min, effectiveMax);
 

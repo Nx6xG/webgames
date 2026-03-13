@@ -25,6 +25,8 @@ export interface GameModalData {
   playHref: string;
   /** Route for custom room (multiplayer only) */
   customHref?: string;
+  /** Maximum players for this game (multiplayer only) */
+  maxPlayers?: number;
   // stats
   plays: number;
   wins: number;
@@ -84,8 +86,10 @@ export function GameDetailsModal({
   onClose: () => void;
 }) {
   const { t } = useI18n();
-  const { isHost, launchGame } = usePartyCtx();
+  const { isHost, launchGame, party } = usePartyCtx();
   const panelRef = useRef<HTMLDivElement>(null);
+  const partySize = party?.members.length ?? 0;
+  const partyTooLarge = isHost && data.mode === 'multiplayer' && partySize > (data.maxPlayers ?? 99);
 
   // ESC to close + lock body scroll
   useEffect(() => {
@@ -181,10 +185,17 @@ export function GameDetailsModal({
                 <>
                   {isHost ? (
                     <button
-                      onClick={() => { launchGame(data.gameId as import('shared').GameId); onClose(); }}
-                      className="flex-1 py-2.5 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-white text-sm font-semibold text-center transition-colors"
+                      onClick={() => { if (!partyTooLarge) { launchGame(data.gameId as import('shared').GameId); onClose(); } }}
+                      disabled={partyTooLarge}
+                      className={`flex-1 py-2.5 rounded-lg text-sm font-semibold text-center transition-colors ${
+                        partyTooLarge
+                          ? 'bg-red-900/60 text-red-300 border border-red-800/60 cursor-not-allowed'
+                          : 'bg-indigo-600 hover:bg-indigo-500 text-white'
+                      }`}
                     >
-                      {t('party.launchGame')}
+                      {partyTooLarge
+                        ? `${t('party.tooLarge')} (${partySize}/${data.maxPlayers})`
+                        : t('party.launchGame')}
                     </button>
                   ) : (
                     <Link
@@ -213,7 +224,7 @@ export function GameDetailsModal({
                 </Link>
               )}
             </div>
-            {isHost && data.mode === 'multiplayer' && (
+            {isHost && data.mode === 'multiplayer' && !partyTooLarge && (
               <p className="text-[11px] text-indigo-400/70 text-center">{t('party.launchHint')}</p>
             )}
           </div>

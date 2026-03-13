@@ -3,8 +3,11 @@
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { useI18n } from '@/components/providers/LanguageProvider';
+import { useProgression } from '@/components/providers/ProgressionProvider';
 import { createSeededRng } from '@/lib/seededRandom';
 import { getTodayStr } from '@/lib/dailyChallenges/definitions';
+import { XP_REWARDS } from '@/lib/progression/rewards';
+import { isGotdBonusAvailable } from '@/lib/progression/xp';
 
 interface SpotlightGame {
   id: string;
@@ -33,6 +36,7 @@ function getGameOfTheDay(): SpotlightGame {
 
 export function GameOfTheDay() {
   const { t } = useI18n();
+  const { progression, isHydrated } = useProgression();
   const [game, setGame] = useState<SpotlightGame | null>(null);
 
   useEffect(() => {
@@ -40,6 +44,9 @@ export function GameOfTheDay() {
   }, []);
 
   if (!game) return null;
+
+  const bonusAvailable = isHydrated && isGotdBonusAvailable(progression, game.id);
+  const bonusClaimed = isHydrated && !bonusAvailable && progression.gotdBonusDate === getTodayStr();
 
   return (
     <section className="max-w-5xl mx-auto px-6 pb-6">
@@ -54,12 +61,27 @@ export function GameOfTheDay() {
           <p className="text-lg font-bold text-zinc-100 truncate">{t(game.titleKey)}</p>
           <p className="text-xs text-zinc-400 truncate">{t(game.descKey)}</p>
         </div>
-        <Link
-          href={game.href}
-          className="shrink-0 px-5 py-2 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-white text-sm font-semibold transition-colors"
-        >
-          {t('lobby.play')}
-        </Link>
+        <div className="shrink-0 flex flex-col items-end gap-1.5">
+          {isHydrated && (
+            <span
+              className={`text-xs font-semibold px-2.5 py-1 rounded-lg border ${
+                bonusClaimed
+                  ? 'bg-zinc-800/60 text-zinc-500 border-zinc-700/50'
+                  : 'bg-amber-500/10 text-amber-400 border-amber-500/30'
+              }`}
+            >
+              {bonusClaimed
+                ? `✓ +${XP_REWARDS.GOTD_FIRST_WIN} XP`
+                : `+${XP_REWARDS.GOTD_FIRST_WIN} XP`}
+            </span>
+          )}
+          <Link
+            href={game.href}
+            className="px-5 py-2 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-white text-sm font-semibold transition-colors"
+          >
+            {t('lobby.play')}
+          </Link>
+        </div>
       </div>
     </section>
   );

@@ -79,6 +79,39 @@ export async function PATCH(
       return NextResponse.json({ ok: true });
     }
 
+    case 'reset_stats_game': {
+      const { gameId } = body;
+      if (!gameId || typeof gameId !== 'string') {
+        return NextResponse.json({ error: 'Missing gameId' }, { status: 400 });
+      }
+      // Fetch current stats
+      const { data: currentStats } = await sb.from('user_stats').select('*').eq('user_id', userId).single();
+      if (!currentStats) return NextResponse.json({ error: 'No stats found' }, { status: 404 });
+
+      const playsByGame = (currentStats.plays_by_game ?? {}) as Record<string, number>;
+      const winsByGame = (currentStats.wins_by_game ?? {}) as Record<string, number>;
+      const gamePlays = playsByGame[gameId] ?? 0;
+      const gameWins = winsByGame[gameId] ?? 0;
+
+      // Remove this game's entries and subtract from totals
+      delete playsByGame[gameId];
+      delete winsByGame[gameId];
+
+      await sb.from('user_stats').update({
+        plays_total: Math.max(0, (currentStats.plays_total ?? 0) - gamePlays),
+        wins_total: Math.max(0, (currentStats.wins_total ?? 0) - gameWins),
+        plays_by_game: playsByGame,
+        wins_by_game: winsByGame,
+      }).eq('user_id', userId);
+
+      await auditLog(sb, admin.userId, 'reset_stats_game', userId, {
+        gameId,
+        removedPlays: gamePlays,
+        removedWins: gameWins,
+      });
+      return NextResponse.json({ ok: true });
+    }
+
     case 'grant_achievement': {
       const { achievementId } = body;
       if (!achievementId) return NextResponse.json({ error: 'Missing achievementId' }, { status: 400 });

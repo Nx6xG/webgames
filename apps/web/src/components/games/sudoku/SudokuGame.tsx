@@ -10,6 +10,7 @@ import { useI18n } from '@/components/providers/LanguageProvider';
 import { createSeededRng } from '@/lib/seededRandom';
 import { useVisibilityPause } from '@/hooks/useVisibilityPause';
 import { getTodayStr } from '@/lib/dailyChallenges/definitions';
+import * as sfx from './sound';
 
 const MAX_LIVES = 3;
 
@@ -138,7 +139,7 @@ export function SudokuGame() {
   const ach = useAchievements('sudoku');
 
   // ── Config form state ─────────────────────────────────────────────────────────
-  const [formDiff, setFormDiff] = useState<Difficulty>('medium');
+  const [formDiff, setFormDiff] = useState<Difficulty>('easy');
 
   // ── Game state ────────────────────────────────────────────────────────────────
   const [phase,      setPhase]      = useState<GamePhase>('config');
@@ -165,7 +166,14 @@ export function SudokuGame() {
   const savedRef = useRef<boolean>(false);
 
   // ── Load stats on mount ───────────────────────────────────────────────────────
-  useEffect(() => { setStats(loadStats()); }, []);
+  useEffect(() => {
+    const s = loadStats();
+    setStats(s);
+    // Auto-select highest unlocked difficulty
+    if (s.hard.wins >= 5) setFormDiff('expert');
+    else if (s.medium.wins >= 5) setFormDiff('hard');
+    else if (s.easy.wins >= 2) setFormDiff('medium');
+  }, []);
 
   // ── Achievement tracking ──────────────────────────────────────────────────
   useEffect(() => {
@@ -256,18 +264,20 @@ export function SudokuGame() {
           else nb[r][c].add(n);
           setNotes(nb);
         } else {
-          penalizeWrong(r, c, n);
+          const isWrong = penalizeWrong(r, c, n);
+          if (isWrong) sfx.errorSound(); else sfx.placeSound();
           updateWrongMark(r, c, n);
           const nb = puzzle.map(row => [...row]);
           nb[r][c] = n;
           setPuzzle(nb);
           setNotes(autoCleanNotes(notes, r, c, n));
-          if (isBoardSolved(nb)) setPhase('won');
+          if (isBoardSolved(nb)) { sfx.winSound(); setPhase('won'); }
         }
       } else if (e.key === 'Backspace' || e.key === 'Delete' || e.key === '0') {
         if (!selected) return;
         const [r, c] = selected;
         if (prefilled[r][c]) return;
+        sfx.eraseSound();
         clearWrongMark(r, c);
         const nb = puzzle.map(row => [...row]);
         nb[r][c] = 0;
@@ -358,13 +368,14 @@ export function SudokuGame() {
       else nb[r][c].add(n);
       setNotes(nb);
     } else {
-      penalizeWrong(r, c, n);
+      const isWrong = penalizeWrong(r, c, n);
+      if (isWrong) sfx.errorSound(); else sfx.placeSound();
       updateWrongMark(r, c, n);
       const nb = puzzle.map(row => [...row]);
       nb[r][c] = n;
       setPuzzle(nb);
       setNotes(autoCleanNotes(notes, r, c, n));
-      if (isBoardSolved(nb)) setPhase('won');
+      if (isBoardSolved(nb)) { sfx.winSound(); setPhase('won'); }
     }
   }
 
@@ -372,6 +383,7 @@ export function SudokuGame() {
     if (phase !== 'playing' || !selected) return;
     const [r, c] = selected;
     if (prefilled[r][c]) return;
+    sfx.eraseSound();
     clearWrongMark(r, c);
     const nb = puzzle.map(row => [...row]);
     nb[r][c] = 0;
@@ -405,21 +417,39 @@ export function SudokuGame() {
               Difficulty
             </p>
             <div className="grid grid-cols-2 gap-3">
-              {DIFFICULTIES.map(d => (
-                <button
-                  key={d.value}
-                  onClick={() => setFormDiff(d.value)}
-                  className={[
-                    'flex flex-col items-start gap-1 p-4 rounded-xl border transition-all text-left',
-                    formDiff === d.value
-                      ? 'bg-indigo-950/60 border-indigo-700/60 text-indigo-200'
-                      : 'bg-zinc-800/40 border-zinc-700/40 text-zinc-400 hover:border-zinc-600 hover:text-zinc-300',
-                  ].join(' ')}
-                >
-                  <span className="text-sm font-bold">{d.label}</span>
-                  <span className="text-xs opacity-70">{d.sub}</span>
-                </button>
-              ))}
+              {DIFFICULTIES.map(d => {
+                const locked =
+                  (d.value === 'medium' && stats.easy.wins < 2) ||
+                  (d.value === 'hard' && stats.medium.wins < 5) ||
+                  (d.value === 'expert' && stats.hard.wins < 5);
+                const unlockLabel =
+                  d.value === 'medium' ? `${stats.easy.wins}/2 Easy` :
+                  d.value === 'hard' ? `${stats.medium.wins}/5 Medium` :
+                  d.value === 'expert' ? `${stats.hard.wins}/5 Hard` : null;
+                return (
+                  <button
+                    key={d.value}
+                    onClick={() => !locked && setFormDiff(d.value)}
+                    disabled={locked}
+                    className={[
+                      'flex flex-col items-start gap-1 p-4 rounded-xl border transition-all text-left',
+                      locked
+                        ? 'bg-zinc-900/40 border-zinc-800/40 text-zinc-600 cursor-not-allowed opacity-60'
+                        : formDiff === d.value
+                          ? 'bg-indigo-950/60 border-indigo-700/60 text-indigo-200'
+                          : 'bg-zinc-800/40 border-zinc-700/40 text-zinc-400 hover:border-zinc-600 hover:text-zinc-300',
+                    ].join(' ')}
+                  >
+                    <span className="text-sm font-bold flex items-center gap-1.5">
+                      {locked && <span>🔒</span>}
+                      {d.label}
+                    </span>
+                    {locked && unlockLabel
+                      ? <span className="text-[10px] text-zinc-500">{unlockLabel}</span>
+                      : <span className="text-xs opacity-70">{d.sub}</span>}
+                  </button>
+                );
+              })}
             </div>
 
             <button

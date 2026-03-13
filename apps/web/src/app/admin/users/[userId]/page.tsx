@@ -121,15 +121,15 @@ export default function AdminUserDetailPage() {
 
       {/* Stats */}
       <Section title={t('admin.users.stats')}>
-        {stats ? (
-          <div className="grid grid-cols-3 gap-3 text-xs">
-            <div><span className="text-zinc-500">{t('admin.users.plays')}: </span><span className="text-zinc-200">{stats.plays_total}</span></div>
-            <div><span className="text-zinc-500">{t('admin.users.wins')}: </span><span className="text-zinc-200">{stats.wins_total}</span></div>
-            <div><span className="text-zinc-500">{t('admin.users.invites')}: </span><span className="text-zinc-200">{stats.invites_total}</span></div>
-          </div>
-        ) : (
-          <p className="text-xs text-zinc-600">{t('admin.users.noStats')}</p>
-        )}
+        <StatsManager
+          stats={stats}
+          actionLoading={actionLoading}
+          confirm={confirm}
+          t={t}
+          onResetAll={() => doAction({ action: 'reset_stats' }, 'reset_stats_all')}
+          onResetGame={(gameId) => doAction({ action: 'reset_stats_game', gameId }, `reset_stats_${gameId}`)}
+          onCancelConfirm={() => setConfirm(null)}
+        />
       </Section>
 
       {/* Progression */}
@@ -178,12 +178,6 @@ export default function AdminUserDetailPage() {
       {/* Account Actions */}
       <Section title={t('admin.users.actions')}>
         <div className="flex flex-wrap gap-2">
-          <ActionButton
-            label={t('admin.actions.resetStats')} variant="danger"
-            loading={actionLoading === 'reset_stats'} confirming={confirm === 'reset_stats'}
-            onClick={() => doAction({ action: 'reset_stats' }, 'reset_stats')}
-            onCancel={() => setConfirm(null)}
-          />
           {profile.suspended_at ? (
             <ActionButton
               label={t('admin.actions.unsuspend')} variant="success"
@@ -699,6 +693,132 @@ function ProgressionManager({
       {!progression && (
         <p className="text-[10px] text-zinc-600 italic">{t('admin.progression.noData')}</p>
       )}
+    </div>
+  );
+}
+
+// ── Stats Manager ────────────────────────────────────────────────────────────
+
+const GAME_LABELS: Record<string, string> = {
+  tictactoe: 'Tic-Tac-Toe',
+  connect4: 'Connect 4',
+  rps: 'Rock Paper Scissors',
+  chess: 'Chess',
+  battleship: 'Battleship',
+  liarsbar: "Liar's Deck",
+  curvefever: 'Curve Fever',
+  uno: 'UNO',
+};
+
+function StatsManager({ stats, actionLoading, confirm, t, onResetAll, onResetGame, onCancelConfirm }: {
+  stats: UserDetail['stats'];
+  actionLoading: string | null;
+  confirm: string | null;
+  t: (key: string) => string;
+  onResetAll: () => void;
+  onResetGame: (gameId: string) => void;
+  onCancelConfirm: () => void;
+}) {
+  if (!stats) return <p className="text-xs text-zinc-600">{t('admin.users.noStats')}</p>;
+
+  const playsByGame = stats.plays_by_game ?? {};
+  const winsByGame = stats.wins_by_game ?? {};
+  const gameIds = [...new Set([...Object.keys(playsByGame), ...Object.keys(winsByGame)])].sort();
+
+  return (
+    <div className="space-y-4">
+      {/* Totals */}
+      <div className="grid grid-cols-4 gap-3 text-xs">
+        <div className="bg-zinc-800/50 rounded-md px-3 py-2">
+          <div className="text-zinc-500 text-[10px] uppercase tracking-wider">{t('admin.users.plays')}</div>
+          <div className="text-zinc-100 font-semibold text-sm">{stats.plays_total}</div>
+        </div>
+        <div className="bg-zinc-800/50 rounded-md px-3 py-2">
+          <div className="text-zinc-500 text-[10px] uppercase tracking-wider">{t('admin.users.wins')}</div>
+          <div className="text-zinc-100 font-semibold text-sm">{stats.wins_total}</div>
+        </div>
+        <div className="bg-zinc-800/50 rounded-md px-3 py-2">
+          <div className="text-zinc-500 text-[10px] uppercase tracking-wider">Winrate</div>
+          <div className="text-zinc-100 font-semibold text-sm">
+            {stats.plays_total > 0 ? `${Math.round((stats.wins_total / stats.plays_total) * 100)}%` : '—'}
+          </div>
+        </div>
+        <div className="bg-zinc-800/50 rounded-md px-3 py-2">
+          <div className="text-zinc-500 text-[10px] uppercase tracking-wider">{t('admin.users.invites')}</div>
+          <div className="text-zinc-100 font-semibold text-sm">{stats.invites_total}</div>
+        </div>
+      </div>
+
+      {/* Per-game breakdown */}
+      {gameIds.length > 0 && (
+        <div>
+          <div className="text-[10px] uppercase tracking-wider text-zinc-500 mb-2">Per Game</div>
+          <div className="border border-zinc-800 rounded-md overflow-hidden">
+            <table className="w-full text-xs">
+              <thead>
+                <tr className="bg-zinc-800/50 text-zinc-500">
+                  <th className="text-left px-3 py-1.5 font-medium">Spiel</th>
+                  <th className="text-right px-3 py-1.5 font-medium">{t('admin.users.plays')}</th>
+                  <th className="text-right px-3 py-1.5 font-medium">{t('admin.users.wins')}</th>
+                  <th className="text-right px-3 py-1.5 font-medium">Niederlagen</th>
+                  <th className="text-right px-3 py-1.5 font-medium">Winrate</th>
+                  <th className="text-right px-3 py-1.5 font-medium"></th>
+                </tr>
+              </thead>
+              <tbody>
+                {gameIds.map((gid) => {
+                  const plays = playsByGame[gid] ?? 0;
+                  const wins = winsByGame[gid] ?? 0;
+                  const losses = plays - wins;
+                  const wr = plays > 0 ? Math.round((wins / plays) * 100) : 0;
+                  const key = `reset_stats_${gid}`;
+                  const isConfirming = confirm === key;
+                  const isLoading = actionLoading === key;
+                  return (
+                    <tr key={gid} className="border-t border-zinc-800/60 hover:bg-zinc-800/20">
+                      <td className="px-3 py-1.5 text-zinc-200 font-medium">{GAME_LABELS[gid] ?? gid}</td>
+                      <td className="px-3 py-1.5 text-right text-zinc-300 tabular-nums">{plays}</td>
+                      <td className="px-3 py-1.5 text-right text-emerald-400 tabular-nums">{wins}</td>
+                      <td className="px-3 py-1.5 text-right text-rose-400 tabular-nums">{losses}</td>
+                      <td className="px-3 py-1.5 text-right text-zinc-400 tabular-nums">{wr}%</td>
+                      <td className="px-3 py-1.5 text-right">
+                        {isConfirming ? (
+                          <span className="inline-flex gap-1">
+                            <button onClick={() => onResetGame(gid)} disabled={isLoading}
+                              className="px-2 py-0.5 rounded text-[10px] font-semibold bg-rose-600 text-white hover:bg-rose-500 disabled:opacity-50 transition-colors">
+                              Reset?
+                            </button>
+                            <button onClick={onCancelConfirm}
+                              className="px-1.5 py-0.5 rounded text-[10px] border border-zinc-700 text-zinc-400 hover:text-zinc-200 transition-colors">
+                              ✕
+                            </button>
+                          </span>
+                        ) : (
+                          <button onClick={() => onResetGame(gid)} disabled={isLoading}
+                            className="px-2 py-0.5 rounded text-[10px] border border-rose-800/60 text-rose-400/70 hover:text-rose-300 hover:border-rose-700 disabled:opacity-50 transition-colors">
+                            Reset
+                          </button>
+                        )}
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
+
+      {/* Reset all button */}
+      <div className="flex items-center gap-2 pt-1">
+        <ActionButton
+          label={t('admin.actions.resetStats')} variant="danger"
+          loading={actionLoading === 'reset_stats_all'} confirming={confirm === 'reset_stats_all'}
+          onClick={onResetAll}
+          onCancel={onCancelConfirm}
+        />
+        <span className="text-[10px] text-zinc-600">Setzt alle Spiele, Siege und Einladungen auf 0</span>
+      </div>
     </div>
   );
 }

@@ -28,10 +28,10 @@ const MAX_PARTICLES = 40;
 type Phase = 'menu' | 'countdown' | 'playing' | 'paused' | 'ended';
 type Difficulty = 'easy' | 'medium' | 'hard';
 
-const BOT_CONFIG: Record<Difficulty, { speed: number; offset: number; driftFactor: number }> = {
-  easy:   { speed: 2.5, offset: 50, driftFactor: 0.2 },
-  medium: { speed: 3.5, offset: 30, driftFactor: 0.3 },
-  hard:   { speed: 5.0, offset: 12, driftFactor: 0.5 },
+const BOT_CONFIG: Record<Difficulty, { speed: number; offset: number; driftFactor: number; predict: number; reactionX: number }> = {
+  easy:   { speed: 3.0, offset: 40, driftFactor: 0.25, predict: 0,    reactionX: W * 0.5 },
+  medium: { speed: 5.0, offset: 18, driftFactor: 0.4,  predict: 0.6,  reactionX: W * 0.3 },
+  hard:   { speed: 6.5, offset: 6,  driftFactor: 0.6,  predict: 0.95, reactionX: 0 },
 };
 
 const GAME_KEYS = new Set(['ArrowUp', 'ArrowDown', 'w', 'W', 's', 'S', ' ', 'p', 'P', 'Escape']);
@@ -393,8 +393,22 @@ export function PongGame() {
       }
 
       // ── Bot movement ─────────────────────────────────────────────────
-      const botTarget = g.ballY - PADDLE_H / 2 + g.botTargetOffset;
-      if (g.ballVx > 0) {
+      if (g.ballVx > 0 && g.ballX >= cfg.reactionX) {
+        // Predict where ball will arrive at bot paddle X
+        let targetY = g.ballY;
+        if (cfg.predict > 0) {
+          const botPaddleX = W - PADDLE_OFFSET - PADDLE_W;
+          const dx = botPaddleX - g.ballX;
+          const ticks = dx / Math.max(g.ballVx, 0.1);
+          let predY = g.ballY + g.ballVy * ticks;
+          // Simulate wall bounces
+          while (predY < 0 || predY > H) {
+            if (predY < 0) predY = -predY;
+            if (predY > H) predY = 2 * H - predY;
+          }
+          targetY = g.ballY + (predY - g.ballY) * cfg.predict;
+        }
+        const botTarget = targetY - PADDLE_H / 2 + g.botTargetOffset;
         if (g.botY < botTarget - 2) g.botY = Math.min(H - PADDLE_H, g.botY + cfg.speed);
         else if (g.botY > botTarget + 2) g.botY = Math.max(0, g.botY - cfg.speed);
       } else {

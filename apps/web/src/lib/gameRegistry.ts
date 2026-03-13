@@ -112,7 +112,7 @@ export const webRegistry: Record<GameId, WebGameEntry> = {
       id: 'chess',
       name: 'Chess',
       description: 'Classic strategy game. Outthink your opponent and deliver checkmate.',
-      categories: ['classic', 'strategy', '2 players'],
+      categories: ['classic', 'strategy', '2 players', 'vs bot'],
       version: '1.0.0',
       routeSlug: 'chess',
       minPlayers: 2,

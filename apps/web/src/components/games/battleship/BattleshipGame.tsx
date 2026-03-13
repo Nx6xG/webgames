@@ -3,7 +3,7 @@
 import { useState, useEffect, useMemo, useRef, type CSSProperties } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
-import type { BattleshipState, BattleshipShip, Coord, Orientation, ShipId, BsSlot, ShotRecord, ShipDef, FleetPreset } from 'shared';
+import type { BattleshipState, BattleshipShip, Coord, Orientation, ShipId, BsSlot, ShotRecord, ShipDef, FleetPreset, BoardSize } from 'shared';
 import { BOARD_SIZE, FLEET_PRESETS } from 'shared';
 import { useMultiplayer } from '@/hooks/useMultiplayer';
 import type { GameComponentProps } from '@/lib/gameRegistry';
@@ -48,20 +48,21 @@ function shipCellsFromOrigin(origin: Coord, orientation: Orientation, length: nu
   );
 }
 
-function inBounds(c: Coord): boolean {
-  return c.x >= 0 && c.x < BOARD_SIZE && c.y >= 0 && c.y < BOARD_SIZE;
+function inBounds(c: Coord, size: number = BOARD_SIZE): boolean {
+  return c.x >= 0 && c.x < size && c.y >= 0 && c.y < size;
 }
 
 // ── Board cell builders ───────────────────────────────────────────────────────
 
-/** 100-entry CellView array for the setup grid (own board, placement phase). */
+/** CellView array for the setup grid (own board, placement phase). */
 function buildSetupCells(
   placedShips: BattleshipState['players'][0]['ships'],
   previewCells: Coord[],
   previewValid: boolean,
+  bSize: number = BOARD_SIZE,
 ): CellView[] {
-  return Array.from({ length: BOARD_SIZE * BOARD_SIZE }, (_, idx): CellView => {
-    const coord: Coord = { x: idx % BOARD_SIZE, y: Math.floor(idx / BOARD_SIZE) };
+  return Array.from({ length: bSize * bSize }, (_, idx): CellView => {
+    const coord: Coord = { x: idx % bSize, y: Math.floor(idx / bSize) };
 
     for (const ship of placedShips) {
       if ((ship.cells ?? []).some((c) => coordEq(c, coord))) return 'ship';
@@ -73,10 +74,10 @@ function buildSetupCells(
   });
 }
 
-/** 100-entry CellView array for the player's own board during play. */
-function buildOwnCells(player: BattleshipState['players'][0], oppShots: ShotRecord[] = []): CellView[] {
-  return Array.from({ length: BOARD_SIZE * BOARD_SIZE }, (_, idx): CellView => {
-    const coord: Coord = { x: idx % BOARD_SIZE, y: Math.floor(idx / BOARD_SIZE) };
+/** CellView array for the player's own board during play. */
+function buildOwnCells(player: BattleshipState['players'][0], oppShots: ShotRecord[] = [], bSize: number = BOARD_SIZE): CellView[] {
+  return Array.from({ length: bSize * bSize }, (_, idx): CellView => {
+    const coord: Coord = { x: idx % bSize, y: Math.floor(idx / bSize) };
 
     for (const ship of player.ships) {
       if ((ship.cells ?? []).some((c) => coordEq(c, coord))) {
@@ -107,9 +108,10 @@ function buildOwnCells(player: BattleshipState['players'][0], oppShots: ShotReco
 function buildOppCells(
   myShots: BattleshipState['shotsFired'][0],
   oppShips: BattleshipState['players'][0]['ships'],
+  bSize: number = BOARD_SIZE,
 ): CellView[] {
-  return Array.from({ length: BOARD_SIZE * BOARD_SIZE }, (_, idx): CellView => {
-    const coord: Coord = { x: idx % BOARD_SIZE, y: Math.floor(idx / BOARD_SIZE) };
+  return Array.from({ length: bSize * bSize }, (_, idx): CellView => {
+    const coord: Coord = { x: idx % bSize, y: Math.floor(idx / bSize) };
 
     // 1. Ship-cell reveal: if cells are present (server sends them after sinking,
     //    or for ALL ships after the game finishes).
@@ -187,7 +189,7 @@ interface ShipSegmentInfo {
  * a ship with known positions (cells present).  Ships without cells are skipped
  * (projected opponent ships that are not yet sunk).
  */
-function buildSegmentMap(ships: BattleshipShip[]): Map<number, ShipSegmentInfo> {
+function buildSegmentMap(ships: BattleshipShip[], bSize: number = BOARD_SIZE): Map<number, ShipSegmentInfo> {
   const map = new Map<number, ShipSegmentInfo>();
   for (const ship of ships) {
     const cells = ship.cells;
@@ -198,7 +200,7 @@ function buildSegmentMap(ships: BattleshipShip[]): Map<number, ShipSegmentInfo> 
     const len = sorted.length;
     for (let i = 0; i < len; i++) {
       const coord = sorted[i];
-      const cellIdx = coord.y * BOARD_SIZE + coord.x;
+      const cellIdx = coord.y * bSize + coord.x;
       let segment: ShipSegmentInfo['segment'];
       if (len === 1) segment = 'single';
       else if (i === 0) segment = 'bow';
@@ -387,10 +389,12 @@ interface BsGridProps {
   popCoord?:      Coord | null;
   /** Set of "x,y" keys whose cells should play the sunk-pulse glow animation. */
   sunkPulseKeys?: Set<string>;
+  /** Dynamic board size (cells per side). */
+  boardSize?:     number;
 }
 
-function BsGrid({ cells, onCell, onHover, disabled, hoverCoord, cellSize = 28, label, segments, targeting, popCoord, sunkPulseKeys }: BsGridProps) {
-  const boardPx = BOARD_SIZE * cellSize + (BOARD_SIZE - 1) * 2; // cells + 2px gaps
+function BsGrid({ cells, onCell, onHover, disabled, hoverCoord, cellSize = 28, label, segments, targeting, popCoord, sunkPulseKeys, boardSize = BOARD_SIZE }: BsGridProps) {
+  const boardPx = boardSize * cellSize + (boardSize - 1) * 2; // cells + 2px gaps
 
   return (
     <div className="flex flex-col items-center gap-1.5">
@@ -404,14 +408,14 @@ function BsGrid({ cells, onCell, onHover, disabled, hoverCoord, cellSize = 28, l
         <div
           style={{
             display: 'grid',
-            gridTemplateColumns: `repeat(${BOARD_SIZE}, ${cellSize}px)`,
+            gridTemplateColumns: `repeat(${boardSize}, ${cellSize}px)`,
             gap: '2px',
             userSelect: 'none',
           }}
         >
           {cells.map((view, idx) => {
-            const x = idx % BOARD_SIZE;
-            const y = Math.floor(idx / BOARD_SIZE);
+            const x = idx % boardSize;
+            const y = Math.floor(idx / boardSize);
             const coord: Coord = { x, y };
             const isHovered   = hoverCoord ? coordEq(hoverCoord, coord) : false;
             const canClick    = !disabled && (view === 'empty' || view === 'preview-ok' || view === 'preview-bad');
@@ -526,6 +530,7 @@ interface ShipRosterProps {
   orientation:   Orientation;
   onRotate:      () => void;
   onReset:       () => void;
+  onAutoPlace:   () => void;
   onReady:       () => void;
   canReady:      boolean;
   isReady:       boolean;
@@ -534,7 +539,7 @@ interface ShipRosterProps {
   t:             (k: string) => string;
 }
 
-function ShipRoster({ shipDefs, placedIds, activeShipId, onSelect, orientation, onRotate, onReset, onReady, canReady, isReady, oppReady, disabled, t }: ShipRosterProps) {
+function ShipRoster({ shipDefs, placedIds, activeShipId, onSelect, orientation, onRotate, onReset, onAutoPlace, onReady, canReady, isReady, oppReady, disabled, t }: ShipRosterProps) {
   const allPlaced = placedIds.size >= shipDefs.length;
 
   return (
@@ -605,6 +610,13 @@ function ShipRoster({ shipDefs, placedIds, activeShipId, onSelect, orientation, 
               {t('battleship.setup.reset')}
             </button>
           </div>
+          <button
+            onClick={onAutoPlace}
+            disabled={disabled}
+            className="w-full py-1.5 text-xs rounded-lg border border-zinc-700 bg-zinc-800 hover:bg-zinc-700 text-amber-400 disabled:opacity-40 transition-colors"
+          >
+            {t('battleship.setup.autoPlace')}
+          </button>
           <p className="text-[10px] text-zinc-600 text-center mt-0.5">
             {t('battleship.setup.rotateHint')}
           </p>
@@ -657,6 +669,10 @@ export function BattleshipGame({ wsUrl, gameId, initialRoomCode, quickPlay: isQu
   const [roomVisibility,  setRoomVisibility]   = useState<'private' | 'public'>('private');
   const [roomName,        setRoomName]         = useState('');
   const [fleetPreset,     setFleetPreset]      = useState<string>('random');
+  const [boardSizeCfg,    setBoardSizeCfg]     = useState<BoardSize>(10);
+  const [salvoModeCfg,    setSalvoModeCfg]     = useState(false);
+  const [shotTimerCfg,    setShotTimerCfg]     = useState(0);
+  const [timerDisplay,    setTimerDisplay]     = useState<number | null>(null);
   const [showInfo,        setShowInfo]         = useState(false);
   const [chatOpen,        setChatOpen]         = useState(false);
   const [unread,          setUnread]           = useState(0);
@@ -762,6 +778,23 @@ export function BattleshipGame({ wsUrl, gameId, initialRoomCode, quickPlay: isQu
 
   const ownShipsLen = gs?.players[myIdx ?? 0]?.ships.length ?? 0;
   const shipDefs: ShipDef[] = gs?.shipDefs ?? [];
+  const bSize = gs?.boardSize ?? 10;
+
+  // ── Shot timer countdown ─────────────────────────────────────────────────
+  useEffect(() => {
+    if (!gs || gs.phase !== 'playing' || !gs.shotTimerSec || !gs.turnStartedAt) {
+      setTimerDisplay(null);
+      return;
+    }
+    const update = () => {
+      const elapsed = Date.now() - gs.turnStartedAt!;
+      const remaining = gs.shotTimerSec * 1000 - elapsed;
+      setTimerDisplay(Math.max(0, remaining / 1000));
+    };
+    update();
+    const iv = setInterval(update, 100);
+    return () => clearInterval(iv);
+  }, [gs?.phase, gs?.shotTimerSec, gs?.turnStartedAt]); // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
     if (!gs || myIdx === null || gs.phase !== 'setup') return;
@@ -827,7 +860,7 @@ export function BattleshipGame({ wsUrl, gameId, initialRoomCode, quickPlay: isQu
 
   const isPreviewValid = useMemo((): boolean => {
     if (previewCells.length === 0) return false;
-    if (!previewCells.every(inBounds)) return false;
+    if (!previewCells.every((c) => inBounds(c, bSize))) return false;
     const others = gs?.players[myIdx ?? 0]?.ships.filter((s) => s.id !== activeShipId) ?? [];
     const occupied = others.flatMap((s) => s.cells ?? []);
     return !previewCells.some((c) => occupied.some((o) => coordEq(c, o)));
@@ -944,31 +977,31 @@ export function BattleshipGame({ wsUrl, gameId, initialRoomCode, quickPlay: isQu
 
   // Board cell arrays
   const setupCells = useMemo((): CellView[] => {
-    if (!gs || myIdx === null) return Array(BOARD_SIZE * BOARD_SIZE).fill('empty') as CellView[];
-    return buildSetupCells(gs.players[myIdx].ships, previewCells, isPreviewValid);
-  }, [gs, myIdx, previewCells, isPreviewValid]);
+    if (!gs || myIdx === null) return Array(bSize * bSize).fill('empty') as CellView[];
+    return buildSetupCells(gs.players[myIdx].ships, previewCells, isPreviewValid, bSize);
+  }, [gs, myIdx, previewCells, isPreviewValid, bSize]);
 
   const ownCells = useMemo((): CellView[] => {
-    if (!gs || myIdx === null || oppIdx === null) return Array(BOARD_SIZE * BOARD_SIZE).fill('empty') as CellView[];
-    return buildOwnCells(gs.players[myIdx], gs.shotsFired[oppIdx]);
-  }, [gs, myIdx, oppIdx]);
+    if (!gs || myIdx === null || oppIdx === null) return Array(bSize * bSize).fill('empty') as CellView[];
+    return buildOwnCells(gs.players[myIdx], gs.shotsFired[oppIdx], bSize);
+  }, [gs, myIdx, oppIdx, bSize]);
 
   const oppCells = useMemo((): CellView[] => {
-    if (!gs || myIdx === null || oppIdx === null) return Array(BOARD_SIZE * BOARD_SIZE).fill('empty') as CellView[];
-    return buildOppCells(gs.shotsFired[myIdx], gs.players[oppIdx].ships);
-  }, [gs, myIdx, oppIdx]);
+    if (!gs || myIdx === null || oppIdx === null) return Array(bSize * bSize).fill('empty') as CellView[];
+    return buildOppCells(gs.shotsFired[myIdx], gs.players[oppIdx].ships, bSize);
+  }, [gs, myIdx, oppIdx, bSize]);
 
   // Spectator boards: show shots landing ON each player's grid.
   // specP0Cells = player 1's shots onto player 0's board.
   // specP1Cells = player 0's shots onto player 1's board.
   // (ship cells are always stripped in spectator projection, so no ship positions leak)
   const specP0Cells = useMemo(
-    () => gs ? buildOppCells(gs.shotsFired[1], gs.players[0].ships) : Array(100).fill('empty') as CellView[],
-    [gs],
+    () => gs ? buildOppCells(gs.shotsFired[1], gs.players[0].ships, bSize) : Array(bSize * bSize).fill('empty') as CellView[],
+    [gs, bSize],
   );
   const specP1Cells = useMemo(
-    () => gs ? buildOppCells(gs.shotsFired[0], gs.players[1].ships) : Array(100).fill('empty') as CellView[],
-    [gs],
+    () => gs ? buildOppCells(gs.shotsFired[0], gs.players[1].ships, bSize) : Array(bSize * bSize).fill('empty') as CellView[],
+    [gs, bSize],
   );
 
   // Ship segment maps for hull-texture overlay.
@@ -976,14 +1009,18 @@ export function BattleshipGame({ wsUrl, gameId, initialRoomCode, quickPlay: isQu
   // oppShipSegments: opponent ships — buildSegmentMap skips ships without cells,
   //   so only sunk ships (which have cells revealed by projection) get entries.
   const myShipSegments = useMemo(
-    () => gs && myIdx !== null ? buildSegmentMap(gs.players[myIdx].ships) : new Map<number, ShipSegmentInfo>(),
-    [gs, myIdx], // eslint-disable-line react-hooks/exhaustive-deps
+    () => gs && myIdx !== null ? buildSegmentMap(gs.players[myIdx].ships, bSize) : new Map<number, ShipSegmentInfo>(),
+    [gs, myIdx, bSize], // eslint-disable-line react-hooks/exhaustive-deps
   );
 
   const oppShipSegments = useMemo(
-    () => gs && oppIdx !== null ? buildSegmentMap(gs.players[oppIdx].ships) : new Map<number, ShipSegmentInfo>(),
-    [gs, oppIdx], // eslint-disable-line react-hooks/exhaustive-deps
+    () => gs && oppIdx !== null ? buildSegmentMap(gs.players[oppIdx].ships, bSize) : new Map<number, ShipSegmentInfo>(),
+    [gs, oppIdx, bSize], // eslint-disable-line react-hooks/exhaustive-deps
   );
+
+  // Dynamic cell size: scale down for larger boards
+  const setupCellSize = Math.max(18, Math.floor(300 / bSize));
+  const playCellSize  = Math.max(16, Math.floor(280 / bSize));
 
   // ── Handlers ───────────────────────────────────────────────────────────────
 
@@ -1092,17 +1129,39 @@ export function BattleshipGame({ wsUrl, gameId, initialRoomCode, quickPlay: isQu
 
     if (mp.phase === 'ended') return <p className="text-sm text-rose-400 text-center">{t('game.status.opponentDisconnected')}</p>;
 
+    // Timer badge helper
+    const timerBadge = timerDisplay !== null && gs.shotTimerSec > 0 ? (
+      <span className={`ml-2 font-mono text-xs px-1.5 py-0.5 rounded ${
+        timerDisplay <= 3 ? 'text-rose-300 bg-rose-950/70' :
+        timerDisplay <= 5 ? 'text-amber-300 bg-amber-950/70' :
+        'text-zinc-300 bg-zinc-800/70'
+      }`}>
+        {timerDisplay.toFixed(1)}s
+      </span>
+    ) : null;
+
+    // Salvo badge helper
+    const salvoBadge = gs.salvoMode && gs.phase === 'playing' ? (
+      <span className="ml-2 text-xs text-zinc-400 bg-zinc-800/70 rounded px-1.5 py-0.5">
+        {t('battleship.play.salvoShots')}: {gs.salvoShotsRemaining}/{gs.salvoTotal}
+      </span>
+    ) : null;
+
     if (isMyTurn) return (
-      <div className="flex items-center gap-2 text-indigo-200 text-sm justify-center font-semibold px-4 py-1.5 rounded-lg bg-indigo-950/60 border border-indigo-700/50">
+      <div className="flex items-center gap-2 text-indigo-200 text-sm justify-center font-semibold px-4 py-1.5 rounded-lg bg-indigo-950/60 border border-indigo-700/50 flex-wrap">
         <span className="w-2 h-2 rounded-full animate-pulse bg-indigo-400 shrink-0" />
         {t('battleship.play.yourTurn')}
+        {salvoBadge}
+        {timerBadge}
       </div>
     );
 
     return (
-      <div className="flex items-center gap-2 text-zinc-400 text-sm justify-center">
+      <div className="flex items-center gap-2 text-zinc-400 text-sm justify-center flex-wrap">
         <span className="w-2 h-2 rounded-full animate-pulse bg-zinc-400" />
         {oppNick}{t('game.status.turnSuffix')}
+        {salvoBadge}
+        {timerBadge}
       </div>
     );
   }
@@ -1499,8 +1558,9 @@ export function BattleshipGame({ wsUrl, gameId, initialRoomCode, quickPlay: isQu
                 onHover={setHoverCoord}
                 disabled={isMyReady}
                 hoverCoord={isMyReady ? null : hoverCoord}
-                cellSize={30}
+                cellSize={setupCellSize}
                 segments={myShipSegments}
+                boardSize={bSize}
               />
               {placeError && (
                 <div className="text-xs text-rose-300 bg-rose-950/60 border border-rose-800/60 rounded-lg px-3 py-1.5 w-full text-center">
@@ -1516,6 +1576,7 @@ export function BattleshipGame({ wsUrl, gameId, initialRoomCode, quickPlay: isQu
               orientation={orientation}
               onRotate={() => setOrientation((o) => (o === 'H' ? 'V' : 'H'))}
               onReset={handleReset}
+              onAutoPlace={() => mp.sendAction({ type: 'BS_AUTO_PLACE' })}
               onReady={() => mp.sendAction({ type: 'BS_READY' })}
               canReady={canReady}
               isReady={isMyReady}
@@ -1561,7 +1622,8 @@ export function BattleshipGame({ wsUrl, gameId, initialRoomCode, quickPlay: isQu
                       cells={specP0Cells}
                       label={`${p0nick} ${t('game.room.watching')}`}
                       disabled
-                      cellSize={26}
+                      cellSize={playCellSize}
+                      boardSize={bSize}
                       popCoord={!isFxOnRight && shotFx?.phase === 'impact' ? { x: shotFx.x, y: shotFx.y } : null}
                       sunkPulseKeys={!isFxOnRight ? sunkPulseKeys : undefined}
                     />
@@ -1578,7 +1640,8 @@ export function BattleshipGame({ wsUrl, gameId, initialRoomCode, quickPlay: isQu
                       cells={specP1Cells}
                       label={`${p1nick} ${t('game.room.watching')}`}
                       disabled
-                      cellSize={26}
+                      cellSize={playCellSize}
+                      boardSize={bSize}
                       popCoord={isFxOnRight && shotFx?.phase === 'impact' ? { x: shotFx.x, y: shotFx.y } : null}
                       sunkPulseKeys={isFxOnRight ? sunkPulseKeys : undefined}
                     />
@@ -1597,7 +1660,8 @@ export function BattleshipGame({ wsUrl, gameId, initialRoomCode, quickPlay: isQu
                     <BsGrid
                       cells={ownCells}
                       disabled
-                      cellSize={26}
+                      cellSize={playCellSize}
+                      boardSize={bSize}
                       label={t('battleship.play.yourBoard')}
                       segments={myShipSegments}
                       popCoord={!isFxOnRight && shotFx?.phase === 'impact' ? { x: shotFx.x, y: shotFx.y } : null}
@@ -1622,7 +1686,8 @@ export function BattleshipGame({ wsUrl, gameId, initialRoomCode, quickPlay: isQu
                       onHover={canFire ? setHoverCoord : undefined}
                       disabled={!canFire}
                       hoverCoord={canFire ? hoverCoord : null}
-                      cellSize={26}
+                      cellSize={playCellSize}
+                      boardSize={bSize}
                       label={t('battleship.play.enemyBoard')}
                       segments={oppShipSegments}
                       targeting={canFire}
@@ -1725,11 +1790,30 @@ export function BattleshipGame({ wsUrl, gameId, initialRoomCode, quickPlay: isQu
                 className="bg-zinc-800 border border-zinc-700 rounded-lg px-3 py-2 text-sm text-zinc-100 placeholder-zinc-500 focus:outline-none focus:border-indigo-500"
               />
             )}
+            {/* Board size selector */}
+            <div className="flex flex-col gap-1.5">
+              <p className="text-[11px] text-zinc-500 font-semibold uppercase tracking-wider">{t('battleship.config.boardSize')}</p>
+              <div className="grid grid-cols-3 gap-1">
+                {([8, 10, 12] as const).map((sz) => (
+                  <button
+                    key={sz}
+                    onClick={() => setBoardSizeCfg(sz)}
+                    className={`py-1.5 px-1 text-[11px] rounded-md font-medium transition-colors border ${
+                      boardSizeCfg === sz
+                        ? 'border-indigo-500 bg-indigo-900/40 text-indigo-300'
+                        : 'border-zinc-700 bg-transparent text-zinc-500 hover:border-zinc-500 hover:text-zinc-300'
+                    }`}
+                  >
+                    {t(`battleship.config.boardSize.${sz}`)}
+                  </button>
+                ))}
+              </div>
+            </div>
             {/* Fleet preset selector */}
             <div className="flex flex-col gap-1.5">
               <p className="text-[11px] text-zinc-500 font-semibold uppercase tracking-wider">{t('battleship.lobby.fleetPreset')}</p>
               <div className="grid grid-cols-3 gap-1">
-                {[{ id: 'random', shipCount: 0 }, ...FLEET_PRESETS].map((p) => (
+                {[{ id: 'random', ships: [] as readonly { id: string; name: string; length: number }[] }, ...FLEET_PRESETS].map((p) => (
                   <button
                     key={p.id}
                     onClick={() => setFleetPreset(p.id)}
@@ -1743,9 +1827,65 @@ export function BattleshipGame({ wsUrl, gameId, initialRoomCode, quickPlay: isQu
                   </button>
                 ))}
               </div>
+              {/* Fleet preview for selected preset */}
+              {(() => {
+                const preset = fleetPreset === 'random' ? null : FLEET_PRESETS.find((p) => p.id === fleetPreset);
+                if (!preset) return (
+                  <p className="text-[10px] text-zinc-600 italic">{t('battleship.fleet.randomHint')}</p>
+                );
+                return (
+                  <div className="flex flex-col gap-0.5">
+                    {preset.ships.map((ship) => {
+                      const baseKey = ship.id.replace(/\d+$/, '');
+                      return (
+                        <div key={ship.id} className="flex items-center gap-1.5">
+                          <div className="flex gap-px">
+                            {Array.from({ length: ship.length }, (_, i) => (
+                              <span key={i} className="w-2.5 h-2.5 rounded-[2px] bg-indigo-500/60 border border-indigo-400/30" />
+                            ))}
+                          </div>
+                          <span className="text-[10px] text-zinc-500">{t(`battleship.ship.${baseKey}`)}</span>
+                        </div>
+                      );
+                    })}
+                  </div>
+                );
+              })()}
+            </div>
+            {/* Salvo mode toggle */}
+            <div className="flex flex-col gap-1">
+              <label className="flex items-center gap-2 cursor-pointer">
+                <button
+                  onClick={() => setSalvoModeCfg((v) => !v)}
+                  className={`relative w-9 h-5 rounded-full transition-colors ${salvoModeCfg ? 'bg-indigo-600' : 'bg-zinc-700'}`}
+                >
+                  <span className={`absolute top-0.5 left-0.5 w-4 h-4 rounded-full bg-white transition-transform ${salvoModeCfg ? 'translate-x-4' : ''}`} />
+                </button>
+                <span className="text-[11px] text-zinc-300 font-semibold uppercase tracking-wider">{t('battleship.config.salvo')}</span>
+              </label>
+              <p className="text-[10px] text-zinc-600 pl-11">{t('battleship.config.salvoDesc')}</p>
+            </div>
+            {/* Shot timer selector */}
+            <div className="flex flex-col gap-1.5">
+              <p className="text-[11px] text-zinc-500 font-semibold uppercase tracking-wider">{t('battleship.config.timer')}</p>
+              <div className="grid grid-cols-4 gap-1">
+                {([0, 15, 30, 60] as const).map((sec) => (
+                  <button
+                    key={sec}
+                    onClick={() => setShotTimerCfg(sec)}
+                    className={`py-1.5 px-1 text-[11px] rounded-md font-medium transition-colors border ${
+                      shotTimerCfg === sec
+                        ? 'border-indigo-500 bg-indigo-900/40 text-indigo-300'
+                        : 'border-zinc-700 bg-transparent text-zinc-500 hover:border-zinc-500 hover:text-zinc-300'
+                    }`}
+                  >
+                    {sec === 0 ? t('battleship.config.timer.off') : `${sec}s`}
+                  </button>
+                ))}
+              </div>
             </div>
             <button
-              onClick={() => mp.createRoom({ visibility: roomVisibility, roomName: roomName.trim() || undefined, battleshipConfig: { fleetPreset } })}
+              onClick={() => mp.createRoom({ visibility: roomVisibility, roomName: roomName.trim() || undefined, battleshipConfig: { fleetPreset, boardSize: boardSizeCfg, salvoMode: salvoModeCfg, shotTimerSec: shotTimerCfg } })}
               disabled={mp.connection !== 'connected'}
               className="w-full py-2.5 rounded-lg bg-indigo-600 hover:bg-indigo-500 disabled:opacity-40 disabled:cursor-not-allowed text-white font-semibold text-sm transition-colors"
             >

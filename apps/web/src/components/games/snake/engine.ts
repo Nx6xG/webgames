@@ -1,13 +1,18 @@
-import type { Coord, Direction, GameState } from './types';
+import type { Coord, Direction, GameState, GridSize, SnakeMode } from './types';
 
-export const GRID_SIZE = 20;
 export const TICK_MS   = 160;
+
+export const GRID_SIZES: Record<GridSize, number> = {
+  small:  12,
+  medium: 20,
+  large:  28,
+};
 
 // ── Public API ────────────────────────────────────────────────────────────────
 
 /** Returns a fresh GameState with a 3-segment snake in the centre moving right. */
-export function createInitialState(best = 0): GameState {
-  const mid = Math.floor(GRID_SIZE / 2);
+export function createInitialState(best = 0, gridSize = 20, mode: SnakeMode = 'classic'): GameState {
+  const mid = Math.floor(gridSize / 2);
   const snake: Coord[] = [
     { x: mid,     y: mid },
     { x: mid - 1, y: mid },
@@ -17,11 +22,13 @@ export function createInitialState(best = 0): GameState {
     snake,
     direction:     'right',
     nextDirection: 'right',
-    food:          spawnFood(snake),
+    food:          spawnFood(snake, gridSize),
     score:         0,
     best,
     moves:         0,
     status:        'playing',
+    mode,
+    gridSize,
   };
 }
 
@@ -34,13 +41,18 @@ export function step(state: GameState): GameState {
 
   const dir     = state.nextDirection;
   const newHead = advance(state.snake[0], dir);
+  const gs      = state.gridSize;
 
-  // Wall collision
-  if (
-    newHead.x < 0 || newHead.x >= GRID_SIZE ||
-    newHead.y < 0 || newHead.y >= GRID_SIZE
-  ) {
-    return { ...state, direction: dir, status: 'over', moves: state.moves + 1 };
+  // Wall collision / wrap
+  if (newHead.x < 0 || newHead.x >= gs || newHead.y < 0 || newHead.y >= gs) {
+    if (state.mode === 'no_walls') {
+      // Wrap around
+      newHead.x = (newHead.x + gs) % gs;
+      newHead.y = (newHead.y + gs) % gs;
+    } else {
+      // classic & speed: game over
+      return { ...state, direction: dir, status: 'over', moves: state.moves + 1 };
+    }
   }
 
   // Self collision (skip the tail tip — it will vacate before we land)
@@ -62,11 +74,13 @@ export function step(state: GameState): GameState {
     snake:         newSnake,
     direction:     dir,
     nextDirection: dir,
-    food:          ateFood ? spawnFood(newSnake) : state.food,
+    food:          ateFood ? spawnFood(newSnake, gs) : state.food,
     score:         newScore,
     best:          Math.max(state.best, newScore),
     moves:         state.moves + 1,
     status:        'playing',
+    mode:          state.mode,
+    gridSize:      gs,
   };
 }
 
@@ -96,11 +110,11 @@ function advance(pos: Coord, dir: Direction): Coord {
   }
 }
 
-function spawnFood(snake: Coord[]): Coord {
+function spawnFood(snake: Coord[], gridSize: number): Coord {
   const occupied = new Set(snake.map(s => `${s.x},${s.y}`));
   const free: Coord[] = [];
-  for (let y = 0; y < GRID_SIZE; y++)
-    for (let x = 0; x < GRID_SIZE; x++)
+  for (let y = 0; y < gridSize; y++)
+    for (let x = 0; x < gridSize; x++)
       if (!occupied.has(`${x},${y}`)) free.push({ x, y });
 
   // Extremely unlikely (board full = you won), fall back to head position

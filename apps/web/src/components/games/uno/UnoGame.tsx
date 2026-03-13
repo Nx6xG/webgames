@@ -480,17 +480,18 @@ function OpponentZone({
 
 // ── Draw Pile Stack ─────────────────────────────────────────────────────────
 
-function DrawPileStack({ compact, isMyTurn, onClick }: { compact: boolean; isMyTurn: boolean; onClick: () => void }) {
+function DrawPileStack({ compact, isMyTurn, canDraw = true, onClick }: { compact: boolean; isMyTurn: boolean; canDraw?: boolean; onClick: () => void }) {
   const w = compact ? 62 : 76;
   const h = compact ? 92 : 112;
   const r = compact ? 10 : 12;
+  const enabled = isMyTurn && canDraw;
 
   return (
     <button
       onClick={onClick}
-      disabled={!isMyTurn}
-      className={`relative group transition-all duration-200 ${isMyTurn ? 'cursor-pointer' : 'cursor-not-allowed'}`}
-      style={{ opacity: isMyTurn ? 1 : 0.4 }}
+      disabled={!enabled}
+      className={`relative group transition-all duration-200 ${enabled ? 'cursor-pointer' : 'cursor-not-allowed'}`}
+      style={{ opacity: enabled ? 1 : 0.4 }}
     >
       {/* Stack layers */}
       {[3, 2, 1].map((layer) => (
@@ -512,7 +513,7 @@ function DrawPileStack({ compact, isMyTurn, onClick }: { compact: boolean; isMyT
       {/* Top card */}
       <div
         className={`relative overflow-hidden flex items-center justify-center transition-all duration-200 ${
-          isMyTurn ? 'group-hover:scale-[1.04] group-hover:-translate-y-1 group-active:scale-[0.98]' : ''
+          enabled ? 'group-hover:scale-[1.04] group-hover:-translate-y-1 group-active:scale-[0.98]' : ''
         }`}
         style={{
           width: w,
@@ -625,6 +626,8 @@ export function UnoGame({ wsUrl, gameId, initialRoomCode, quickPlay: isQuickPlay
   const [allowDraw2OnDraw4, setAllowDraw2OnDraw4] = useState(UNO_DEFAULT_RULES.allowDraw2OnDraw4);
   const [allowDraw4OnDraw2, setAllowDraw4OnDraw2] = useState(UNO_DEFAULT_RULES.allowDraw4OnDraw2);
   const [playDrawnCard, setPlayDrawnCard] = useState(UNO_DEFAULT_RULES.playDrawnCardImmediately);
+  const [drawUntilPlayable, setDrawUntilPlayable] = useState(UNO_DEFAULT_RULES.drawUntilPlayable);
+  const [forcedPlay, setForcedPlay] = useState(UNO_DEFAULT_RULES.forcedPlay);
   const autoJoined = useRef(false);
 
   // ── Game UI state ─────────────────────────────────────────────────────────
@@ -1056,7 +1059,7 @@ export function UnoGame({ wsUrl, gameId, initialRoomCode, quickPlay: isQuickPlay
                         {t('uno.pass')}
                       </button>
                     ) : (
-                      <DrawPileStack compact={compact} isMyTurn={isMyTurn} onClick={handleDraw} />
+                      <DrawPileStack compact={compact} isMyTurn={isMyTurn} canDraw={!gs.rules.forcedPlay || gs.mustDraw || gs.pendingDraw > 0} onClick={handleDraw} />
                     )}
                     <span
                       className="font-semibold uppercase tracking-wider"
@@ -1550,6 +1553,8 @@ export function UnoGame({ wsUrl, gameId, initialRoomCode, quickPlay: isQuickPlay
                   [allowDraw4OnDraw2, setAllowDraw4OnDraw2, 'uno.rules.allowDraw4OnDraw2'] as const,
                   [allowDraw2OnDraw4, setAllowDraw2OnDraw4, 'uno.rules.allowDraw2OnDraw4'] as const,
                   [playDrawnCard, setPlayDrawnCard, 'uno.rules.playDrawnCard'] as const,
+                  [drawUntilPlayable, setDrawUntilPlayable, 'uno.rules.drawUntilPlayable'] as const,
+                  [forcedPlay, setForcedPlay, 'uno.rules.forcedPlay'] as const,
                 ]).map(([val, setter, key]) => (
                   <label key={key} className="flex items-center justify-between cursor-pointer group">
                     <span className="text-xs text-zinc-300 group-hover:text-zinc-100 transition-colors select-none">{t(key)}</span>
@@ -1584,7 +1589,7 @@ export function UnoGame({ wsUrl, gameId, initialRoomCode, quickPlay: isQuickPlay
               </div>
 
               <button
-                onClick={() => mp.createRoom({ visibility: roomVisibility, roomName: roomName.trim() || undefined, maxPlayers, unoConfig: { targetScore, stackDraw2, stackDraw4, allowDraw2OnDraw4, allowDraw4OnDraw2, playDrawnCardImmediately: playDrawnCard } })}
+                onClick={() => mp.createRoom({ visibility: roomVisibility, roomName: roomName.trim() || undefined, maxPlayers, unoConfig: { targetScore, stackDraw2, stackDraw4, allowDraw2OnDraw4, allowDraw4OnDraw2, playDrawnCardImmediately: playDrawnCard, drawUntilPlayable, forcedPlay } })}
                 className="w-full py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white font-bold transition-colors cursor-pointer active:scale-[0.98]"
               >
                 {t('game.lobby.createRoom')}

@@ -253,14 +253,30 @@ export function TetrisGame() {
         case 'ArrowRight': dispatch({ type: 'moveRight' }); break;
         case 'ArrowDown':  dispatch({ type: 'softDrop' }); break;
         case ' ':          dispatch({ type: 'hardDrop' }); break;
-        case 'z': case 'Z': dispatch({ type: 'rotateCCW' }); break;
-        case 'x': case 'X': case 'ArrowUp': dispatch({ type: 'rotateCW' }); break;
+        case 'z': case 'Z': case 'q': case 'Q': dispatch({ type: 'rotateCCW' }); break;
+        case 'x': case 'X': case 'e': case 'E': case 'ArrowUp': dispatch({ type: 'rotateCW' }); break;
         case 'c': case 'C': dispatch({ type: 'hold' }); break;
         case 'p': case 'P': dispatch({ type: 'togglePause' }); break;
       }
     }
     window.addEventListener('keydown', handleKey);
     return () => window.removeEventListener('keydown', handleKey);
+  }, [dispatch]);
+
+  // ── Mouse wheel rotation ───────────────────────────────────────────────────
+
+  const boardRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    const el = boardRef.current;
+    if (!el) return;
+    function handleWheel(e: WheelEvent) {
+      e.preventDefault();
+      if (e.deltaY < 0) dispatch({ type: 'rotateCW' });
+      else if (e.deltaY > 0) dispatch({ type: 'rotateCCW' });
+    }
+    el.addEventListener('wheel', handleWheel, { passive: false });
+    return () => el.removeEventListener('wheel', handleWheel);
   }, [dispatch]);
 
   // ── Handlers ────────────────────────────────────────────────────────────────
@@ -309,7 +325,7 @@ export function TetrisGame() {
           </div>
 
           {/* Board — height-driven, width derived from aspect ratio */}
-          <div className="relative h-full" style={{ aspectRatio: `${BOARD_COLS} / ${BOARD_ROWS}`, maxWidth: '100%' }}>
+          <div ref={boardRef} className="relative h-full" style={{ aspectRatio: `${BOARD_COLS} / ${BOARD_ROWS}`, maxWidth: '100%' }}>
             <div
               className="grid h-full w-full border-2 border-zinc-700 bg-zinc-950 rounded"
               style={{ gridTemplateColumns: `repeat(${BOARD_COLS}, 1fr)` }}

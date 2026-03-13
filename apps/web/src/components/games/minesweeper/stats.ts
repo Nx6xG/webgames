@@ -4,13 +4,16 @@ export interface MinesweeperStats {
   games: number;
   wins: number;
   losses: number;
+  winsEasy: number;
+  winsMedium: number;
+  winsHard: number;
   bestTimeEasy: number | null;
   bestTimeMedium: number | null;
   bestTimeHard: number | null;
 }
 
 export function emptyStats(): MinesweeperStats {
-  return { games: 0, wins: 0, losses: 0, bestTimeEasy: null, bestTimeMedium: null, bestTimeHard: null };
+  return { games: 0, wins: 0, losses: 0, winsEasy: 0, winsMedium: 0, winsHard: 0, bestTimeEasy: null, bestTimeMedium: null, bestTimeHard: null };
 }
 
 export function loadStats(): MinesweeperStats {
@@ -41,6 +44,11 @@ export function updateStats(
   };
 
   if (won) {
+    const winsKey = difficulty === 'easy' ? 'winsEasy'
+      : difficulty === 'medium' ? 'winsMedium'
+      : 'winsHard';
+    next[winsKey] = (next[winsKey] ?? 0) + 1;
+
     const key = difficulty === 'easy' ? 'bestTimeEasy'
       : difficulty === 'medium' ? 'bestTimeMedium'
       : 'bestTimeHard';

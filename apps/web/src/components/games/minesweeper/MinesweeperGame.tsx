@@ -242,7 +242,7 @@ export function MinesweeperGame() {
     if (savedRef.current) return;
     savedRef.current = true;
     setStats((prev) => {
-      const base = prev ?? { games: 0, wins: 0, losses: 0, bestTimeEasy: null, bestTimeMedium: null, bestTimeHard: null };
+      const base = prev ?? { games: 0, wins: 0, losses: 0, winsEasy: 0, winsMedium: 0, winsHard: 0, bestTimeEasy: null, bestTimeMedium: null, bestTimeHard: null };
       const next = updateStats(base, won, diff, timeSec);
       saveStats(next);
       return next;
@@ -424,16 +424,33 @@ export function MinesweeperGame() {
           <div className="flex flex-col gap-3 w-64">
             {(['easy', 'medium', 'hard'] as const).map((d) => {
               const cfg = DIFF_CONFIG[d];
+              const easyWins = stats?.winsEasy ?? 0;
+              const mediumWins = stats?.winsMedium ?? 0;
+              const locked =
+                (d === 'medium' && easyWins < 2) ||
+                (d === 'hard' && mediumWins < 5);
+              const unlockLabel =
+                d === 'medium' ? `🔒 ${easyWins}/2 Easy` :
+                d === 'hard' ? `🔒 ${mediumWins}/5 Medium` : null;
               return (
                 <button
                   key={d}
-                  onClick={() => startGame(d)}
-                  className="flex items-center justify-between px-5 py-3 rounded-lg bg-zinc-800/80 hover:bg-zinc-700/80 border border-zinc-700 hover:border-zinc-600 transition-colors"
+                  onClick={() => !locked && startGame(d)}
+                  disabled={locked}
+                  className={`flex items-center justify-between px-5 py-3 rounded-lg border transition-colors ${
+                    locked
+                      ? 'bg-zinc-900/40 border-zinc-800/40 cursor-not-allowed opacity-60'
+                      : 'bg-zinc-800/80 hover:bg-zinc-700/80 border-zinc-700 hover:border-zinc-600'
+                  }`}
                 >
-                  <span className="font-semibold text-zinc-100">{t(`minesweeper.diff.${d}`)}</span>
-                  <span className="text-xs text-zinc-500 tabular-nums">
-                    {cfg.rows}×{cfg.cols} · {cfg.mines} {t('minesweeper.mines')}
+                  <span className={`font-semibold ${locked ? 'text-zinc-500' : 'text-zinc-100'}`}>
+                    {t(`minesweeper.diff.${d}`)}
                   </span>
+                  {locked && unlockLabel
+                    ? <span className="text-[10px] text-zinc-500">{unlockLabel}</span>
+                    : <span className="text-xs text-zinc-500 tabular-nums">
+                        {cfg.rows}×{cfg.cols} · {cfg.mines} {t('minesweeper.mines')}
+                      </span>}
                 </button>
               );
             })}

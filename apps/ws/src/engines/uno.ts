@@ -354,15 +354,62 @@ export const unoEngine: GameEngine<UnoState, UnoAction> = {
         return s;
       }
 
-      const count = s.pendingDraw > 0 ? s.pendingDraw : 1;
-      drawCards(s, pIdx, count);
-      s.pendingDraw = 0;
-      s.pendingDrawSource = null;
-      s.players[pIdx].calledUno = false;
-      s.lastAction = `${s.players[pIdx].nickname || 'Player'} drew ${count} card${count > 1 ? 's' : ''}`;
+      // Forced play: cannot voluntarily draw if you have a playable card (unless pending draw)
+      if (s.rules.forcedPlay && s.pendingDraw === 0 && hasPlayableCard(s.hands[pIdx], s.topCard, s.chosenColor)) {
+        throw new Error('INVALID_ACTION: You have a playable card and must play it');
+      }
 
-      // playDrawnCardImmediately: if drew exactly 1 card and it's playable, keep turn
-      if (count === 1 && s.rules.playDrawnCardImmediately) {
+      if (s.pendingDraw > 0) {
+        // Penalty draw: draw all pending cards at once
+        const count = s.pendingDraw;
+        drawCards(s, pIdx, count);
+        s.pendingDraw = 0;
+        s.pendingDrawSource = null;
+        s.players[pIdx].calledUno = false;
+        s.lastAction = `${s.players[pIdx].nickname || 'Player'} drew ${count} card${count > 1 ? 's' : ''}`;
+        advanceTurn(s);
+        s.mustDraw = !hasPlayableCard(s.hands[s.turnIndex], s.topCard, s.chosenColor);
+        return s;
+      }
+
+      // Normal draw (no pending)
+      if (s.rules.drawUntilPlayable) {
+        // Draw-to-match: keep drawing until a playable card is found
+        let totalDrawn = 0;
+        let lastPlayable: UnoCard | null = null;
+        while (true) {
+          const beforeLen = s.hands[pIdx].length;
+          drawCards(s, pIdx, 1);
+          if (s.hands[pIdx].length === beforeLen) break; // draw pile exhausted
+          totalDrawn++;
+          const drawn = s.hands[pIdx][s.hands[pIdx].length - 1];
+          if (canPlayCard(drawn, s.topCard, s.chosenColor)) {
+            lastPlayable = drawn;
+            break;
+          }
+        }
+        s.players[pIdx].calledUno = false;
+        s.lastAction = `${s.players[pIdx].nickname || 'Player'} drew ${totalDrawn} card${totalDrawn > 1 ? 's' : ''}`;
+
+        // If the last drawn card is playable and playDrawnCardImmediately is on, offer it
+        if (lastPlayable && s.rules.playDrawnCardImmediately) {
+          s.drawnCardId = lastPlayable.id;
+          s.mustDraw = false;
+          return s;
+        }
+
+        advanceTurn(s);
+        s.mustDraw = !hasPlayableCard(s.hands[s.turnIndex], s.topCard, s.chosenColor);
+        return s;
+      }
+
+      // Standard: draw exactly 1
+      drawCards(s, pIdx, 1);
+      s.players[pIdx].calledUno = false;
+      s.lastAction = `${s.players[pIdx].nickname || 'Player'} drew 1 card`;
+
+      // playDrawnCardImmediately: if drew 1 card and it's playable, keep turn
+      if (s.rules.playDrawnCardImmediately) {
         const drawnCard = s.hands[pIdx][s.hands[pIdx].length - 1];
         if (canPlayCard(drawnCard, s.topCard, s.chosenColor)) {
           s.drawnCardId = drawnCard.id;

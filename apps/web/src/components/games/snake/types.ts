@@ -1,5 +1,8 @@
 export type Direction = 'up' | 'down' | 'left' | 'right';
 
+export type SnakeMode = 'classic' | 'no_walls' | 'speed';
+export type GridSize = 'small' | 'medium' | 'large';
+
 export interface Coord {
   x: number;
   y: number;
@@ -14,6 +17,8 @@ export interface GameState {
   best:          number;
   moves:         number;     // ticks elapsed while playing
   status:        'playing' | 'over';
+  mode:          SnakeMode;
+  gridSize:      number;
 }
 
 export interface SnakeHighscoreEntry {
