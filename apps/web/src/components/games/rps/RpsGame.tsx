@@ -18,6 +18,8 @@ import { RoomInviteButton } from '@/components/social/RoomInviteButton';
 import { useAchievements } from '@/hooks/useAchievements';
 import { SpectatorBanner } from '@/components/ui/SpectatorBanner';
 import { ReconnectBanner } from '@/components/ui/ReconnectBanner';
+import { useRpsBot } from './useRpsBot';
+import type { BotDifficulty } from './botEngine';
 
 const PICKS: RpsPick[] = ['rock', 'paper', 'scissors'];
 
@@ -31,8 +33,39 @@ const BEST_OF_OPTIONS = [3, 5, 7, 9];
 
 export function RpsGame({ wsUrl, gameId, initialRoomCode, quickPlay: isQuickPlay }: GameComponentProps) {
   const router = useRouter();
-  const mp = useMultiplayer<RpsState>(wsUrl, gameId);
+  const mpRaw = useMultiplayer<RpsState>(wsUrl, gameId);
   const { t } = useI18n();
+
+  const [botMode, setBotMode] = useState(false);
+  const [botDifficulty, setBotDifficulty] = useState<BotDifficulty>('medium');
+  const bot = useRpsBot(botDifficulty);
+
+  const mp = botMode ? {
+    ...mpRaw,
+    phase: bot.phase as 'lobby' | 'waiting' | 'playing' | 'ended',
+    gameState: bot.gameState,
+    connection: bot.connection as 'connected',
+    playerIndex: bot.playerIndex,
+    playerCount: bot.playerCount,
+    roomMaxPlayers: bot.roomMaxPlayers,
+    isSpectator: bot.isSpectator,
+    spectatorCount: bot.spectatorCount,
+    roomCode: bot.roomCode,
+    roomReady: bot.roomReady,
+    matchCountdown: null as number | null,
+    players: bot.players,
+    sendAction: bot.sendAction as (action: Record<string, unknown>) => void,
+    leaveRoom: bot.leaveGame,
+    requestRematch: bot.requestRematch,
+    rematchVotes: bot.rematchVotes,
+    myVotedRematch: false,
+    rematchError: null as string | null,
+    roomMessages: [] as typeof mpRaw.roomMessages,
+    globalMessages: [] as typeof mpRaw.globalMessages,
+    error: bot.error,
+    clearError: bot.clearError,
+  } : mpRaw;
+
   const ach = useAchievements('rps', mp.roomCode);
   const [joinInput, setJoinInput]         = useState(initialRoomCode ?? '');
   const [copied, setCopied]               = useState(false);
@@ -479,12 +512,12 @@ export function RpsGame({ wsUrl, gameId, initialRoomCode, quickPlay: isQuickPlay
     <div className="grid gap-6 lg:grid-cols-[1fr_360px] w-full items-start">
       {/* ── Game area ──────────────────────────────────────────────────────── */}
       <div className="relative min-w-0 flex flex-col items-center justify-center gap-6 min-h-[420px]">
-        <CountdownOverlay countdown={mp.matchCountdown} />
+        <CountdownOverlay countdown={botMode ? null : mpRaw.matchCountdown} />
         <WaitingForConnectionOverlay
-          show={mp.phase === 'playing' && !mp.roomReady && !mp.isSpectator}
+          show={!botMode && mp.phase === 'playing' && !mp.roomReady && !mp.isSpectator}
           label={t('game.ready.waiting')}
         />
-        <ReconnectBanner mp={mp} />
+        {!botMode && <ReconnectBanner mp={mpRaw} />}
 
         {/* Score + round info */}
         {gs && mp.phase !== 'lobby' && (
@@ -532,10 +565,10 @@ export function RpsGame({ wsUrl, gameId, initialRoomCode, quickPlay: isQuickPlay
 
         {(mp.phase === 'ended' || mp.phase === 'playing') && (
           <button
-            onClick={mp.leaveRoom}
+            onClick={botMode ? bot.leaveGame : mpRaw.leaveRoom}
             className="mt-2 px-4 py-2 text-sm rounded-lg border border-zinc-700 text-zinc-400 hover:border-zinc-500 hover:text-zinc-200 transition-colors"
           >
-            {t('game.actions.leaveRoom')}
+            {botMode ? t('rps.bot.backToLobby') : t('game.actions.leaveRoom')}
           </button>
         )}
       </div>
@@ -563,8 +596,59 @@ export function RpsGame({ wsUrl, gameId, initialRoomCode, quickPlay: isQuickPlay
           </div>
         )}
 
+        {/* Mode toggle: Online / vs Bot */}
+        {mp.phase === 'lobby' && !isQuickPlay && (
+          <div className="rounded-xl border border-zinc-800 bg-zinc-900 p-4">
+            <div className="flex gap-1 p-1 bg-zinc-800 rounded-lg">
+              <button
+                onClick={() => setBotMode(false)}
+                className={`flex-1 py-1.5 text-xs rounded-md font-medium transition-colors ${!botMode ? 'bg-zinc-700 text-zinc-100' : 'text-zinc-500 hover:text-zinc-300'}`}
+              >
+                Online
+              </button>
+              <button
+                onClick={() => setBotMode(true)}
+                className={`flex-1 py-1.5 text-xs rounded-md font-medium transition-colors ${botMode ? 'bg-zinc-700 text-zinc-100' : 'text-zinc-500 hover:text-zinc-300'}`}
+              >
+                vs Bot
+              </button>
+            </div>
+          </div>
+        )}
+
+        {/* Bot lobby */}
+        {mp.phase === 'lobby' && botMode && !isQuickPlay && (
+          <div className="rounded-xl border border-zinc-800 bg-zinc-900 p-4 flex flex-col gap-3">
+            {/* Difficulty */}
+            <p className="text-xs text-zinc-500 font-semibold uppercase tracking-wider">{t('rps.bot.difficulty')}</p>
+            <div className="flex gap-1 p-1 bg-zinc-800 rounded-lg">
+              {(['easy', 'medium', 'hard'] as BotDifficulty[]).map((d) => (
+                <button
+                  key={d}
+                  onClick={() => setBotDifficulty(d)}
+                  className={`flex-1 py-1.5 text-xs rounded-md font-medium transition-colors ${
+                    botDifficulty === d ? 'bg-zinc-700 text-zinc-100' : 'text-zinc-500 hover:text-zinc-300'
+                  }`}
+                >
+                  {t(`rps.bot.${d}`)}
+                </button>
+              ))}
+            </div>
+
+            {/* Mode selector */}
+            <LobbyModeSelector />
+
+            <button
+              onClick={() => bot.startGame(rpsMode, rpsMode === 'best_of' ? bestOfChoice : 0)}
+              className="w-full py-2.5 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-white font-semibold text-sm transition-colors"
+            >
+              {t('rps.bot.play')}
+            </button>
+          </div>
+        )}
+
         {/* Lobby */}
-        {mp.phase === 'lobby' && isQuickPlay ? (
+        {mp.phase === 'lobby' && !botMode && isQuickPlay ? (
           <div className="rounded-xl border border-zinc-800 bg-zinc-900 p-4 flex flex-col items-center gap-3">
             <div className="flex items-center gap-2 text-amber-400 text-sm">
               <span className="w-2 h-2 rounded-full bg-amber-400 animate-pulse" />
@@ -574,7 +658,7 @@ export function RpsGame({ wsUrl, gameId, initialRoomCode, quickPlay: isQuickPlay
               {t('common.cancel')}
             </Link>
           </div>
-        ) : mp.phase === 'lobby' ? (
+        ) : mp.phase === 'lobby' && !botMode ? (
           <div className="rounded-xl border border-zinc-800 bg-zinc-900 p-4 flex flex-col gap-3">
             {/* Visibility */}
             <div className="flex gap-1 p-1 bg-zinc-800 rounded-lg">
@@ -633,8 +717,16 @@ export function RpsGame({ wsUrl, gameId, initialRoomCode, quickPlay: isQuickPlay
           </div>
         ) : null}
 
+        {/* Bot match info */}
+        {botMode && mp.phase !== 'lobby' && (
+          <div className="rounded-xl border border-zinc-800 bg-zinc-900 p-4 flex flex-col gap-2">
+            <p className="text-xs text-zinc-500 uppercase tracking-wider font-semibold">{t('rps.bot.title')}</p>
+            <span className="text-zinc-400 text-sm">vs Bot ({t(`rps.bot.${botDifficulty}`)})</span>
+          </div>
+        )}
+
         {/* Room info */}
-        {mp.roomCode && (
+        {!botMode && mp.roomCode && (
           <div className="rounded-xl border border-zinc-800 bg-zinc-900 p-4 flex flex-col gap-3">
             <p className="text-xs text-zinc-500 uppercase tracking-wider font-semibold">{t('game.room.title')}</p>
             <div className="flex items-center gap-2">
@@ -695,10 +787,10 @@ export function RpsGame({ wsUrl, gameId, initialRoomCode, quickPlay: isQuickPlay
         )}
 
         {/* Nickname */}
-        <NicknameEditor nickname={mp.myNickname} onSave={mp.setNickname} />
+        {!botMode && <NicknameEditor nickname={mpRaw.myNickname} onSave={mpRaw.setNickname} />}
 
         {/* Chat — collapsible */}
-        <ChatPanel
+        {!botMode && <ChatPanel
           mode="both"
           roomCode={mp.roomCode}
           roomMessages={mp.roomMessages}
@@ -712,7 +804,7 @@ export function RpsGame({ wsUrl, gameId, initialRoomCode, quickPlay: isQuickPlay
           showUnreadBadge
           unreadCount={unread}
           className="rounded-xl border border-zinc-800 bg-zinc-900"
-        />
+        />}
 
         {/* Stats & Rules */}
         <button

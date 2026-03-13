@@ -93,12 +93,20 @@ const PONG_SKINS: { id: string; price: number }[] = [
   { id: 'plasma', price: 200 },
 ];
 
+const TETRIS_SKINS: { id: string; price: number }[] = [
+  { id: 'classic', price: 0 }, { id: 'ocean', price: 15 }, { id: 'sunset', price: 15 },
+  { id: 'forest', price: 25 }, { id: 'candy', price: 30 }, { id: 'mono', price: 40 },
+  { id: 'neon', price: 60 }, { id: 'ice', price: 80 }, { id: 'lava', price: 120 },
+  { id: 'aurora', price: 200 },
+];
+
 const SKIN_GAMES: { gameId: string; nameKeyPrefix: string; skins: { id: string; price: number }[] }[] = [
   { gameId: 'crossyroad', nameKeyPrefix: 'crossyroad.skin', skins: CROSSY_SKINS },
   { gameId: 'snake', nameKeyPrefix: 'snake.skin', skins: SNAKE_SKINS },
   { gameId: 'doodlejump', nameKeyPrefix: 'doodlejump.skin', skins: DOODLE_SKINS },
   { gameId: 'flappy', nameKeyPrefix: 'flappy.skin', skins: FLAPPY_SKINS },
   { gameId: 'pong', nameKeyPrefix: 'pong.skin', skins: PONG_SKINS },
+  { gameId: 'tetris', nameKeyPrefix: 'tetris.skin', skins: TETRIS_SKINS },
 ];
 
 const DIFF_COLORS = {
@@ -1043,6 +1051,7 @@ function GameProgressManager({
           ['doodlejump', 'Doodle Jump'],
           ['flappy', 'Flappy Bird'],
           ['pong', 'Pong'],
+          ['tetris', 'Tetris'],
           ['sudoku', 'Sudoku'],
           ['minesweeper', 'Minesweeper'],
         ].map(([tab, label]) => (

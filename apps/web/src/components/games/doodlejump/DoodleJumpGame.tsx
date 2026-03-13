@@ -1015,7 +1015,7 @@ export function DoodleJumpGame() {
       if (!savedRef.current) {
         savedRef.current = true;
         pb.submit(gs.score);
-        shop.addCoins(gs.score);
+        shop.addCoins(Math.max(1, Math.floor(gs.score / 10)));
       }
 
       // Render one last frame

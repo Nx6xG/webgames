@@ -325,7 +325,7 @@ export function createInitialState(): TetrisState {
     score: 0,
     lines: 0,
     level: 0,
-    status: 'countdown',
+    status: 'menu',
     lastClear: undefined,
   };
 }
@@ -349,9 +349,16 @@ export function reducer(state: TetrisState, action: TetrisAction): TetrisState {
       return s;
     }
 
+    // ── Start game (menu → countdown) ──────────────────────────────────────
+    case 'startGame': {
+      if (s.status === 'menu') return { ...s, status: 'countdown' };
+      return s;
+    }
+
     // ── Restart ─────────────────────────────────────────────────────────────
     case 'restart': {
-      return createInitialState();
+      const fresh = createInitialState();
+      return { ...fresh, status: 'countdown' };
     }
 
     // ── Ignore inputs when game is not running ──────────────────────────────

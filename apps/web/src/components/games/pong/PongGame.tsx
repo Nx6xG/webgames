@@ -28,7 +28,7 @@ const RESET_DELAY = 400;
 const TRAIL_LENGTH = 10;
 const MAX_PARTICLES = 40;
 
-type Phase = 'menu' | 'countdown' | 'playing' | 'paused' | 'ended';
+type Phase = 'menu' | 'countdown' | 'playing' | 'paused' | 'ended' | 'score_countdown';
 type Difficulty = 'easy' | 'medium' | 'hard';
 
 const BOT_CONFIG: Record<Difficulty, { speed: number; offset: number; driftFactor: number; predict: number; reactionX: number }> = {
@@ -98,6 +98,7 @@ export function PongGame() {
   diffRef.current = difficulty;
   const savedRef = useRef(false);
   const rallyRef = useRef(0);
+  const serveDirectionRef = useRef<1 | -1>(1);
 
   // Skin refs for frame-loop access
   const skinColorsRef = useRef(shop.activeSkinDef.colors);
@@ -349,6 +350,34 @@ export function PongGame() {
     return () => clearInterval(interval);
   }, [phase, resetBall]);
 
+  // ── Score countdown (mini countdown between points) ────────────────────
+
+  useEffect(() => {
+    if (phase !== 'score_countdown') return;
+    draw(gameRef.current);
+
+    let step = 2;
+    setCountdownNum(step);
+    sfx.countdownBeep();
+
+    const interval = setInterval(() => {
+      step--;
+      if (step <= 0) {
+        clearInterval(interval);
+        setCountdownNum(0);
+        sfx.countdownGo();
+        resetBall(serveDirectionRef.current);
+        gameRef.current.resetTimer = 0;
+        setPhase('playing');
+      } else {
+        setCountdownNum(step);
+        sfx.countdownBeep();
+      }
+    }, 600);
+
+    return () => clearInterval(interval);
+  }, [phase, resetBall]);
+
   // ── Start / restart game ───────────────────────────────────────────────
 
   const startGame = useCallback(() => {
@@ -571,7 +600,7 @@ export function PongGame() {
         g.bScore++;
         setBotScore(g.bScore);
         scored = true;
-        resetBall(-1);
+        serveDirectionRef.current = -1;
       } else if (g.ballX - BALL_R > W) {
         spawnParticles(W - BALL_R, g.ballY, 12, skinColorsRef.current.particle, 4);
         flashes.push({ x: W, y: g.ballY, age: 0, kind: 'goal', color: skinColorsRef.current.particle });
@@ -581,13 +610,26 @@ export function PongGame() {
         g.pScore++;
         setPlayerScore(g.pScore);
         scored = true;
-        resetBall(1);
+        serveDirectionRef.current = 1;
       }
 
-      if (scored && (g.pScore >= WIN_SCORE || g.bScore >= WIN_SCORE)) {
-        const won = g.pScore >= WIN_SCORE;
-        setWinner(won ? 'player' : 'bot');
-        setPhase('ended');
+      if (scored) {
+        // Park ball at center
+        g.ballX = W / 2;
+        g.ballY = H / 2;
+        g.ballVx = 0;
+        g.ballVy = 0;
+        trailRef.current = [];
+
+        if (g.pScore >= WIN_SCORE || g.bScore >= WIN_SCORE) {
+          const won = g.pScore >= WIN_SCORE;
+          setWinner(won ? 'player' : 'bot');
+          setPhase('ended');
+          draw(g);
+          return;
+        }
+        // Mini countdown before next serve
+        setPhase('score_countdown');
         draw(g);
         return;
       }
@@ -890,7 +932,7 @@ export function PongGame() {
   // ── Draw on static phases ──────────────────────────────────────────────
 
   useEffect(() => {
-    if (phase === 'menu' || phase === 'paused' || phase === 'ended') {
+    if (phase === 'menu' || phase === 'paused' || phase === 'ended' || phase === 'score_countdown') {
       draw(gameRef.current);
     }
   }, [phase]);
@@ -952,7 +994,7 @@ export function PongGame() {
     }
   }, []);
 
-  const isActive = phase === 'playing' || phase === 'paused' || phase === 'countdown';
+  const isActive = phase === 'playing' || phase === 'paused' || phase === 'countdown' || phase === 'score_countdown';
 
   return (
     <div
@@ -1057,7 +1099,7 @@ export function PongGame() {
         )}
 
         {/* Countdown overlay */}
-        {phase === 'countdown' && (
+        {(phase === 'countdown' || phase === 'score_countdown') && (
           <div className="absolute inset-0 flex items-center justify-center rounded-xl pointer-events-none">
             <span
               key={countdownNum}

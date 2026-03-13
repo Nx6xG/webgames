@@ -25,6 +25,9 @@ import { useAuth } from '@/components/providers/AuthProvider';
 import { useNickname } from '@/components/providers/NicknameProvider';
 import * as sfx from './sound';
 import { useVisibilityPause } from '@/hooks/useVisibilityPause';
+import { useSkinShop } from '@/hooks/useSkinShop';
+import { SkinShopOverlay } from '@/components/ui/SkinShopOverlay';
+import type { SkinDef } from '@/lib/skinShop';
 
 // ── Constants ─────────────────────────────────────────────────────────────────
 
@@ -35,34 +38,70 @@ function gravityMs(level: number): number {
   return Math.max(floor, base - level * 50);
 }
 
-/** Piece colour classes by kind-index (1-7). */
-const PIECE_COLOURS: Record<number, string> = {
-  1: 'bg-cyan-400',    // I
-  2: 'bg-yellow-400',  // O
-  3: 'bg-purple-400',  // T
-  4: 'bg-green-400',   // S
-  5: 'bg-red-400',     // Z
-  6: 'bg-blue-400',    // J
-  7: 'bg-orange-400',  // L
-};
+// ── Skin definitions ─────────────────────────────────────────────────────────
 
-const GHOST_COLOURS: Record<number, string> = {
-  1: 'bg-cyan-400/20',
-  2: 'bg-yellow-400/20',
-  3: 'bg-purple-400/20',
-  4: 'bg-green-400/20',
-  5: 'bg-red-400/20',
-  6: 'bg-blue-400/20',
-  7: 'bg-orange-400/20',
-};
+// Each skin defines 7 piece colors (I, O, T, S, Z, J, L) + a board bg
+const TETRIS_SKINS: SkinDef[] = [
+  { id: 'classic', price: 0, nameKey: 'tetris.skin.classic', colors: {
+    I: '#22d3ee', O: '#facc15', T: '#c084fc', S: '#4ade80', Z: '#f87171', J: '#60a5fa', L: '#fb923c',
+    bg: '#09090b', border: '#27272a',
+  }},
+  { id: 'ocean', price: 15, nameKey: 'tetris.skin.ocean', colors: {
+    I: '#67e8f9', O: '#7dd3fc', T: '#38bdf8', S: '#22d3ee', Z: '#0ea5e9', J: '#0284c7', L: '#a5f3fc',
+    bg: '#0c1929', border: '#1e3a5f',
+  }},
+  { id: 'sunset', price: 15, nameKey: 'tetris.skin.sunset', colors: {
+    I: '#fbbf24', O: '#f97316', T: '#ef4444', S: '#fb923c', Z: '#dc2626', J: '#f59e0b', L: '#fcd34d',
+    bg: '#1a0c08', border: '#4a2010',
+  }},
+  { id: 'forest', price: 25, nameKey: 'tetris.skin.forest', colors: {
+    I: '#4ade80', O: '#a3e635', T: '#34d399', S: '#86efac', Z: '#22c55e', J: '#16a34a', L: '#bbf7d0',
+    bg: '#071a0e', border: '#14532d',
+  }},
+  { id: 'candy', price: 30, nameKey: 'tetris.skin.candy', colors: {
+    I: '#f9a8d4', O: '#fdba74', T: '#c4b5fd', S: '#a5f3fc', Z: '#fda4af', J: '#93c5fd', L: '#fde68a',
+    bg: '#1a0a1a', border: '#4a1942',
+  }},
+  { id: 'mono', price: 40, nameKey: 'tetris.skin.mono', colors: {
+    I: '#e4e4e7', O: '#d4d4d8', T: '#a1a1aa', S: '#fafafa', Z: '#71717a', J: '#f4f4f5', L: '#c4c4cc',
+    bg: '#0a0a0a', border: '#2a2a2a',
+  }},
+  { id: 'neon', price: 60, nameKey: 'tetris.skin.neon', colors: {
+    I: '#00ffff', O: '#ffff00', T: '#ff00ff', S: '#00ff88', Z: '#ff0066', J: '#4466ff', L: '#ff8800',
+    bg: '#050510', border: '#1a1a3a',
+  }},
+  { id: 'ice', price: 80, nameKey: 'tetris.skin.ice', colors: {
+    I: '#bae6fd', O: '#e0f2fe', T: '#7dd3fc', S: '#cffafe', Z: '#a5f3fc', J: '#38bdf8', L: '#f0f9ff',
+    bg: '#0c1525', border: '#1e3a5f',
+  }},
+  { id: 'lava', price: 120, nameKey: 'tetris.skin.lava', colors: {
+    I: '#ff4500', O: '#ff6b35', T: '#dc2626', S: '#f97316', Z: '#b91c1c', J: '#ff8c42', L: '#fbbf24',
+    bg: '#1a0800', border: '#5c1a00',
+  }},
+  { id: 'aurora', price: 200, nameKey: 'tetris.skin.aurora', colors: {
+    I: '#67e8f9', O: '#c084fc', T: '#f0abfc', S: '#34d399', Z: '#fb7185', J: '#818cf8', L: '#fbbf24',
+    bg: '#08060e', border: '#2a1a4a',
+  }, requireAll: true },
+];
+
+const PIECE_KEYS = ['I', 'O', 'T', 'S', 'Z', 'J', 'L'] as const;
+
+function getPieceColor(colors: Record<string, string>, idx: number): string {
+  return colors[PIECE_KEYS[idx - 1]] ?? '#888';
+}
+
+function getGhostColor(colors: Record<string, string>, idx: number): string {
+  const c = getPieceColor(colors, idx);
+  return c + '33'; // 20% opacity hex
+}
 
 // ── Mini piece preview (4×4 grid) ─────────────────────────────────────────────
 
-function MiniPiece({ kind }: { kind: TetrominoKind }) {
+function MiniPiece({ kind, skinColors }: { kind: TetrominoKind; skinColors: Record<string, string> }) {
   const piece = spawnKind(kind);
   const cells = getCellsForPiece(piece);
   const idx = KIND_INDEX[kind];
-  const colour = PIECE_COLOURS[idx];
+  const colour = getPieceColor(skinColors, idx);
 
   const grid: boolean[][] = Array.from({ length: 4 }, () => Array(4).fill(false));
   for (const { col, row } of cells) {
@@ -87,7 +126,8 @@ function MiniPiece({ kind }: { kind: TetrominoKind }) {
         Array.from({ length: maxCol }, (_, c) => (
           <div
             key={`${r}-${c}`}
-            className={`w-[13px] h-[13px] rounded-sm ${grid[r][c] ? colour : 'bg-transparent'}`}
+            className="w-[13px] h-[13px] rounded-sm"
+            style={{ backgroundColor: grid[r][c] ? colour : 'transparent' }}
           />
         ))
       )}
@@ -128,6 +168,8 @@ export function TetrisGame() {
   const { nickname } = useNickname();
   const ach = useAchievements('tetris');
   const pb = usePersonalScores('tetris', user ? { userId: user.id, nickname } : undefined);
+  const shop = useSkinShop('tetris', TETRIS_SKINS);
+  const sc = shop.activeSkinDef.colors;
   const [state, setState] = useState<TetrisState>(createInitialState);
   const [countdown, setCountdown] = useState(3);
   const [stats, setStats] = useState<TetrisStats | null>(null);
@@ -267,6 +309,8 @@ export function TetrisGame() {
       });
       setStats(updated);
       pb.submit(state.score, { lines: state.lines, level: state.level });
+      // Award coins: 1 per line cleared
+      if (state.lines > 0) shop.addCoins(state.lines);
     }
     if (state.status === 'countdown') {
       savedRef.current = false;
@@ -334,19 +378,61 @@ export function TetrisGame() {
 
   const best = stats?.bestScore ?? 0;
 
+  const renderSkinPreview = useCallback((ctx: CanvasRenderingContext2D, skin: SkinDef, size: number) => {
+    const c = skin.colors;
+    const cellSize = Math.floor(size / 6);
+    const pad = (size - cellSize * 5) / 2;
+
+    // Background
+    ctx.fillStyle = c.bg;
+    ctx.fillRect(0, 0, size, size);
+
+    // Draw a mini T-piece shape
+    const tShape = [[1,0],[0,1],[1,1],[2,1]];
+    for (const [cx, cy] of tShape) {
+      const x = pad + cx * cellSize;
+      const y = pad + cy * cellSize;
+      ctx.fillStyle = c.T;
+      ctx.fillRect(x + 1, y + 1, cellSize - 2, cellSize - 2);
+    }
+
+    // Draw an L-piece below-right
+    const lShape = [[3,1],[3,2],[3,3],[4,3]];
+    for (const [cx, cy] of lShape) {
+      const x = pad + cx * cellSize;
+      const y = pad + cy * cellSize;
+      ctx.fillStyle = c.L;
+      ctx.fillRect(x + 1, y + 1, cellSize - 2, cellSize - 2);
+    }
+
+    // Draw an S-piece bottom-left
+    const sShape = [[1,3],[2,3],[0,4],[1,4]];
+    for (const [cx, cy] of sShape) {
+      const x = pad + cx * cellSize;
+      const y = pad + cy * cellSize;
+      ctx.fillStyle = c.S;
+      ctx.fillRect(x + 1, y + 1, cellSize - 2, cellSize - 2);
+    }
+
+    // Grid border lines
+    ctx.strokeStyle = c.border + '60';
+    ctx.lineWidth = 0.5;
+    ctx.strokeRect(pad, pad, cellSize * 5, cellSize * 5);
+  }, []);
+
   return (
     <div className="flex flex-col items-center gap-3 flex-1 min-h-0">
       {/* ── Game area — viewport-fitted ─────────────────────────────── */}
       <div className="flex flex-col items-center gap-2 sm:gap-3 w-full flex-1 min-h-0">
         {/* Board row: sidebars + board — fills available height */}
-        <div className="flex-1 min-h-0 flex gap-3 sm:gap-4 items-stretch justify-center w-full">
+        <div className="flex-1 min-h-0 flex gap-3 sm:gap-4 items-stretch justify-center w-full relative">
           {/* Left sidebar — Hold + Stats */}
           <div className="hidden sm:flex flex-col gap-2 w-[90px] shrink-0">
             <div className="bg-zinc-900 border border-zinc-800 rounded-lg p-2.5">
               <div className="text-[10px] uppercase tracking-widest text-zinc-500 mb-1.5">{t('tetris.hold')}</div>
               <div className="flex items-center justify-center h-[50px]">
                 {state.holdKind ? (
-                  <MiniPiece kind={state.holdKind} />
+                  <MiniPiece kind={state.holdKind} skinColors={sc} />
                 ) : (
                   <span className="text-zinc-700 text-xs">—</span>
                 )}
@@ -358,13 +444,19 @@ export function TetrisGame() {
               <StatRow label={t('tetris.level')} value={state.level} />
               <StatRow label={t('tetris.best')} value={best} />
             </div>
+            <button
+              onClick={() => shop.setShowShop(true)}
+              className="w-full px-2.5 py-2 rounded-lg border border-amber-700/50 hover:border-amber-500/50 bg-amber-950/30 hover:bg-amber-950/50 text-amber-400 text-xs font-bold transition-colors"
+            >
+              {t('tetris.shop')} · ● {shop.wallet}
+            </button>
           </div>
 
           {/* Board — height-driven, width derived from aspect ratio */}
           <div ref={boardRef} className="relative h-full" style={{ aspectRatio: `${BOARD_COLS} / ${BOARD_ROWS}`, maxWidth: '100%' }}>
             <div
-              className="grid h-full w-full border-2 border-zinc-700 bg-zinc-950 rounded"
-              style={{ gridTemplateColumns: `repeat(${BOARD_COLS}, 1fr)` }}
+              className="grid h-full w-full border-2 rounded"
+              style={{ gridTemplateColumns: `repeat(${BOARD_COLS}, 1fr)`, backgroundColor: sc.bg, borderColor: sc.border }}
             >
               {Array.from({ length: BOARD_ROWS }, (_, row) =>
                 Array.from({ length: BOARD_COLS }, (_, col) => {
@@ -374,26 +466,59 @@ export function TetrisGame() {
                   const isGhost = !isActive && ghostMap.has(key);
                   const isFlash = flashRows.has(row);
 
-                  let bg = 'bg-zinc-950';
+                  let bgColor = sc.bg;
                   if (isFlash) {
-                    bg = 'bg-white';
+                    bgColor = '#ffffff';
                   } else if (isActive) {
-                    bg = PIECE_COLOURS[activeIdx];
+                    bgColor = getPieceColor(sc, activeIdx);
                   } else if (isGhost) {
-                    bg = GHOST_COLOURS[activeIdx];
+                    bgColor = getGhostColor(sc, activeIdx);
                   } else if (boardVal > 0) {
-                    bg = PIECE_COLOURS[boardVal];
+                    bgColor = getPieceColor(sc, boardVal);
                   }
 
                   return (
                     <div
                       key={key}
-                      className={`aspect-square border border-zinc-900/50 ${bg} ${isFlash ? 'animate-pulse' : ''}`}
+                      className={`aspect-square ${isFlash ? 'animate-pulse' : ''}`}
+                      style={{ backgroundColor: bgColor, border: `1px solid ${sc.border}50` }}
                     />
                   );
                 })
               )}
             </div>
+
+            {/* Menu overlay */}
+            {state.status === 'menu' && (
+              <div className="absolute inset-0 bg-black/80 flex items-center justify-center rounded">
+                <div className="text-center space-y-4">
+                  <h2 className="text-5xl font-black tracking-tight text-white">Tetris</h2>
+                  <p className="text-zinc-500 text-xs max-sm:hidden">← → · ↓ · Space · Z/X · C · P</p>
+                  {stats && stats.gamesPlayed > 0 && (
+                    <p className="text-zinc-500 text-xs">
+                      {t('tetris.best')}: {stats.bestScore.toLocaleString()} · {t('tetris.games')}: {stats.gamesPlayed}
+                    </p>
+                  )}
+                  <div className="flex items-center gap-3 justify-center">
+                    <button
+                      onClick={() => dispatch({ type: 'startGame' })}
+                      className="px-8 py-3 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-white font-bold text-lg transition-colors"
+                    >
+                      {t('tetris.start')}
+                    </button>
+                    <button
+                      onClick={() => shop.setShowShop(true)}
+                      className="px-4 py-3 rounded-lg border border-amber-700/50 hover:border-amber-500/50 bg-amber-950/30 hover:bg-amber-950/50 text-amber-400 font-bold transition-colors"
+                    >
+                      {t('tetris.shop')}
+                    </button>
+                  </div>
+                  <div className="flex items-center gap-1.5 text-amber-400 text-xs font-bold justify-center">
+                    <span>●</span> {shop.wallet}
+                  </div>
+                </div>
+              </div>
+            )}
 
             {/* Countdown overlay */}
             {state.status === 'countdown' && (
@@ -417,17 +542,26 @@ export function TetrisGame() {
             {/* Game over overlay */}
             {state.status === 'gameover' && (
               <div className="absolute inset-0 bg-black/80 flex items-center justify-center rounded">
-                <div className="text-center space-y-4">
+                <div className="text-center space-y-3">
                   <p className="text-3xl font-bold text-white">{t('game.over')}</p>
                   <p className="text-zinc-300">
                     {t('game.score')}: <span className="font-bold text-white">{state.score}</span>
                   </p>
+                  {state.lines > 0 && (
+                    <p className="text-amber-400 text-sm font-bold">+{state.lines} ●</p>
+                  )}
                   <div className="flex gap-3 justify-center">
                     <button
                       onClick={handleRestart}
                       className="px-4 py-2 bg-indigo-600 hover:bg-indigo-500 text-white rounded-lg text-sm font-medium transition-colors"
                     >
                       {t('game.restart')}
+                    </button>
+                    <button
+                      onClick={() => shop.setShowShop(true)}
+                      className="px-4 py-2 border border-amber-700/50 hover:border-amber-500/50 bg-amber-950/30 hover:bg-amber-950/50 text-amber-400 rounded-lg text-sm font-medium transition-colors"
+                    >
+                      {t('tetris.shop')}
                     </button>
                     <a
                       href="/"
@@ -441,6 +575,23 @@ export function TetrisGame() {
             )}
           </div>
 
+          {/* Skin Shop Overlay */}
+          {shop.showShop && (
+            <div className="absolute inset-0 z-30">
+              <SkinShopOverlay
+                skins={TETRIS_SKINS}
+                wallet={shop.wallet}
+                owned={shop.owned}
+                activeSkin={shop.activeSkin}
+                onBuy={shop.buy}
+                onEquip={shop.equip}
+                onClose={() => shop.setShowShop(false)}
+                renderPreview={renderSkinPreview}
+                lockedLabel={t('tetris.auroraLocked')}
+              />
+            </div>
+          )}
+
           {/* Right sidebar — Next queue */}
           <div className="hidden sm:flex flex-col gap-2 w-[90px] shrink-0">
             <div className="bg-zinc-900 border border-zinc-800 rounded-lg p-2.5">
@@ -448,7 +599,7 @@ export function TetrisGame() {
               <div className="flex flex-col items-center gap-2">
                 {state.nextQueue.slice(0, 5).map((kind, i) => (
                   <div key={i} className="flex items-center justify-center h-[38px]">
-                    <MiniPiece kind={kind} />
+                    <MiniPiece kind={kind} skinColors={sc} />
                   </div>
                 ))}
               </div>

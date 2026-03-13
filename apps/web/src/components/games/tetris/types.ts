@@ -22,7 +22,7 @@ export interface Piece {
 }
 
 /** High-level lifecycle state of the game. */
-export type GameStatus = 'countdown' | 'running' | 'paused' | 'gameover';
+export type GameStatus = 'menu' | 'countdown' | 'running' | 'paused' | 'gameover';
 
 /** Snapshot of a completed line-clear for toast/animation purposes. */
 export interface ClearInfo {
@@ -77,4 +77,5 @@ export type TetrisAction =
   | { type: 'rotateCCW' }
   | { type: 'hold' }
   | { type: 'togglePause' }
-  | { type: 'restart' };
+  | { type: 'restart' }
+  | { type: 'startGame' };

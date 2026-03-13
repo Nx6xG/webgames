@@ -97,7 +97,7 @@ export const webRegistry: Record<GameId, WebGameEntry> = {
       id: 'rps',
       name: 'Rock Paper Scissors',
       description: 'Choose your weapon in this simultaneous best-of-3 showdown!',
-      categories: ['classic', '2 players', 'multiplayer'],
+      categories: ['classic', '2 players', 'multiplayer', 'vs bot'],
       version: '1.0.0',
       routeSlug: 'rps',
       minPlayers: 2,
