@@ -111,6 +111,15 @@ const SINGLEPLAYER_GAMES = [
     tags:         ['singleplayer', 'arcade'],
     bestScoreKey: '',
   },
+  {
+    id:           'mahjong',
+    titleKey:     'lobby.games.mahjong.title',
+    descKey:      'lobby.games.mahjong.desc',
+    emoji:        '🀄',
+    href:         '/games/mahjong',
+    tags:         ['singleplayer', 'puzzle', 'classic'],
+    bestScoreKey: '',
+  },
 ] as const;
 import { GlobalChatWidget } from '@/components/chat/GlobalChatWidget';
 import { ProfileMenu } from '@/components/ProfileMenu';
@@ -125,6 +134,7 @@ import { GameOfTheDay } from '@/components/GameOfTheDay';
 import { RecentlyPlayed } from '@/components/RecentlyPlayed';
 import { ActiveRoomsWidget } from '@/components/ActiveRoomsWidget';
 import { LevelUpCelebration } from '@/components/LevelUpCelebration';
+import { GlobalMuteButton } from '@/components/ui/GlobalMuteButton';
 
 /** Maps internal category IDs (used as CSS-class keys) to i18n message keys. */
 const CATEGORY_TAG_KEYS: Record<string, string> = {
@@ -660,6 +670,7 @@ export default function HomePage() {
             <TokenHeaderChip />
             <div className="w-px h-4 bg-zinc-700/60 shrink-0" aria-hidden />
             <div className="flex items-center gap-2">
+              <GlobalMuteButton />
               <OnlineNavChip />
               <ProfileMenu />
             </div>

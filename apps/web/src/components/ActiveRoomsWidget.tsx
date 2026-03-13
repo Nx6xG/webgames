@@ -2,11 +2,13 @@
 
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
-import { io } from 'socket.io-client';
+import { io, type Socket } from 'socket.io-client';
 import { getWsUrl } from '@/lib/getWsUrl';
 import { useI18n } from '@/components/providers/LanguageProvider';
 import { GAME_EMOJI } from '@/lib/localStats';
-import type { PublicRoomListItem } from 'shared';
+import type { ServerToClientEvents, ClientToServerEvents, PublicRoomListItem } from 'shared';
+
+type RoomsSocket = Socket<ServerToClientEvents, ClientToServerEvents>;
 
 const MAX_DISPLAY = 4;
 
@@ -35,30 +37,24 @@ export function ActiveRoomsWidget() {
   const [loaded, setLoaded] = useState(false);
 
   useEffect(() => {
-    const socket = io(getWsUrl(), {
+    const socket: RoomsSocket = io(getWsUrl(), {
       autoConnect: false,
-      reconnection: false,
+      reconnection: true,
+      reconnectionDelay: 2_000,
+      reconnectionDelayMax: 10_000,
+      reconnectionAttempts: Infinity,
     });
 
     socket.connect();
     socket.on('connect', () => {
       socket.emit('get_open_rooms');
     });
-    socket.on('open_rooms', ({ rooms: r }: { rooms: PublicRoomListItem[] }) => {
+    socket.on('open_rooms', ({ rooms: r }) => {
       setRooms(r);
       setLoaded(true);
-      // Disconnect after receiving data — this is a one-shot fetch
-      socket.disconnect();
     });
 
-    // Timeout safety — disconnect after 5s even if no response
-    const timer = setTimeout(() => {
-      setLoaded(true);
-      socket.disconnect();
-    }, 5000);
-
     return () => {
-      clearTimeout(timer);
       socket.disconnect();
     };
   }, []);

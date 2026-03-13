@@ -83,6 +83,9 @@ export const GAME_EMOJI: Record<string, string> = {
   pong: '🏓',
   breakout: '🧱',
   minesweeper: '💣',
+  mahjong: '🀄',
+  doodlejump: '🦘',
+  crossyroad: '🐔',
 };
 
 // ── Helpers ───────────────────────────────────────────────────────────────────

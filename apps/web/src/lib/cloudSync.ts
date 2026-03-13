@@ -158,6 +158,32 @@ export async function saveCloudProgression(
     .upsert({ user_id: userId, data: prog }, { onConflict: 'user_id' });
 }
 
+// ── Game progress (singleplayer unlocks) ─────────────────────────────────────
+
+export type GameProgressData = Record<string, unknown>;
+
+export async function fetchCloudGameProgress(
+  sb: SupabaseClient,
+  userId: string,
+): Promise<GameProgressData | null> {
+  const { data } = await sb
+    .from('user_game_progress')
+    .select('data')
+    .eq('user_id', userId)
+    .maybeSingle();
+  return (data?.data as GameProgressData) ?? null;
+}
+
+export async function saveCloudGameProgress(
+  sb: SupabaseClient,
+  userId: string,
+  progress: GameProgressData,
+): Promise<void> {
+  await sb
+    .from('user_game_progress')
+    .upsert({ user_id: userId, data: progress }, { onConflict: 'user_id' });
+}
+
 // ── Merge helpers ────────────────────────────────────────────────────────────
 
 /** For each key, take the max of a and b. */
@@ -247,6 +273,41 @@ export async function saveCloudNickname(
   }
 }
 
+// ── Game progress local storage ──────────────────────────────────────────────
+
+const GAME_PROGRESS_KEY = 'webgames.game_progress';
+
+export function loadGameProgress(): GameProgressData {
+  try {
+    const raw = typeof window !== 'undefined' ? localStorage.getItem(GAME_PROGRESS_KEY) : null;
+    if (!raw) return {};
+    return JSON.parse(raw) as GameProgressData;
+  } catch { return {}; }
+}
+
+export function saveGameProgress(data: GameProgressData): void {
+  if (typeof window === 'undefined') return;
+  localStorage.setItem(GAME_PROGRESS_KEY, JSON.stringify(data));
+}
+
+/** Merge game progress: union arrays per game key. */
+export function mergeGameProgress(
+  local: GameProgressData,
+  cloud: GameProgressData,
+): GameProgressData {
+  const result: GameProgressData = { ...cloud };
+  for (const [key, val] of Object.entries(local)) {
+    const cloudVal = result[key];
+    if (Array.isArray(val) && Array.isArray(cloudVal)) {
+      result[key] = [...new Set([...cloudVal, ...val])];
+    } else if (Array.isArray(val)) {
+      result[key] = val;
+    }
+    // cloud wins for non-array values
+  }
+  return result;
+}
+
 // ── Sync guard ───────────────────────────────────────────────────────────────
 
 const SYNC_DONE_PREFIX = 'wg_cloud_sync_done:';
@@ -288,15 +349,17 @@ export async function runInitialSync(
   const localStats = loadStats();
   const localUnlockedCosmetics = loadUnlockedCosmetics();
   const localProgression = loadProgression();
+  const localGameProgress = loadGameProgress();
 
   // Load cloud data (each fetch is individually safe)
-  const [cloudCosmetics, cloudUnlocked, cloudStats, cloudUnlockedCosmetics, cloudProgression] =
+  const [cloudCosmetics, cloudUnlocked, cloudStats, cloudUnlockedCosmetics, cloudProgression, cloudGameProgress] =
     await Promise.all([
       fetchCloudCosmetics(sb, userId).catch((e) => { console.error('[cloudSync] fetchCosmetics:', e); return null; }),
       fetchCloudAchievements(sb, userId).catch((e) => { console.error('[cloudSync] fetchAchievements:', e); return null; }),
       fetchCloudStats(sb, userId).catch((e) => { console.error('[cloudSync] fetchStats:', e); return null; }),
       fetchCloudUnlockedCosmetics(sb, userId).catch((e) => { console.error('[cloudSync] fetchUnlockedCosmetics:', e); return null; }),
       fetchCloudProgression(sb, userId).catch((e) => { console.error('[cloudSync] fetchProgression:', e); return null; }),
+      fetchCloudGameProgress(sb, userId).catch((e) => { console.error('[cloudSync] fetchGameProgress:', e); return null; }),
     ]);
 
   // Merge cosmetics (local wins per field, cloud fills gaps)
@@ -355,12 +418,16 @@ export async function runInitialSync(
     mergedProgression.tokens = Math.max(localProgression.tokens, cp.tokens);
   }
 
+  // Merge game progress (union of arrays per game key)
+  const mergedGameProgress = mergeGameProgress(localGameProgress, cloudGameProgress ?? {});
+
   // Save merged → local
   saveCosmetics(mergedCosmetics);
   saveUnlocked(new Set(mergedUnlocked));
   saveStats(mergedStats);
   saveUnlockedCosmetics(mergedUnlockedCosmetics);
   saveProgression(mergedProgression);
+  saveGameProgress(mergedGameProgress);
 
   // Save merged → cloud (each save is individually safe)
   await Promise.all([
@@ -369,6 +436,7 @@ export async function runInitialSync(
     safe('saveStats', () => saveCloudStats(sb, userId, mergedStats)),
     safe('saveUnlockedCosmetics', () => saveCloudUnlockedCosmetics(sb, userId, mergedUnlockedCosmetics)),
     safe('saveProgression', () => saveCloudProgression(sb, userId, mergedProgression)),
+    safe('saveGameProgress', () => saveCloudGameProgress(sb, userId, mergedGameProgress)),
   ]);
 
   markSyncDone(userId);
@@ -380,13 +448,14 @@ export async function loadCloudToLocal(
   sb: SupabaseClient,
   userId: string,
 ): Promise<void> {
-  const [cloudCosmetics, cloudUnlocked, cloudStats, cloudUnlockedCosmetics, cloudProgression] =
+  const [cloudCosmetics, cloudUnlocked, cloudStats, cloudUnlockedCosmetics, cloudProgression, cloudGameProgress] =
     await Promise.all([
       fetchCloudCosmetics(sb, userId).catch((e) => { console.error('[cloudSync] fetchCosmetics:', e); return null; }),
       fetchCloudAchievements(sb, userId).catch((e) => { console.error('[cloudSync] fetchAchievements:', e); return null; }),
       fetchCloudStats(sb, userId).catch((e) => { console.error('[cloudSync] fetchStats:', e); return null; }),
       fetchCloudUnlockedCosmetics(sb, userId).catch((e) => { console.error('[cloudSync] fetchUnlockedCosmetics:', e); return null; }),
       fetchCloudProgression(sb, userId).catch((e) => { console.error('[cloudSync] fetchProgression:', e); return null; }),
+      fetchCloudGameProgress(sb, userId).catch((e) => { console.error('[cloudSync] fetchGameProgress:', e); return null; }),
     ]);
 
   if (cloudCosmetics) saveCosmetics(cloudCosmetics);
@@ -394,4 +463,5 @@ export async function loadCloudToLocal(
   if (cloudStats) saveStats(cloudStats);
   if (cloudUnlockedCosmetics) saveUnlockedCosmetics(cloudUnlockedCosmetics);
   if (cloudProgression) saveProgression(cloudProgression);
+  if (cloudGameProgress) saveGameProgress(cloudGameProgress);
 }

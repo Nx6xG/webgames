@@ -79,6 +79,13 @@ body {
   border-radius: 9999px;
 }
 
+.scrollbar-none {
+  scrollbar-width: none;
+}
+.scrollbar-none::-webkit-scrollbar {
+  display: none;
+}
+
 /* ── Connect Four animations ───────────────────────────────────────────────── */
 
 @keyframes c4drop {
