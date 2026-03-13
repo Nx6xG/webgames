@@ -13,6 +13,9 @@ import {
 } from './engine';
 import { getStats, recordRun } from './stats';
 import type { TetrisStats } from './stats';
+import { saveGame, loadGame, clearSave } from '@/lib/gameSave';
+
+const SAVE_TETRIS = 'tetris';
 import type { TetrisState, TetrisAction, TetrominoKind, Piece } from './types';
 import { useI18n } from '@/components/providers/LanguageProvider';
 import { useAchievements } from '@/hooks/useAchievements';
@@ -131,8 +134,39 @@ export function TetrisGame() {
   const tickRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const countdownRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
-  // Load stats on mount
-  useEffect(() => { setStats(getStats()); }, []);
+  // Load stats + restore saved game on mount
+  useEffect(() => {
+    setStats(getStats());
+    const saved = loadGame<TetrisState>(SAVE_TETRIS);
+    if (saved && (saved.status === 'running' || saved.status === 'paused')) {
+      saved.status = 'paused';
+      saved.lastClear = undefined;
+      setState(saved);
+      clearSave(SAVE_TETRIS);
+    }
+  }, []);
+
+  // Auto-save when leaving
+  const tetrisSaveRef = useRef<() => void>(() => {});
+  tetrisSaveRef.current = () => {
+    if (state.status !== 'running' && state.status !== 'paused') return;
+    if (state.score === 0 && state.lines === 0) return;
+    saveGame(SAVE_TETRIS, state);
+  };
+
+  useEffect(() => {
+    const onVis = () => { if (document.hidden) tetrisSaveRef.current(); };
+    const onUnload = () => tetrisSaveRef.current();
+    document.addEventListener('visibilitychange', onVis);
+    window.addEventListener('beforeunload', onUnload);
+    return () => {
+      document.removeEventListener('visibilitychange', onVis);
+      window.removeEventListener('beforeunload', onUnload);
+    };
+  }, []);
+
+  // Save on unmount (Next.js client navigation)
+  useEffect(() => () => { tetrisSaveRef.current(); }, []);
 
   // Dispatch helper with sound effects
   const dispatch = useCallback((action: TetrisAction) => {
@@ -224,6 +258,7 @@ export function TetrisGame() {
   useEffect(() => {
     if (state.status === 'gameover' && !savedRef.current) {
       savedRef.current = true;
+      clearSave(SAVE_TETRIS);
       const updated = recordRun({
         score: state.score,
         lines: state.lines,
@@ -282,6 +317,7 @@ export function TetrisGame() {
   // ── Handlers ────────────────────────────────────────────────────────────────
 
   const handleRestart = useCallback(() => {
+    clearSave(SAVE_TETRIS);
     dispatch({ type: 'restart' });
   }, [dispatch]);
 
@@ -299,9 +335,9 @@ export function TetrisGame() {
   const best = stats?.bestScore ?? 0;
 
   return (
-    <div className="flex flex-col items-center gap-3">
+    <div className="flex flex-col items-center gap-3 flex-1 min-h-0">
       {/* ── Game area — viewport-fitted ─────────────────────────────── */}
-      <div className="flex flex-col items-center gap-2 sm:gap-3 w-full h-[calc(100dvh-7.5rem)]">
+      <div className="flex flex-col items-center gap-2 sm:gap-3 w-full flex-1 min-h-0">
         {/* Board row: sidebars + board — fills available height */}
         <div className="flex-1 min-h-0 flex gap-3 sm:gap-4 items-stretch justify-center w-full">
           {/* Left sidebar — Hold + Stats */}

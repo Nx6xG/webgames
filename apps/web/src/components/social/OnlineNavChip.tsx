@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { useOnlineUsers } from '@/hooks/useOnlineUsers';
+import { useOnlinePresence } from '@/components/providers/OnlinePresenceProvider';
 import { usePartyCtx } from '@/components/providers/PartyProvider';
 import { useI18n } from '@/components/providers/LanguageProvider';
 import { useClickOutside, useEscape } from '@/hooks/useClickOutside';
@@ -28,14 +28,14 @@ const GAME_TITLE_KEYS: Record<string, string> = {
   battleship: 'lobby.games.battleship.title',
 };
 
-export function OnlineNavChip({ wsUrl = '' }: { wsUrl?: string }) {
+export function OnlineNavChip() {
   const { user } = useAuth();
   const {
     users, connected,
     incomingInvites, sentInvite, inviteError,
     acceptedInvite,
     sendInvite, acceptInvite, dismissInvite, dismissSentInvite, dismissAcceptedInvite,
-  } = useOnlineUsers(wsUrl, user?.id);
+  } = useOnlinePresence();
 
   const {
     party, incomingPartyInvite, partyError, gameStarting,

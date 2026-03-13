@@ -837,7 +837,7 @@ export function DoodleJumpGame() {
   // ── Render ────────────────────────────────────────────────────────────
 
   return (
-    <div className="flex flex-col items-center gap-2 w-full mx-auto select-none" style={{ height: 'calc(100dvh - 4rem)' }}>
+    <div className="flex flex-col items-center gap-2 w-full mx-auto select-none flex-1 min-h-0">
       {/* Game viewport — fills available space */}
       <div className="flex-1 min-h-0 w-full flex justify-center" ref={containerRef}>
         <div

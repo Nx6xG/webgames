@@ -4,6 +4,7 @@ import Link from 'next/link';
 import { type ReactNode, useCallback, useEffect, useState } from 'react';
 import { useI18n } from '@/components/providers/LanguageProvider';
 import { isGloballyMuted, setGlobalMuted } from '@/lib/globalMute';
+import { OnlineNavChip } from '@/components/social/OnlineNavChip';
 
 interface Props {
   title: string;
@@ -25,7 +26,7 @@ export function GamePage({ title, children }: Props) {
   }, []);
 
   return (
-    <div className="min-h-screen bg-zinc-950 text-zinc-100 flex flex-col">
+    <div className="h-dvh bg-zinc-950 text-zinc-100 flex flex-col overflow-hidden">
       {/* Header */}
       <header className="border-b border-zinc-800 bg-zinc-950/80 backdrop-blur sticky top-0 z-10">
         <div className="max-w-6xl mx-auto px-6 py-4 flex items-center gap-4">
@@ -49,6 +50,7 @@ export function GamePage({ title, children }: Props) {
             >
               {muted ? '\u{1F507}' : '\u{1F50A}'}
             </button>
+            <OnlineNavChip />
             <Link href="/rooms" className="text-xs text-zinc-500 hover:text-zinc-300 transition-colors">
               {t('nav.rooms')}
             </Link>
@@ -60,7 +62,7 @@ export function GamePage({ title, children }: Props) {
       </header>
 
       {/* Main */}
-      <main className="flex-1 max-w-6xl mx-auto w-full px-6 py-4 lg:py-6 xl:py-10">
+      <main className="flex-1 min-h-0 max-w-6xl mx-auto w-full px-4 sm:px-6 py-2 lg:py-3 flex flex-col overflow-auto">
         {children}
       </main>
     </div>

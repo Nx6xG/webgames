@@ -797,7 +797,7 @@ export function PongGame() {
   return (
     <div
       ref={wrapperRef}
-      className="flex flex-col items-center gap-6 outline-none"
+      className="flex flex-col items-center gap-2 outline-none flex-1 min-h-0"
       tabIndex={-1}
     >
       {/* Score bar */}
@@ -810,11 +810,14 @@ export function PongGame() {
       )}
 
       {/* Canvas wrapper */}
-      <div className="relative">
+      <div className="flex-1 min-h-0 w-full flex justify-center">
+        <div
+          className="relative h-full overflow-hidden rounded-xl border border-zinc-800"
+          style={{ aspectRatio: `${W} / ${H}`, maxWidth: '100%' }}
+        >
         <canvas
           ref={canvasRef}
-          style={{ width: W, height: H }}
-          className="rounded-xl border border-zinc-800 max-w-full h-auto touch-none"
+          className="absolute inset-0 w-full h-full touch-none"
         />
 
         {/* Mute toggle — always visible in top-right */}
@@ -928,6 +931,7 @@ export function PongGame() {
             </button>
           </div>
         )}
+        </div>
       </div>
 
       {/* Controls hint */}

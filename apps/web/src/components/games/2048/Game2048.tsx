@@ -15,7 +15,10 @@ import { ScoreboardPanel } from '@/components/ui/ScoreboardPanel';
 import { useAuth } from '@/components/providers/AuthProvider';
 import { useNickname } from '@/components/providers/NicknameProvider';
 import { useSwipe } from '@/hooks/useSwipe';
+import { saveGame, loadGame, clearSave } from '@/lib/gameSave';
 import * as sfx from './sound';
+
+const SAVE_2048 = '2048';
 
 // ── Best-score persistence ────────────────────────────────────────────────────
 
@@ -111,13 +114,42 @@ export function Game2048() {
   const startTimeRef = useRef<number>(Date.now());
   const savedRef     = useRef<boolean>(false);
 
-  // ── Load persisted data on mount ────────────────────────────────────────────
+  // ── Load persisted data + restore saved game on mount ──────────────────────
   useEffect(() => {
     const savedBest = loadBest();
-    if (savedBest > 0) {
+    const saved = loadGame<GameState>(SAVE_2048);
+    if (saved && saved.status === 'playing') {
+      saved.best = Math.max(saved.best, savedBest);
+      // Clear animation flags from restored tiles
+      saved.tiles = saved.tiles.map(t => ({ ...t, isNew: false, isMerged: false }));
+      setState(saved);
+      clearSave(SAVE_2048);
+    } else if (savedBest > 0) {
       setState((prev) => ({ ...prev, best: Math.max(prev.best, savedBest) }));
     }
   }, []);
+
+  // ── Auto-save when leaving ────────────────────────────────────────────────
+  const gameSaveRef = useRef<() => void>(() => {});
+  gameSaveRef.current = () => {
+    if (state.status !== 'playing') return;
+    if (state.moves === 0) return;
+    saveGame(SAVE_2048, state);
+  };
+
+  useEffect(() => {
+    const onVis = () => { if (document.hidden) gameSaveRef.current(); };
+    const onUnload = () => gameSaveRef.current();
+    document.addEventListener('visibilitychange', onVis);
+    window.addEventListener('beforeunload', onUnload);
+    return () => {
+      document.removeEventListener('visibilitychange', onVis);
+      window.removeEventListener('beforeunload', onUnload);
+    };
+  }, []);
+
+  // Save on unmount (Next.js client navigation)
+  useEffect(() => () => { gameSaveRef.current(); }, []);
 
   // ── Persist best whenever it improves ───────────────────────────────────────
   useEffect(() => {
@@ -142,6 +174,7 @@ export function Game2048() {
   useEffect(() => {
     if (state.status === 'over' && !savedRef.current) {
       savedRef.current = true;
+      clearSave(SAVE_2048);
       pb.submit(state.score, { maxTile: maxTile(state.grid), moves: state.moves });
     }
   }, [state.status, state.score, state.moves, state.grid]); // eslint-disable-line react-hooks/exhaustive-deps
@@ -175,6 +208,7 @@ export function Game2048() {
   }, []);
 
   const handleNewGame = useCallback(() => {
+    clearSave(SAVE_2048);
     startTimeRef.current = Date.now();
     savedRef.current     = false;
     setState((prev) => createInitialState(prev.best));
@@ -202,7 +236,7 @@ export function Game2048() {
   const swipeHandlers = useSwipe({ onSwipe: handleMove });
 
   return (
-    <div className="flex flex-col items-center gap-5 py-6 px-4">
+    <div className="flex flex-col items-center gap-3 py-2 px-4">
 
       {/* ── Header row ───────────────────────────────────────────────── */}
       <div className="w-full max-w-[420px] flex items-center gap-3">

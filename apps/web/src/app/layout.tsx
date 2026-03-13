@@ -9,6 +9,7 @@ import { AchievementToastProvider } from '@/components/ui/AchievementToasts';
 import { LevelUpToastProvider } from '@/components/ui/LevelUpToasts';
 import { PartyProvider } from '@/components/providers/PartyProvider';
 import { ProgressionProvider } from '@/components/providers/ProgressionProvider';
+import { OnlinePresenceProvider } from '@/components/providers/OnlinePresenceProvider';
 
 export const metadata: Metadata = {
   title: 'Dashboard',
@@ -29,7 +30,9 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
             <AchievementToastProvider>
               <LevelUpToastProvider>
                 <PartyProvider>
-                  <NicknameProvider>{children}</NicknameProvider>
+                  <NicknameProvider>
+                    <OnlinePresenceProvider>{children}</OnlinePresenceProvider>
+                  </NicknameProvider>
                 </PartyProvider>
               </LevelUpToastProvider>
             </AchievementToastProvider>

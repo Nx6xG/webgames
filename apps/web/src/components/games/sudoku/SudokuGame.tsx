@@ -10,7 +10,32 @@ import { useI18n } from '@/components/providers/LanguageProvider';
 import { createSeededRng } from '@/lib/seededRandom';
 import { useVisibilityPause } from '@/hooks/useVisibilityPause';
 import { getTodayStr } from '@/lib/dailyChallenges/definitions';
+import { saveGame, loadGame, clearSave } from '@/lib/gameSave';
 import * as sfx from './sound';
+
+// ── Save/Load helpers ────────────────────────────────────────────────────────
+
+const SAVE_ID = 'sudoku';
+
+interface SudokuSaveData {
+  difficulty: Difficulty;
+  puzzle: Board;
+  solution: Board;
+  prefilled: boolean[][];
+  origPuzzle: Board;
+  elapsedSec: number;
+  notes: number[][][]; // Sets serialized as arrays
+  lives: number;
+  wrongCells: string[];
+}
+
+function serializeNotes(notes: Notes): number[][][] {
+  return notes.map(row => row.map(s => [...s]));
+}
+
+function deserializeNotes(data: number[][][]): Notes {
+  return data.map(row => row.map(arr => new Set(arr)));
+}
 
 const MAX_LIVES = 3;
 
@@ -165,15 +190,43 @@ export function SudokuGame() {
   const [stats, setStats] = useState<SudokuStats>(emptyStats);
   const savedRef = useRef<boolean>(false);
 
-  // ── Load stats on mount ───────────────────────────────────────────────────────
+  // ── Saved game detection ─────────────────────────────────────────────────────
+  const [hasSaved, setHasSaved] = useState(false);
+
+  // ── Load stats + check for saved game on mount ─────────────────────────────
   useEffect(() => {
     const s = loadStats();
     setStats(s);
-    // Auto-select highest unlocked difficulty
     if (s.hard.wins >= 5) setFormDiff('expert');
     else if (s.medium.wins >= 5) setFormDiff('hard');
     else if (s.easy.wins >= 2) setFormDiff('medium');
+    setHasSaved(loadGame(SAVE_ID) !== null);
   }, []);
+
+  // ── Auto-save when leaving ─────────────────────────────────────────────────
+  const saveRef = useRef<() => void>(() => {});
+  saveRef.current = () => {
+    if (phase !== 'playing' && phase !== 'paused') return;
+    const data: SudokuSaveData = {
+      difficulty, puzzle, solution, prefilled, origPuzzle, elapsedSec,
+      notes: serializeNotes(notes), lives, wrongCells: [...wrongCells],
+    };
+    saveGame(SAVE_ID, data);
+  };
+
+  useEffect(() => {
+    const onVisChange = () => { if (document.hidden) saveRef.current(); };
+    const onBeforeUnload = () => saveRef.current();
+    document.addEventListener('visibilitychange', onVisChange);
+    window.addEventListener('beforeunload', onBeforeUnload);
+    return () => {
+      document.removeEventListener('visibilitychange', onVisChange);
+      window.removeEventListener('beforeunload', onBeforeUnload);
+    };
+  }, []);
+
+  // Save on unmount (Next.js client navigation)
+  useEffect(() => () => { saveRef.current(); }, []);
 
   // ── Achievement tracking ──────────────────────────────────────────────────
   useEffect(() => {
@@ -216,7 +269,7 @@ export function SudokuGame() {
     setTimeout(() => setLifeLostToast(false), 1800);
     setLives(prev => {
       const next = prev - 1;
-      if (next <= 0) setTimeout(() => setPhase('gameOver'), 60);
+      if (next <= 0) setTimeout(() => { clearSave(SAVE_ID); setPhase('gameOver'); }, 60);
       return next;
     });
     return true;
@@ -271,7 +324,7 @@ export function SudokuGame() {
           nb[r][c] = n;
           setPuzzle(nb);
           setNotes(autoCleanNotes(notes, r, c, n));
-          if (isBoardSolved(nb)) { sfx.winSound(); setPhase('won'); }
+          if (isBoardSolved(nb)) { sfx.winSound(); clearSave(SAVE_ID); setPhase('won'); }
         }
       } else if (e.key === 'Backspace' || e.key === 'Delete' || e.key === '0') {
         if (!selected) return;
@@ -300,6 +353,8 @@ export function SudokuGame() {
   const [isDaily, setIsDaily] = useState(false);
 
   function startGame(diff: Difficulty, seed?: string) {
+    clearSave(SAVE_ID);
+    setHasSaved(false);
     setPhase('generating');
     setIsDaily(!!seed);
     // Defer heavy generation to let the 'generating' render happen first
@@ -342,7 +397,29 @@ export function SudokuGame() {
 
   function handleNewPuzzle() { startGame(difficulty); }
 
-  function handleBack() { setPhase('config'); }
+  function handleBack() {
+    saveRef.current();
+    setHasSaved(loadGame(SAVE_ID) !== null);
+    setPhase('config');
+  }
+
+  function handleContinue() {
+    const data = loadGame<SudokuSaveData>(SAVE_ID);
+    if (!data) return;
+    setDifficulty(data.difficulty);
+    setPuzzle(data.puzzle.map(r => [...r]));
+    setSolution(data.solution.map(r => [...r]));
+    setPrefilled(data.prefilled.map(r => [...r]));
+    setOrigPuzzle(data.origPuzzle.map(r => [...r]));
+    setElapsedSec(data.elapsedSec);
+    setNotes(deserializeNotes(data.notes));
+    setLives(data.lives);
+    setWrongCells(new Set(data.wrongCells));
+    setSelected(null);
+    setNotesMode(false);
+    savedRef.current = false;
+    setPhase('playing');
+  }
 
   function handleResetStats() {
     if (!confirm('Really reset all stats?')) return;
@@ -375,7 +452,7 @@ export function SudokuGame() {
       nb[r][c] = n;
       setPuzzle(nb);
       setNotes(autoCleanNotes(notes, r, c, n));
-      if (isBoardSolved(nb)) { sfx.winSound(); setPhase('won'); }
+      if (isBoardSolved(nb)) { sfx.winSound(); clearSave(SAVE_ID); setPhase('won'); }
     }
   }
 
@@ -400,14 +477,14 @@ export function SudokuGame() {
     nb[r][c] = hintVal;
     setPuzzle(nb);
     setNotes(autoCleanNotes(notes, r, c, hintVal));
-    if (isBoardSolved(nb)) setPhase('won');
+    if (isBoardSolved(nb)) { clearSave(SAVE_ID); setPhase('won'); }
   }
 
   // ── Config screen ─────────────────────────────────────────────────────────────
 
   if (phase === 'config') {
     return (
-      <div className="flex flex-col items-center gap-6 py-8 px-4 w-full">
+      <div className="flex flex-col items-center gap-4 py-2 px-4 w-full">
         <div className="w-full max-w-[420px] flex flex-col gap-4">
           <h1 className="text-4xl font-black text-zinc-100 tracking-tight">Sudoku</h1>
 
@@ -458,6 +535,15 @@ export function SudokuGame() {
             >
               Start Game
             </button>
+
+            {hasSaved && (
+              <button
+                onClick={handleContinue}
+                className="w-full py-2.5 rounded-lg border border-emerald-700/60 bg-emerald-950/40 hover:bg-emerald-950/60 text-emerald-300 text-sm font-semibold transition-colors"
+              >
+                {t('game.continue')}
+              </button>
+            )}
           </div>
 
           {/* Daily puzzle */}
@@ -479,7 +565,7 @@ export function SudokuGame() {
 
   if (phase === 'generating') {
     return (
-      <div className="flex flex-col items-center justify-center gap-4 py-24 px-4">
+      <div className="flex flex-col items-center justify-center gap-4 py-8 px-4">
         <div className="w-8 h-8 border-2 border-zinc-700 border-t-indigo-500 rounded-full animate-spin" />
         <p className="text-sm text-zinc-500">Generating puzzle…</p>
       </div>
@@ -491,7 +577,7 @@ export function SudokuGame() {
   const conflicts = computeConflicts(puzzle);
 
   return (
-    <div className="flex flex-col items-center gap-5 py-6 px-4 w-full">
+    <div className="flex flex-col items-center gap-3 py-2 px-4 w-full">
       <div className="w-full max-w-[400px] flex flex-col gap-5">
 
         {/* Header */}

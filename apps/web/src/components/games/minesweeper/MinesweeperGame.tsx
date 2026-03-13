@@ -13,6 +13,7 @@ import * as sfx from './sound';
 import { createSeededRng } from '@/lib/seededRandom';
 import { useVisibilityPause } from '@/hooks/useVisibilityPause';
 import { getTodayStr } from '@/lib/dailyChallenges/definitions';
+import { saveGame, loadGame, clearSave } from '@/lib/gameSave';
 
 // ── Types ────────────────────────────────────────────────────────────────────
 
@@ -187,6 +188,17 @@ function getCellSize(diff: Difficulty): number {
   return 24;
 }
 
+// ── Save/Load ────────────────────────────────────────────────────────────────
+
+const MS_SAVE_ID = 'minesweeper';
+
+interface MinesweeperSaveData {
+  difficulty: Difficulty;
+  grid: { mine: boolean; state: CellState; adjacent: number }[][];
+  elapsed: number;
+  firstClick: boolean;
+}
+
 // ── Component ────────────────────────────────────────────────────────────────
 
 export function MinesweeperGame() {
@@ -216,10 +228,38 @@ export function MinesweeperGame() {
 
   const config = DIFF_CONFIG[difficulty];
 
-  // Load stats on mount
+  const [hasSaved, setHasSaved] = useState(false);
+
+  // Load stats + check saved game on mount
   useEffect(() => {
     setStats(loadStats());
+    setHasSaved(loadGame(MS_SAVE_ID) !== null);
   }, []);
+
+  // Auto-save when leaving
+  const msSaveRef = useRef<() => void>(() => {});
+  msSaveRef.current = () => {
+    if (phase !== 'playing' && phase !== 'paused') return;
+    const data: MinesweeperSaveData = {
+      difficulty, elapsed, firstClick,
+      grid: grid.map(row => row.map(c => ({ mine: c.mine, state: c.state, adjacent: c.adjacent }))),
+    };
+    saveGame(MS_SAVE_ID, data);
+  };
+
+  useEffect(() => {
+    const onVis = () => { if (document.hidden) msSaveRef.current(); };
+    const onUnload = () => msSaveRef.current();
+    document.addEventListener('visibilitychange', onVis);
+    window.addEventListener('beforeunload', onUnload);
+    return () => {
+      document.removeEventListener('visibilitychange', onVis);
+      window.removeEventListener('beforeunload', onUnload);
+    };
+  }, []);
+
+  // Save on unmount (Next.js client navigation)
+  useEffect(() => () => { msSaveRef.current(); }, []);
 
   // Timer
   useEffect(() => {
@@ -255,6 +295,8 @@ export function MinesweeperGame() {
   }, [ach, pbMap]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const startGame = useCallback((diff: Difficulty, seed?: string) => {
+    clearSave(MS_SAVE_ID);
+    setHasSaved(false);
     const cfg = DIFF_CONFIG[diff];
     setDifficulty(diff);
     setGrid(createEmptyGrid(cfg.rows, cfg.cols));
@@ -269,6 +311,22 @@ export function MinesweeperGame() {
     ach.trackPlay();
     setPhase('playing');
   }, [ach]);
+
+  function handleContinue() {
+    const data = loadGame<MinesweeperSaveData>(MS_SAVE_ID);
+    if (!data) return;
+    clearSave(MS_SAVE_ID);
+    setHasSaved(false);
+    setDifficulty(data.difficulty);
+    setGrid(data.grid.map(row => row.map(c => ({ ...c, revealOrder: 0 }))));
+    setFirstClick(data.firstClick);
+    setElapsed(data.elapsed);
+    startTimeRef.current = Date.now() - data.elapsed * 1000;
+    setClickedMine(null);
+    savedRef.current = false;
+    setFlagMode(false);
+    setPhase('playing');
+  }
 
   /** Shared: apply post-reveal logic (win check, auto-flag, sounds). */
   function finalizeGrid(newGrid: Cell[][], soundType: 'reveal' | 'flood' | 'chord') {
@@ -288,6 +346,7 @@ export function MinesweeperGame() {
       }
       setGrid([...newGrid]);
       setPhase('won');
+      clearSave(MS_SAVE_ID);
       sfx.winSound();
       const timeSec = Math.floor((Date.now() - startTimeRef.current) / 1000);
       saveResult(true, difficulty, timeSec);
@@ -304,6 +363,7 @@ export function MinesweeperGame() {
     setGrid(newGrid);
     setClickedMine([mineR, mineC]);
     setPhase('lost');
+    clearSave(MS_SAVE_ID);
     sfx.explosionSound();
     const timeSec = Math.floor((Date.now() - startTimeRef.current) / 1000);
     saveResult(false, difficulty, timeSec);
@@ -402,7 +462,7 @@ export function MinesweeperGame() {
   // ── Render ──────────────────────────────────────────────────────────────────
 
   return (
-    <div className="flex flex-col items-center gap-4">
+    <div className="flex flex-col items-center gap-3">
       {/* Stats bar */}
       {stats && stats.games > 0 && (
         <div className="flex gap-6 text-xs text-zinc-500 tabular-nums">
@@ -461,6 +521,15 @@ export function MinesweeperGame() {
             >
               <span>📅</span> {t('daily.puzzle')} <span className="text-xs text-amber-500/70">({t('daily.puzzleHint')})</span>
             </button>
+
+            {hasSaved && (
+              <button
+                onClick={handleContinue}
+                className="flex items-center justify-center px-5 py-3 rounded-lg border border-emerald-700/60 bg-emerald-950/40 hover:bg-emerald-950/60 text-emerald-300 text-sm font-semibold transition-colors"
+              >
+                {t('game.continue')}
+              </button>
+            )}
           </div>
         </div>
       )}

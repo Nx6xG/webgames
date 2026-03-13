@@ -297,7 +297,7 @@ export function SnakeGame() {
   // Config screen
   if (phase === 'config') {
     return (
-      <div className="flex flex-col items-center gap-5 py-6 px-4">
+      <div className="flex flex-col items-center gap-3 py-2 px-4">
         {/* Header */}
         <div className="w-full max-w-[420px] flex items-center gap-3">
           <span className="text-4xl font-black text-zinc-100 tracking-tight mr-auto">{t('game.name.snake')}</span>
@@ -374,7 +374,7 @@ export function SnakeGame() {
   }
 
   return (
-    <div className="flex flex-col items-center gap-5 py-6 px-4">
+    <div className="flex flex-col items-center gap-3 py-2 px-4">
 
       {/* ── Header ───────────────────────────────────────────────────── */}
       <div className="w-full max-w-[420px] flex items-center gap-3">

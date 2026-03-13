@@ -1436,7 +1436,7 @@ export function BreakoutGame() {
   const diffConfig = DIFF_CONFIG[difficulty];
 
   return (
-    <div className="flex flex-col items-center gap-4" ref={wrapperRef}>
+    <div className="flex flex-col items-center gap-2 flex-1 min-h-0" ref={wrapperRef}>
       {/* Stats bar */}
       {stats && (
         <div className="flex gap-6 text-xs text-zinc-500 tabular-nums">
@@ -1453,11 +1453,14 @@ export function BreakoutGame() {
       )}
 
       {/* Canvas */}
-      <div className="relative">
+      <div className="flex-1 min-h-0 w-full flex justify-center">
+        <div
+          className="relative h-full overflow-hidden rounded-xl border border-zinc-800 bg-[#0f0f1a]"
+          style={{ aspectRatio: `${W} / ${H}`, maxWidth: '100%' }}
+        >
         <canvas
           ref={canvasRef}
-          style={{ width: W, height: H }}
-          className="rounded-xl border border-zinc-800 bg-[#0f0f1a] max-w-full h-auto touch-none"
+          className="absolute inset-0 w-full h-full touch-none"
         />
 
         {/* Menu overlay */}
@@ -1573,6 +1576,7 @@ export function BreakoutGame() {
             </button>
           </div>
         )}
+        </div>
       </div>
 
       {/* Controls hint + mute */}
