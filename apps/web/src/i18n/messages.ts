@@ -208,6 +208,8 @@ export const messages: Record<Lang, Record<string, string>> = {
     'pb.publicLogin':           'Melde dich an, um öffentliche Bestenlisten zu sehen',
     'pb.player':                'Spieler',
     'pb.you':                   '(Du)',
+    'pb.showMore':              'Mehr anzeigen',
+    'pb.showLess':              'Weniger anzeigen',
 
     // ── Support ──────────────────────────────────────────────────────────
     'support.label':            'Projekt unterstützen',
@@ -277,6 +279,8 @@ export const messages: Record<Lang, Record<string, string>> = {
     'lobby.availableGames': 'Verfügbare Spiele',
     'lobby.singleplayer':   'Einzelspieler',
     'lobby.play':           'Spielen',
+    'lobby.search':         'Spiel suchen…',
+    'lobby.noResults':      'Keine Spiele gefunden.',
     'lobby.quickPlay':      'Schnellspiel',
     'lobby.customGame':     'Benutzerdefiniert',
     'lobby.soon':           'Bald',
@@ -1765,6 +1769,8 @@ export const messages: Record<Lang, Record<string, string>> = {
     'pb.publicLogin':           'Sign in to see public leaderboards',
     'pb.player':                'Player',
     'pb.you':                   '(You)',
+    'pb.showMore':              'Show more',
+    'pb.showLess':              'Show less',
 
     // ── Support ──────────────────────────────────────────────────────────
     'support.label':            'Support this project',
@@ -1833,6 +1839,8 @@ export const messages: Record<Lang, Record<string, string>> = {
     'lobby.availableGames': 'Available Games',
     'lobby.singleplayer':   'Singleplayer',
     'lobby.play':           'Play',
+    'lobby.search':         'Search games…',
+    'lobby.noResults':      'No games found.',
     'lobby.quickPlay':      'Quick Play',
     'lobby.customGame':     'Custom',
     'lobby.soon':           'Soon',

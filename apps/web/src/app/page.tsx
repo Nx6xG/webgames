@@ -516,6 +516,7 @@ const FILTER_LABELS: { value: GameFilter; label: string }[] = [
 export default function HomePage() {
   const { t } = useI18n();
   const [filter, setFilter] = useState<GameFilter>('all');
+  const [search, setSearch] = useState('');
 
   // Modal state
   const [modalData, setModalData] = useState<GameModalData | null>(null);
@@ -565,6 +566,30 @@ export default function HomePage() {
 
   const showMultiplayer  = filter !== 'singleplayer';
   const showSingleplayer = filter !== 'multiplayer';
+
+  // Search filtering
+  const searchLower = search.trim().toLowerCase();
+
+  const filteredMultiplayer = useMemo(() => {
+    const entries = Object.values(webRegistry);
+    if (!searchLower) return entries;
+    return entries.filter((e) => {
+      const title = t(e.titleKey).toLowerCase();
+      const desc = t(e.descKey).toLowerCase();
+      const tags = e.manifest.categories.join(' ').toLowerCase();
+      return title.includes(searchLower) || desc.includes(searchLower) || tags.includes(searchLower);
+    });
+  }, [searchLower, t]);
+
+  const filteredSingleplayer = useMemo(() => {
+    if (!searchLower) return SINGLEPLAYER_GAMES;
+    return SINGLEPLAYER_GAMES.filter((g) => {
+      const title = t(g.titleKey).toLowerCase();
+      const desc = t(g.descKey).toLowerCase();
+      const tags = g.tags.join(' ').toLowerCase();
+      return title.includes(searchLower) || desc.includes(searchLower) || tags.includes(searchLower);
+    });
+  }, [searchLower, t]);
 
   function openMultiplayerModal(entry: WebGameEntry) {
     const s = statsMap?.get(entry.manifest.id);
@@ -666,9 +691,9 @@ export default function HomePage() {
       {/* Active rooms */}
       <ActiveRoomsWidget />
 
-      {/* Filter toggle */}
-      <div className="max-w-5xl mx-auto px-6 pb-8">
-        <div className="flex gap-1 p-1 bg-zinc-800 rounded-lg w-fit">
+      {/* Filter toggle + Search */}
+      <div className="max-w-5xl mx-auto px-6 pb-8 flex flex-col sm:flex-row items-start sm:items-center gap-3">
+        <div className="flex gap-1 p-1 bg-zinc-800 rounded-lg shrink-0">
           {FILTER_LABELS.map(({ value, label }) => (
             <button
               key={value}
@@ -681,6 +706,28 @@ export default function HomePage() {
             </button>
           ))}
         </div>
+        <div className="relative w-full sm:w-64">
+          <svg className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-zinc-500 pointer-events-none" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+            <path strokeLinecap="round" strokeLinejoin="round" d="M21 21l-5.197-5.197m0 0A7.5 7.5 0 105.196 5.196a7.5 7.5 0 0010.607 10.607z" />
+          </svg>
+          <input
+            type="text"
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            placeholder={t('lobby.search')}
+            className="w-full pl-8 pr-8 py-1.5 text-xs rounded-lg bg-zinc-800 border border-zinc-700/60 text-zinc-100 placeholder-zinc-500 focus:outline-none focus:border-indigo-500/50 transition-colors"
+          />
+          {search && (
+            <button
+              onClick={() => setSearch('')}
+              className="absolute right-2 top-1/2 -translate-y-1/2 text-zinc-500 hover:text-zinc-300 transition-colors"
+            >
+              <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+              </svg>
+            </button>
+          )}
+        </div>
       </div>
 
       {/* Game of the Day */}
@@ -690,13 +737,13 @@ export default function HomePage() {
       <DailyChallengesWidget />
 
       {/* Multiplayer games grid */}
-      {showMultiplayer && (
+      {showMultiplayer && filteredMultiplayer.length > 0 && (
         <section className="max-w-5xl mx-auto px-6 pb-12">
           <h2 className="text-xs font-semibold uppercase tracking-widest text-zinc-500 mb-6">
             Multiplayer
           </h2>
           <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-4">
-            {Object.values(webRegistry).map((entry) => (
+            {filteredMultiplayer.map((entry) => (
               <GameCard
                 key={entry.manifest.id}
                 entry={entry}
@@ -710,13 +757,13 @@ export default function HomePage() {
       )}
 
       {/* Singleplayer games grid */}
-      {showSingleplayer && (
+      {showSingleplayer && filteredSingleplayer.length > 0 && (
         <section className="max-w-5xl mx-auto px-6 pb-24">
           <h2 className="text-xs font-semibold uppercase tracking-widest text-zinc-500 mb-6">
             {t('lobby.singleplayer')}
           </h2>
           <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-4">
-            {SINGLEPLAYER_GAMES.map((game) => (
+            {filteredSingleplayer.map((game) => (
               <SingleplayerCard
                 key={game.id}
                 game={game}
@@ -727,6 +774,13 @@ export default function HomePage() {
             ))}
           </div>
         </section>
+      )}
+
+      {/* No results */}
+      {searchLower && filteredMultiplayer.length === 0 && filteredSingleplayer.length === 0 && (
+        <div className="max-w-5xl mx-auto px-6 pb-24 text-center">
+          <p className="text-zinc-500 text-sm">{t('lobby.noResults')}</p>
+        </div>
       )}
 
       {/* Footer */}

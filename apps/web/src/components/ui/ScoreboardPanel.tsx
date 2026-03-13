@@ -46,6 +46,7 @@ export function ScoreboardPanel({ gameId, scores, lastInsertId, isNewBest, onCle
   const config = getScoreConfig(gameId);
 
   const [mode, setMode] = useState<LeaderboardMode>('personal');
+  const [expanded, setExpanded] = useState(false);
   const prevInsertRef = useRef(lastInsertId);
 
   // Auto-refresh public leaderboard when a new score is submitted
@@ -145,7 +146,7 @@ export function ScoreboardPanel({ gameId, scores, lastInsertId, isNewBest, onCle
                   </tr>
                 </thead>
                 <tbody>
-                  {scores.map((entry, i) => {
+                  {(expanded ? scores.slice(0, 10) : scores.slice(0, 3)).map((entry, i) => {
                     const isLast = entry.id === lastInsertId;
                     return (
                       <tr
@@ -195,6 +196,14 @@ export function ScoreboardPanel({ gameId, scores, lastInsertId, isNewBest, onCle
                   })}
                 </tbody>
               </table>
+              {scores.length > 3 && (
+                <button
+                  onClick={() => setExpanded(!expanded)}
+                  className="w-full py-1.5 text-xs font-semibold text-zinc-500 hover:text-zinc-300 transition-colors border-t border-zinc-800/50 bg-zinc-900/30"
+                >
+                  {expanded ? t('pb.showLess') : t('pb.showMore')}
+                </button>
+              )}
             </div>
           )}
         </>

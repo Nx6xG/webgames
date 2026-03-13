@@ -86,7 +86,6 @@ const RAILROAD_COLOR = '#1f2937';
 const RAIL_COLOR = '#6b7280';
 const LOG_COLOR = '#92400e';
 const LOG_LIGHT = '#a16207';
-const LILYPAD_COLOR = '#22c55e';
 const PLAYER_COLOR = '#fbbf24';
 const PLAYER_DARK = '#d97706';
 const COIN_COLOR = '#fbbf24';
@@ -176,7 +175,6 @@ function makeRoadLane(row: number, dir: 1 | -1, difficulty: number): Lane {
   const speed = (baseSpeed + Math.random() * 0.5) * dir;
   const vehWidth = randInt(1, 2) * TILE;
 
-  // Space vehicles evenly with some jitter
   const totalSpace = GAME_W + 200;
   const spacing = totalSpace / numVehicles;
   for (let i = 0; i < numVehicles; i++) {
@@ -195,7 +193,7 @@ function makeWaterLane(row: number, dir: 1 | -1, difficulty: number): Lane {
   const logs: LogObj[] = [];
   const numLogs = randInt(2, 4 - Math.floor(difficulty * 1.5));
   const clampedLogs = Math.max(numLogs, 2);
-  const baseSpeed = (0.6 + difficulty * 0.8) * dir;
+  const speed = (0.6 + difficulty * 0.8) * dir; // same speed for all logs in lane
   const logWidth = randInt(2, 4) * TILE;
 
   const totalSpace = GAME_W + 300;
@@ -204,7 +202,7 @@ function makeWaterLane(row: number, dir: 1 | -1, difficulty: number): Lane {
     logs.push({
       x: i * spacing + randInt(-15, 15),
       width: logWidth,
-      speed: baseSpeed + (Math.random() * 0.3 - 0.15),
+      speed, // all logs move together — no overlap
     });
   }
 
@@ -265,6 +263,7 @@ export function CrossyRoadGame() {
   const hopToYRef = useRef(0);
   const playerAliveRef = useRef(true);
   const onLogSpeedRef = useRef(0); // if standing on a log, its speed
+  const logDriftXRef = useRef(0); // accumulated pixel offset from log movement
 
   // Camera — smooth interpolation (pixel-level, not tile-snapping)
   const cameraTargetRef = useRef(0); // target camera row (integer)
@@ -279,8 +278,9 @@ export function CrossyRoadGame() {
   const lastForwardTimeRef = useRef(0);
   const deathLineYRef = useRef(GAME_H + 50); // starts off-screen
 
-  // Frame counter
+  // Frame counter + delta time
   const frameRef = useRef(0);
+  const lastTimeRef = useRef(0);
 
   // Death animation
   const deathFrameRef = useRef(0);
@@ -346,6 +346,7 @@ export function CrossyRoadGame() {
     hopProgressRef.current = 0;
     playerAliveRef.current = true;
     onLogSpeedRef.current = 0;
+    logDriftXRef.current = 0;
 
     cameraTargetRef.current = 0;
     cameraYRef.current = 0;
@@ -500,15 +501,21 @@ export function CrossyRoadGame() {
     };
   }, [startGame, resumeGame]);
 
-  // ── Game loop ──────────────────────────────────────────────────────────
-  const tick = useCallback(() => {
+  // ── Game loop (delta-time based — consistent across all refresh rates) ──
+  const tick = useCallback((timestamp: number) => {
     if (phaseRef.current !== 'playing') return;
 
-    frameRef.current += 1;
+    // Calculate delta-time factor (1.0 = 60fps)
+    if (lastTimeRef.current === 0) lastTimeRef.current = timestamp;
+    const rawDt = timestamp - lastTimeRef.current;
+    lastTimeRef.current = timestamp;
+    const dt = Math.min(rawDt, 50) / 16.667;
+
+    frameRef.current += dt;
     const now = performance.now();
 
-    // ── Process input ────────────────────────────────────────────────
-    if (hopProgressRef.current === 0 && inputQueueRef.current.length > 0) {
+    // ── Process input (only while alive) ─────────────────────────────
+    if (playerAliveRef.current && hopProgressRef.current === 0 && inputQueueRef.current.length > 0) {
       const dir = inputQueueRef.current.shift()!;
       let targetCol = playerColRef.current;
       let targetRow = playerRowRef.current;
@@ -538,6 +545,7 @@ export function CrossyRoadGame() {
 
           playerColRef.current = targetCol;
           playerRowRef.current = targetRow;
+          logDriftXRef.current = 0; // reset drift when hopping
 
           sfx.hopSound();
 
@@ -566,7 +574,7 @@ export function CrossyRoadGame() {
 
     // ── Hop animation ────────────────────────────────────────────────
     if (hopProgressRef.current > 0) {
-      hopProgressRef.current += 1;
+      hopProgressRef.current += dt;
       if (hopProgressRef.current > HOP_FRAMES) {
         hopProgressRef.current = 0;
         playerPxXRef.current = hopToXRef.current;
@@ -578,7 +586,7 @@ export function CrossyRoadGame() {
       }
     } else {
       // Not hopping — update position based on camera + log movement
-      playerPxXRef.current = colToScreenX(playerColRef.current) + onLogSpeedRef.current;
+      playerPxXRef.current = colToScreenX(playerColRef.current) + logDriftXRef.current;
       playerPxYRef.current = rowToScreenY(playerRowRef.current);
     }
 
@@ -588,11 +596,16 @@ export function CrossyRoadGame() {
     if (Math.abs(diff) < 0.5) {
       cameraYRef.current = targetCamY;
     } else {
-      cameraYRef.current += diff * 0.15; // smooth lerp
+      cameraYRef.current += diff * (1 - Math.pow(1 - 0.15, dt)); // frame-rate independent lerp
     }
 
     // ── Update lanes (vehicles, logs, trains) ────────────────────────
     onLogSpeedRef.current = 0;
+    // Reset log drift if not on a water lane
+    const currentLane = getLane(playerRowRef.current);
+    if (!currentLane || currentLane.type !== 'water') {
+      logDriftXRef.current = 0;
+    }
     const camRow = Math.floor(cameraYRef.current / TILE);
     const visibleMin = camRow - 2;
     const visibleMax = camRow + VISIBLE_ROWS + 3;
@@ -602,7 +615,7 @@ export function CrossyRoadGame() {
 
       // Vehicles
       for (const v of lane.vehicles) {
-        v.x += v.speed;
+        v.x += v.speed * dt;
         // Wrap
         if (v.speed > 0 && v.x > GAME_W + 50) v.x = -v.width - 50;
         if (v.speed < 0 && v.x + v.width < -50) v.x = GAME_W + 50;
@@ -610,7 +623,7 @@ export function CrossyRoadGame() {
 
       // Logs
       for (const log of lane.logs) {
-        log.x += log.speed;
+        log.x += log.speed * dt;
         if (log.speed > 0 && log.x > GAME_W + 50) log.x = -log.width - 50;
         if (log.speed < 0 && log.x + log.width < -50) log.x = GAME_W + 50;
       }
@@ -618,20 +631,20 @@ export function CrossyRoadGame() {
       // Trains
       for (const train of lane.trains) {
         if (!train.active) {
-          train.warningTimer -= 1;
+          train.warningTimer -= dt;
           if (train.warningTimer <= 0 && !train.warning) {
             train.warning = true;
             train.warningTimer = 90; // warning duration in frames
             sfx.trainWarningSound();
           }
           if (train.warning) {
-            train.warningTimer -= 1;
+            train.warningTimer -= dt;
             if (train.warningTimer <= 0) {
               train.active = true;
             }
           }
         } else {
-          train.x += train.speed;
+          train.x += train.speed * dt;
           // Respawn
           if (train.speed > 0 && train.x > GAME_W + 200) {
             train.x = -train.width - randInt(200, 600);
@@ -676,20 +689,24 @@ export function CrossyRoadGame() {
           }
         }
 
-        // Water — must be on a log
+        // Water — must be on a log; player drifts with it
         if (lane.type === 'water') {
           let onLog = false;
+          const playerCenterX = colToScreenX(pCol) + logDriftXRef.current + TILE / 2;
           for (const log of lane.logs) {
-            const logLeft = log.x;
-            const logRight = log.x + log.width;
-            const centerX = colToScreenX(pCol) + TILE / 2;
-            if (centerX >= logLeft && centerX <= logRight) {
+            if (playerCenterX >= log.x && playerCenterX <= log.x + log.width) {
               onLog = true;
               onLogSpeedRef.current = log.speed;
-              // Move player col based on log drift
-              const newPxX = colToScreenX(pCol) + log.speed;
-              const newCol = Math.round(newPxX / TILE);
-              if (newCol < 0 || newCol >= COLS) {
+              // Accumulate drift from log movement
+              logDriftXRef.current += log.speed * dt;
+              // Snap to new column when drift exceeds half a tile
+              if (Math.abs(logDriftXRef.current) >= TILE / 2) {
+                const colShift = Math.round(logDriftXRef.current / TILE);
+                playerColRef.current += colShift;
+                logDriftXRef.current -= colShift * TILE;
+              }
+              // Die if carried off screen
+              if (playerColRef.current < -1 || playerColRef.current >= COLS + 1) {
                 die('splash');
               }
               break;
@@ -729,7 +746,7 @@ export function CrossyRoadGame() {
     if (playerAliveRef.current) {
       const timeSinceForward = now - lastForwardTimeRef.current;
       if (timeSinceForward > IDLE_TIMEOUT_MS) {
-        deathLineYRef.current -= DEATH_LINE_SPEED;
+        deathLineYRef.current -= DEATH_LINE_SPEED * dt;
       }
       // Check if player is below death line
       const pScreenY = playerPxYRef.current + PLAYER_OFFSET + PLAYER_SIZE;
@@ -740,7 +757,7 @@ export function CrossyRoadGame() {
 
     // ── Death animation ──────────────────────────────────────────────
     if (!playerAliveRef.current) {
-      deathFrameRef.current += 1;
+      deathFrameRef.current += dt;
       if (deathFrameRef.current > 40) {
         endGame();
         return;
@@ -876,15 +893,30 @@ export function CrossyRoadGame() {
   }, [countdownNum]);
 
   // ── Draw helpers ───────────────────────────────────────────────────
+
+  function roundRect(ctx: CanvasRenderingContext2D, x: number, y: number, w: number, h: number, r: number) {
+    ctx.beginPath();
+    ctx.moveTo(x + r, y);
+    ctx.lineTo(x + w - r, y);
+    ctx.quadraticCurveTo(x + w, y, x + w, y + r);
+    ctx.lineTo(x + w, y + h - r);
+    ctx.quadraticCurveTo(x + w, y + h, x + w - r, y + h);
+    ctx.lineTo(x + r, y + h);
+    ctx.quadraticCurveTo(x, y + h, x, y + h - r);
+    ctx.lineTo(x, y + r);
+    ctx.quadraticCurveTo(x, y, x + r, y);
+    ctx.closePath();
+    ctx.fill();
+  }
+
   function drawGrassLane(ctx: CanvasRenderingContext2D, lane: Lane, y: number) {
-    // Base grass
     ctx.fillStyle = GRASS_COLOR;
     ctx.fillRect(0, y, GAME_W, TILE);
 
     // Grass texture patches
     ctx.fillStyle = GRASS_DARK;
     const seed = lane.row * 7;
-    for (let i = 0; i < 6; i++) {
+    for (let i = 0; i < 8; i++) {
       const px = ((seed + i * 73) % GAME_W);
       const py = y + ((seed + i * 31) % (TILE - 6)) + 3;
       ctx.fillRect(px, py, 6, 3);
@@ -902,7 +934,7 @@ export function CrossyRoadGame() {
       // Trunk
       ctx.fillStyle = '#92400e';
       ctx.fillRect(tx - 3, ty - 2, 6, 12);
-      // Foliage
+      // Foliage layers
       ctx.fillStyle = '#15803d';
       ctx.beginPath();
       ctx.arc(tx, ty - 4, 13, 0, Math.PI * 2);
@@ -911,6 +943,11 @@ export function CrossyRoadGame() {
       ctx.beginPath();
       ctx.arc(tx - 3, ty - 2, 9, 0, Math.PI * 2);
       ctx.fill();
+      // Highlight
+      ctx.fillStyle = 'rgba(255,255,255,0.08)';
+      ctx.beginPath();
+      ctx.arc(tx - 2, ty - 6, 5, 0, Math.PI * 2);
+      ctx.fill();
     }
 
     // Coins
@@ -918,7 +955,6 @@ export function CrossyRoadGame() {
       if (coin.collected) continue;
       const cx = coin.col * TILE + TILE / 2;
       const cy = y + TILE / 2;
-      // Sparkle animation
       const sparkle = Math.sin(frameRef.current * 0.1 + lane.row) * 2;
       ctx.fillStyle = COIN_COLOR;
       ctx.beginPath();
@@ -932,7 +968,6 @@ export function CrossyRoadGame() {
   }
 
   function drawRoadLane(ctx: CanvasRenderingContext2D, lane: Lane, y: number) {
-    // Road base
     ctx.fillStyle = ROAD_COLOR;
     ctx.fillRect(0, y, GAME_W, TILE);
 
@@ -971,8 +1006,12 @@ export function CrossyRoadGame() {
       ctx.fillStyle = v.color;
       roundRect(ctx, vx, vy, vw, vh, 4);
 
+      // Highlight
+      ctx.fillStyle = 'rgba(255,255,255,0.12)';
+      ctx.fillRect(vx + 3, vy + 2, vw - 6, 3);
+
       // Windshield
-      ctx.fillStyle = 'rgba(0,0,0,0.3)';
+      ctx.fillStyle = 'rgba(100,180,255,0.4)';
       const windshieldX = v.speed > 0 ? vx + vw - 14 : vx + 4;
       ctx.fillRect(windshieldX, vy + 4, 10, vh - 8);
 
@@ -981,11 +1020,16 @@ export function CrossyRoadGame() {
       const hlX = v.speed > 0 ? vx + vw - 3 : vx;
       ctx.fillRect(hlX, vy + 5, 3, 5);
       ctx.fillRect(hlX, vy + vh - 10, 3, 5);
+
+      // Tail lights
+      ctx.fillStyle = '#ef4444';
+      const tlX = v.speed > 0 ? vx + 1 : vx + vw - 4;
+      ctx.fillRect(tlX, vy + 6, 3, 4);
+      ctx.fillRect(tlX, vy + vh - 10, 3, 4);
     }
   }
 
   function drawWaterLane(ctx: CanvasRenderingContext2D, lane: Lane, y: number) {
-    // Water base
     ctx.fillStyle = WATER_COLOR;
     ctx.fillRect(0, y, GAME_W, TILE);
 
@@ -1009,7 +1053,7 @@ export function CrossyRoadGame() {
       const lh = TILE - 12;
       const lw = log.width;
 
-      // Shadow in water
+      // Shadow
       ctx.fillStyle = 'rgba(0,0,0,0.2)';
       roundRect(ctx, lx + 2, ly + 3, lw, lh, 6);
 
@@ -1026,11 +1070,14 @@ export function CrossyRoadGame() {
         ctx.lineTo(gx, ly + lh - 3);
         ctx.stroke();
       }
+
+      // Top highlight
+      ctx.fillStyle = 'rgba(255,255,255,0.08)';
+      ctx.fillRect(lx + 6, ly + 2, lw - 12, 2);
     }
   }
 
   function drawRailroadLane(ctx: CanvasRenderingContext2D, lane: Lane, y: number) {
-    // Base
     ctx.fillStyle = RAILROAD_COLOR;
     ctx.fillRect(0, y, GAME_W, TILE);
 
@@ -1050,14 +1097,12 @@ export function CrossyRoadGame() {
       ctx.fillRect(tx, y + 8, 8, TILE - 16);
     }
 
-    // Warning flash
     for (const train of lane.trains) {
       if (train.warning && !train.active) {
         const flash = Math.sin(frameRef.current * 0.3) > 0;
         if (flash) {
           ctx.fillStyle = 'rgba(239, 68, 68, 0.25)';
           ctx.fillRect(0, y, GAME_W, TILE);
-          // Warning lights at edges
           ctx.fillStyle = '#ef4444';
           ctx.beginPath();
           ctx.arc(20, y + TILE / 2, 5, 0, Math.PI * 2);
@@ -1068,7 +1113,6 @@ export function CrossyRoadGame() {
         }
       }
 
-      // Train
       if (train.active) {
         const tx = train.x;
         const ty = y + 2;
@@ -1106,10 +1150,10 @@ export function CrossyRoadGame() {
     const px = playerPxXRef.current + PLAYER_OFFSET;
     let py = playerPxYRef.current + PLAYER_OFFSET;
 
-    // Hop bounce (slight arc during hop animation)
+    // Hop bounce
     if (hopProgressRef.current > 0) {
-      const t = hopProgressRef.current / HOP_FRAMES;
-      const bounce = Math.sin(t * Math.PI) * 8;
+      const hp = hopProgressRef.current / HOP_FRAMES;
+      const bounce = Math.sin(hp * Math.PI) * 8;
       py -= bounce;
     }
 
@@ -1120,11 +1164,9 @@ export function CrossyRoadGame() {
 
       ctx.save();
       if (type === 'splash') {
-        // Sink + ripple
         const sinkOffset = Math.min(df * 1.5, 20);
         py += sinkOffset;
         ctx.globalAlpha = Math.max(0, 1 - df / 35);
-        // Ripples
         ctx.strokeStyle = '#60a5fa';
         ctx.lineWidth = 1.5;
         for (let r = 0; r < 3; r++) {
@@ -1136,11 +1178,9 @@ export function CrossyRoadGame() {
         }
         ctx.globalAlpha = Math.max(0, 1 - df / 30);
       } else if (type === 'hit' || type === 'crushed') {
-        // Flash red + flatten
         ctx.globalAlpha = Math.max(0, 1 - df / 35);
         const squish = Math.min(df * 0.5, 10);
         py += squish / 2;
-        // Red flash
         if (df < 10 && df % 4 < 2) {
           ctx.fillStyle = '#ef4444';
           ctx.fillRect(px - 4, py - 4, PLAYER_SIZE + 8, PLAYER_SIZE + 8);
@@ -1168,9 +1208,13 @@ export function CrossyRoadGame() {
     ctx.fillStyle = PLAYER_COLOR;
     roundRect(ctx, px, py, PLAYER_SIZE, PLAYER_SIZE, 6);
 
-    // Darker bottom
+    // Darker bottom half
     ctx.fillStyle = PLAYER_DARK;
     roundRect(ctx, px, py + PLAYER_SIZE * 0.6, PLAYER_SIZE, PLAYER_SIZE * 0.4, 6);
+
+    // Body highlight
+    ctx.fillStyle = 'rgba(255,255,255,0.12)';
+    ctx.fillRect(px + 4, py + 3, PLAYER_SIZE - 8, 3);
 
     // Eyes
     ctx.fillStyle = '#1f2937';
@@ -1201,25 +1245,11 @@ export function CrossyRoadGame() {
     ctx.fill();
   }
 
-  function roundRect(ctx: CanvasRenderingContext2D, x: number, y: number, w: number, h: number, r: number) {
-    ctx.beginPath();
-    ctx.moveTo(x + r, y);
-    ctx.lineTo(x + w - r, y);
-    ctx.quadraticCurveTo(x + w, y, x + w, y + r);
-    ctx.lineTo(x + w, y + h - r);
-    ctx.quadraticCurveTo(x + w, y + h, x + w - r, y + h);
-    ctx.lineTo(x + r, y + h);
-    ctx.quadraticCurveTo(x, y + h, x, y + h - r);
-    ctx.lineTo(x, y + r);
-    ctx.quadraticCurveTo(x, y, x + r, y);
-    ctx.closePath();
-    ctx.fill();
-  }
-
   // ── RAF loop ───────────────────────────────────────────────────────
   useEffect(() => {
-    function loop() {
-      tick();
+    lastTimeRef.current = 0; // reset so first frame gets dt=0
+    function loop(timestamp: number) {
+      tick(timestamp);
       draw();
       rafRef.current = requestAnimationFrame(loop);
     }

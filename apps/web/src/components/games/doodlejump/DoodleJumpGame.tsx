@@ -171,7 +171,7 @@ function createInitialState(): GameState {
     score: 0,
     maxHeight: 0,
     lastScoredY: -1,
-    nextPlatformY: platforms[platforms.length - 1].y + randomRange(40, 70),
+    nextPlatformY: platforms[platforms.length - 1].y + randomRange(28, 45),
     platformIdCounter: platforms.length,
   };
 }
@@ -416,6 +416,7 @@ export function DoodleJumpGame() {
   const savedRef = useRef(false);
   const countdownTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const lastScoreMilestone = useRef(0);
+  const lastTimeRef = useRef<number>(0);
 
   // Sync phase ref
   useEffect(() => {
@@ -479,21 +480,28 @@ export function DoodleJumpGame() {
     ctx.restore();
   }, []);
 
-  // ── Game tick ─────────────────────────────────────────────────────────
-  const tick = useCallback(() => {
+  // ── Game tick (delta-time based — consistent across all refresh rates) ──
+  const tick = useCallback((timestamp: number) => {
     if (phaseRef.current !== 'playing') return;
+
+    // Calculate delta-time factor (1.0 = 60fps, 2.0 = 30fps, 0.5 = 120fps)
+    if (lastTimeRef.current === 0) lastTimeRef.current = timestamp;
+    const rawDt = timestamp - lastTimeRef.current;
+    lastTimeRef.current = timestamp;
+    // Clamp dt to avoid huge jumps after tab switch or lag spike (max ~3 frames at 60fps)
+    const dt = Math.min(rawDt, 50) / 16.667;
 
     const gs = gsRef.current;
     const keys = keysRef.current;
 
     // ── Input ─────────────────────────────────────────────────────────
     if (keys.has('ArrowLeft') || keys.has('a') || keys.has('A')) {
-      gs.velX -= MOVE_SPEED * 0.2;
+      gs.velX -= MOVE_SPEED * 0.2 * dt;
     }
     if (keys.has('ArrowRight') || keys.has('d') || keys.has('D')) {
-      gs.velX += MOVE_SPEED * 0.2;
+      gs.velX += MOVE_SPEED * 0.2 * dt;
     }
-    gs.velX *= FRICTION;
+    gs.velX *= Math.pow(FRICTION, dt);
     if (Math.abs(gs.velX) < 0.1) gs.velX = 0;
 
     // Clamp horizontal speed
@@ -501,11 +509,11 @@ export function DoodleJumpGame() {
     if (gs.velX < -MOVE_SPEED) gs.velX = -MOVE_SPEED;
 
     // ── Physics ───────────────────────────────────────────────────────
-    gs.velY -= GRAVITY;
+    gs.velY -= GRAVITY * dt;
     if (gs.velY < -MAX_FALL_VEL) gs.velY = -MAX_FALL_VEL;
 
-    gs.doodlerX += gs.velX;
-    gs.doodlerY += gs.velY;
+    gs.doodlerX += gs.velX * dt;
+    gs.doodlerY += gs.velY * dt;
 
     // Screen wrap
     if (gs.doodlerX + DOODLER_W < 0) {
@@ -535,8 +543,8 @@ export function DoodleJumpGame() {
           doodlerBottom <= platTop + 10
         ) {
           if (p.kind === 'breakable') {
-            // Bounce first, then break after a short delay
-            gs.velY = JUMP_VEL * 0.7; // weaker bounce
+            // Full bounce, then break — penalty is losing the platform, not jump height
+            gs.velY = JUMP_VEL;
             gs.doodlerY = platTop;
             sfx.jumpSound();
             // Schedule break after the bounce launches the player
@@ -569,7 +577,7 @@ export function DoodleJumpGame() {
     // ── Move moving platforms ─────────────────────────────────────────
     for (const p of gs.platforms) {
       if (p.kind === 'moving' && !p.broken) {
-        p.x += (p.moveDir ?? 1) * (p.moveSpeed ?? 1);
+        p.x += (p.moveDir ?? 1) * (p.moveSpeed ?? 1) * dt;
         if (p.x <= (p.moveMin ?? 0)) {
           p.x = p.moveMin ?? 0;
           p.moveDir = 1;
@@ -581,7 +589,7 @@ export function DoodleJumpGame() {
       }
       // Animate broken platforms
       if (p.broken && p.breakTimer !== undefined) {
-        p.breakTimer += 1;
+        p.breakTimer += 1 * dt;
       }
     }
 
@@ -601,18 +609,27 @@ export function DoodleJumpGame() {
 
     // ── Generate new platforms ────────────────────────────────────────
     // Max jump height ≈ v²/(2g) = 9²/(2*0.3) = 135px
-    // Gaps must always be reachable: cap at ~105px (leaves ~30px margin)
+    // Gaps must always be reachable: cap at ~85px (leaves ~50px margin for dt variance)
     const topOfView = gs.cameraY + CANVAS_H + 100;
     while (gs.nextPlatformY < topOfView) {
       const difficulty = Math.min(gs.score / 150, 1); // slow ramp over 150 bounces
-      const minGap = 30 + difficulty * 20;  // 30 → 50
-      const maxGap = 50 + difficulty * 55;  // 50 → 105
+      const minGap = 28 + difficulty * 17;  // 28 → 45
+      const maxGap = 45 + difficulty * 40;  // 45 → 85
       const gap = randomRange(minGap, maxGap);
 
       gs.nextPlatformY += gap;
       const x = randomRange(10, CANVAS_W - PLATFORM_W - 10);
       const kind = choosePlatformKind(gs.score);
-      gs.platforms.push(createPlatform(x, gs.nextPlatformY, kind));
+      const plat = createPlatform(x, gs.nextPlatformY, kind);
+      gs.platforms.push(plat);
+
+      // After a breakable platform, always place a reachable normal platform nearby
+      if (kind === 'breakable') {
+        const safeGap = randomRange(28, 50);
+        gs.nextPlatformY += safeGap;
+        const safeX = randomRange(10, CANVAS_W - PLATFORM_W - 10);
+        gs.platforms.push(createPlatform(safeX, gs.nextPlatformY, 'normal'));
+      }
     }
 
     // ── Cull platforms below camera ──────────────────────────────────
@@ -655,6 +672,7 @@ export function DoodleJumpGame() {
   // ── Start/stop loop based on phase ────────────────────────────────────
   const startLoop = useCallback(() => {
     if (rafRef.current) cancelAnimationFrame(rafRef.current);
+    lastTimeRef.current = 0; // reset so first frame gets dt=0
     rafRef.current = requestAnimationFrame(tick);
   }, [tick]);
 
