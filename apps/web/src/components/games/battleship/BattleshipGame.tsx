@@ -1812,7 +1812,104 @@ export function BattleshipGame({ wsUrl, gameId, initialRoomCode, quickPlay: isQu
             </Link>
           </div>
         ) : mp.phase === 'lobby' ? (
-          <div className="rounded-xl border border-zinc-800 bg-zinc-900 p-4 flex flex-col gap-3">
+          <div className="flex flex-col gap-3">
+            {/* Mode toggle: Online / vs Bot */}
+            <div className="flex gap-1 p-1 bg-zinc-800 rounded-lg">
+              <button
+                onClick={() => setBotMode(false)}
+                className={`flex-1 py-1.5 text-xs rounded-md font-medium transition-colors ${!botMode ? 'bg-zinc-700 text-zinc-100' : 'text-zinc-500 hover:text-zinc-300'}`}
+              >
+                Online
+              </button>
+              <button
+                onClick={() => setBotMode(true)}
+                className={`flex-1 py-1.5 text-xs rounded-md font-medium transition-colors ${botMode ? 'bg-zinc-700 text-zinc-100' : 'text-zinc-500 hover:text-zinc-300'}`}
+              >
+                vs Bot
+              </button>
+            </div>
+
+            {botMode ? (
+              /* ── Bot lobby ─────────────────────────────────────────── */
+              <div className="rounded-xl border border-zinc-800 bg-zinc-900 p-4 flex flex-col gap-3">
+                {/* Difficulty */}
+                <div>
+                  <p className="text-xs text-zinc-500 uppercase tracking-wider font-semibold mb-1.5">{t('chess.bot.difficulty')}</p>
+                  <div className="flex gap-1.5">
+                    {(['easy', 'medium', 'hard'] as const).map((d) => (
+                      <button
+                        key={d}
+                        onClick={() => setBotDifficulty(d)}
+                        className={`flex-1 py-1.5 rounded-md text-xs font-medium transition-colors ${
+                          botDifficulty === d ? 'bg-indigo-600 text-white' : 'bg-zinc-800 text-zinc-400 hover:bg-zinc-700 hover:text-zinc-200'
+                        }`}
+                      >
+                        {t(`chess.bot.${d}`)}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+                {/* Board size */}
+                <div className="flex flex-col gap-1.5">
+                  <p className="text-[11px] text-zinc-500 font-semibold uppercase tracking-wider">{t('battleship.config.boardSize')}</p>
+                  <div className="grid grid-cols-3 gap-1">
+                    {([8, 10, 12] as const).map((sz) => (
+                      <button
+                        key={sz}
+                        onClick={() => setBoardSizeCfg(sz)}
+                        className={`py-1.5 px-1 text-[11px] rounded-md font-medium transition-colors border ${
+                          boardSizeCfg === sz
+                            ? 'border-indigo-500 bg-indigo-900/40 text-indigo-300'
+                            : 'border-zinc-700 bg-transparent text-zinc-500 hover:border-zinc-500 hover:text-zinc-300'
+                        }`}
+                      >
+                        {t(`battleship.config.boardSize.${sz}`)}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+                {/* Fleet preset */}
+                <div className="flex flex-col gap-1.5">
+                  <p className="text-[11px] text-zinc-500 font-semibold uppercase tracking-wider">{t('battleship.lobby.fleetPreset')}</p>
+                  <div className="grid grid-cols-3 gap-1">
+                    {[{ id: 'random', ships: [] as readonly { id: string; name: string; length: number }[] }, ...FLEET_PRESETS].map((p) => (
+                      <button
+                        key={p.id}
+                        onClick={() => setFleetPreset(p.id)}
+                        className={`py-1.5 px-1 text-[11px] rounded-md font-medium transition-colors border ${
+                          fleetPreset === p.id
+                            ? 'border-indigo-500 bg-indigo-900/40 text-indigo-300'
+                            : 'border-zinc-700 bg-transparent text-zinc-500 hover:border-zinc-500 hover:text-zinc-300'
+                        }`}
+                      >
+                        {t(`battleship.fleet.${p.id}`)}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+                {/* Salvo mode */}
+                <div className="flex flex-col gap-1">
+                  <label className="flex items-center gap-2 cursor-pointer">
+                    <button
+                      onClick={() => setSalvoModeCfg((v) => !v)}
+                      className={`relative w-9 h-5 rounded-full transition-colors ${salvoModeCfg ? 'bg-indigo-600' : 'bg-zinc-700'}`}
+                    >
+                      <span className={`absolute top-0.5 left-0.5 w-4 h-4 rounded-full bg-white transition-transform ${salvoModeCfg ? 'translate-x-4' : ''}`} />
+                    </button>
+                    <span className="text-[11px] text-zinc-300 font-semibold uppercase tracking-wider">{t('battleship.config.salvo')}</span>
+                  </label>
+                </div>
+                {/* Start */}
+                <button
+                  onClick={() => bot.startGame({ fleetPreset, boardSize: boardSizeCfg, salvoMode: salvoModeCfg, shotTimerSec: 0 })}
+                  className="w-full py-2.5 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-white font-semibold text-sm transition-colors"
+                >
+                  {t('chess.bot.play')}
+                </button>
+              </div>
+            ) : (
+              /* ── Multiplayer lobby ─────────────────────────────────── */
+              <div className="rounded-xl border border-zinc-800 bg-zinc-900 p-4 flex flex-col gap-3">
             <div className="flex gap-1 p-1 bg-zinc-800 rounded-lg">
               {(['private', 'public'] as const).map((v) => (
                 <button
@@ -1930,7 +2027,7 @@ export function BattleshipGame({ wsUrl, gameId, initialRoomCode, quickPlay: isQu
               </div>
             </div>
             <button
-              onClick={() => mp.createRoom({ visibility: roomVisibility, roomName: roomName.trim() || undefined, battleshipConfig: { fleetPreset, boardSize: boardSizeCfg, salvoMode: salvoModeCfg, shotTimerSec: shotTimerCfg } })}
+              onClick={() => mpRaw.createRoom({ visibility: roomVisibility, roomName: roomName.trim() || undefined, battleshipConfig: { fleetPreset, boardSize: boardSizeCfg, salvoMode: salvoModeCfg, shotTimerSec: shotTimerCfg } })}
               disabled={mp.connection !== 'connected'}
               className="w-full py-2.5 rounded-lg bg-indigo-600 hover:bg-indigo-500 disabled:opacity-40 disabled:cursor-not-allowed text-white font-semibold text-sm transition-colors"
             >
@@ -1945,13 +2042,15 @@ export function BattleshipGame({ wsUrl, gameId, initialRoomCode, quickPlay: isQu
                 className="flex-1 bg-zinc-800 border border-zinc-700 rounded-lg px-3 py-2 text-sm text-zinc-100 placeholder-zinc-500 focus:outline-none focus:border-indigo-500 uppercase tracking-widest font-mono"
               />
               <button
-                onClick={() => mp.joinRoom(joinInput)}
+                onClick={() => mpRaw.joinRoom(joinInput)}
                 disabled={joinInput.length < 4 || mp.connection !== 'connected'}
                 className="px-4 py-2 rounded-lg bg-zinc-700 hover:bg-zinc-600 disabled:opacity-40 disabled:cursor-not-allowed text-white text-sm font-semibold transition-colors"
               >
                 {t('game.lobby.join')}
               </button>
             </div>
+              </div>
+            )}
           </div>
         ) : null}
 

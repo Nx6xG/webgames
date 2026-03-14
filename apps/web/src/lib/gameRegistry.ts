@@ -130,7 +130,7 @@ export const webRegistry: Record<GameId, WebGameEntry> = {
       id: 'battleship',
       name: 'Battleship',
       description: 'Place your fleet and sink the enemy before they sink you!',
-      categories: ['classic', 'strategy', '2 players'],
+      categories: ['classic', 'strategy', '2 players', 'vs bot'],
       version: '1.0.0',
       routeSlug: 'battleship',
       minPlayers: 2,
