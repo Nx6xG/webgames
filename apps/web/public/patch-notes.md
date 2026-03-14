@@ -10,6 +10,9 @@
 - **Täglicher Streak** — Streak zählt jetzt nur hoch, wenn alle täglichen Herausforderungen abgeschlossen wurden
 - **Neues Spiel: Elfmeterschießen** — Schieß Elfmeter und halte als Torwart gegen die KI (3 Schwierigkeiten, Sudden Death)
 - **Neue Spiele: Doodle Jump, Crossy Road & Mahjong** — Drei neue Singleplayer-Spiele
+- **Neue Spiele: Pac-Man, Asteroids, Geometry Dash, Fruit Ninja, Whack-a-Mole & Typing Test** — Sechs neue Singleplayer-Spiele
+- **Asteroids: Power-ups** — Doppelschuss, Dreifachschuss, Schnellfeuer, Schild und Große Kugeln spawnen beim Zerstören von Asteroiden
+- **Typing Test: Deutsch & Englisch** — Wörter passen sich automatisch der Spracheinstellung an
 - **Singleplayer-Shops** — Einige Singleplayer-Spiele haben jetzt eigenständige Shops mit spielspezifischen Items
 
 ---

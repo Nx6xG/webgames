@@ -129,6 +129,60 @@ const SINGLEPLAYER_GAMES = [
     tags:         ['singleplayer', 'arcade'],
     bestScoreKey: '',
   },
+  {
+    id:           'asteroids',
+    titleKey:     'lobby.games.asteroids.title',
+    descKey:      'lobby.games.asteroids.desc',
+    emoji:        '☄️',
+    href:         '/games/asteroids',
+    tags:         ['singleplayer', 'arcade', 'classic'],
+    bestScoreKey: '',
+  },
+  {
+    id:           'pacman',
+    titleKey:     'lobby.games.pacman.title',
+    descKey:      'lobby.games.pacman.desc',
+    emoji:        '👾',
+    href:         '/games/pacman',
+    tags:         ['singleplayer', 'arcade', 'classic'],
+    bestScoreKey: '',
+  },
+  {
+    id:           'typingtest',
+    titleKey:     'lobby.games.typingtest.title',
+    descKey:      'lobby.games.typingtest.desc',
+    emoji:        '⌨️',
+    href:         '/games/typingtest',
+    tags:         ['singleplayer', 'casual'],
+    bestScoreKey: '',
+  },
+  {
+    id:           'geometrydash',
+    titleKey:     'lobby.games.geometrydash.title',
+    descKey:      'lobby.games.geometrydash.desc',
+    emoji:        '▶️',
+    href:         '/games/geometrydash',
+    tags:         ['singleplayer', 'arcade'],
+    bestScoreKey: '',
+  },
+  {
+    id:           'whackamole',
+    titleKey:     'lobby.games.whackamole.title',
+    descKey:      'lobby.games.whackamole.desc',
+    emoji:        '\u{1F528}',
+    href:         '/games/whackamole',
+    tags:         ['singleplayer', 'arcade'],
+    bestScoreKey: '',
+  },
+  {
+    id:           'fruitninja',
+    titleKey:     'lobby.games.fruitninja.title',
+    descKey:      'lobby.games.fruitninja.desc',
+    emoji:        '\u{1F349}',
+    href:         '/games/fruitninja',
+    tags:         ['singleplayer', 'arcade'],
+    bestScoreKey: '',
+  },
 ] as const;
 import { GlobalChatWidget } from '@/components/chat/GlobalChatWidget';
 import { ProfileMenu } from '@/components/ProfileMenu';
@@ -196,6 +250,8 @@ const GAME_CONTROLS_KEY: Record<string, string> = {
   uno:             'modal.controls.uno',
   doodlejump:      'modal.controls.doodlejump',
   crossyroad:      'modal.controls.crossyroad',
+  typingtest:      'modal.controls.typingtest',
+  fruitninja:      'modal.controls.fruitninja',
 };
 
 // ── Badge system ─────────────────────────────────────────────────────────────
