@@ -1,5 +1,5 @@
 import { useState, useCallback, useRef, useEffect } from 'react';
-import type { BattleshipState, BattleshipAction, BoardSize } from 'shared';
+import type { BattleshipState, BattleshipAction, BoardSize, CosmeticsSelection } from 'shared';
 import {
   createInitialState, applyAction, autoPlaceShips,
   getBotShot, createBotMemory, updateBotMemory,
@@ -15,6 +15,7 @@ interface BotPlayer {
   avatarId?: string;
   nameColor?: string;
   avatarFrame?: string;
+  cosmetics?: CosmeticsSelection;
 }
 
 export interface BattleshipBotState {

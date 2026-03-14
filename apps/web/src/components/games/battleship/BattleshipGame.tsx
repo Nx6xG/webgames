@@ -685,7 +685,7 @@ export function BattleshipGame({ wsUrl, gameId, initialRoomCode, quickPlay: isQu
     countdown: bot.countdown,
     matchCountdown: null as number | null,
     players: bot.players,
-    sendAction: bot.sendAction as (action: Record<string, unknown>) => void,
+    sendAction: bot.sendAction as unknown as (action: Record<string, unknown>) => void,
     leaveRoom: bot.leaveGame,
     requestRematch: bot.requestRematch,
     rematchVotes: bot.rematchVotes,
