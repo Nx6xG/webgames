@@ -4,14 +4,20 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import type { GameComponentProps } from '@/lib/gameRegistry';
 import { useMultiplayer } from '@/hooks/useMultiplayer';
 import { useI18n } from '@/components/providers/LanguageProvider';
-import type { CurveFeverState, CfDeathEvent, CfKillFeedEntry, CfPowerUpType, RoomVisibility } from 'shared';
+import type { CurveFeverState, CfDeathEvent, CfKillFeedEntry, CfPowerUpType, CfSpeedSetting, CfPowerUpDensity, CfThickness, CfArenaShape, CfMapSize, CfBotDifficulty, RoomVisibility } from 'shared';
+import { isBotToken } from 'shared';
 import { ReconnectBanner } from '@/components/ui/ReconnectBanner';
 import { useAchievements } from '@/hooks/useAchievements';
+import { NicknameEditor } from '@/components/NicknameEditor';
+import { ChatPanelWithProfile as ChatPanel } from '@/components/chat/ChatPanelWithProfile';
+import { SpectatorBanner } from '@/components/ui/SpectatorBanner';
+import { WaitingForConnectionOverlay } from '@/components/WaitingForConnectionOverlay';
 
 const ARENA_W = 800;
 const ARENA_H = 600;
 const PLAYER_RADIUS = 3;
-const TICKS_PER_SEC = 20;
+const TICKS_PER_SEC = 30;
+const TICK_MS = 33; // 1000/30
 const POWERUP_PICKUP_RADIUS = 12;
 
 // ── Power-up visuals ─────────────────────────────────────────────────────────
@@ -20,12 +26,20 @@ const POWERUP_COLORS: Record<CfPowerUpType, string> = {
   speed: '#f39c12',   // amber
   shield: '#3498db',  // blue
   phase: '#9b59b6',   // purple
+  slow: '#1abc9c',    // teal
+  thin: '#e91e63',    // pink
+  reverse: '#ff5722', // deep orange
+  big: '#8bc34a',     // light green
 };
 
 const POWERUP_ICONS: Record<CfPowerUpType, string> = {
   speed: '⚡',
   shield: '🛡',
   phase: '👻',
+  slow: '🐢',
+  thin: '📍',
+  reverse: '🔄',
+  big: '💪',
 };
 
 // ── Death particle system (client-only) ──────────────────────────────────────
@@ -100,6 +114,67 @@ interface KillFeedDisplay {
 
 const KILL_FEED_DISPLAY_MS = 4000;
 
+// ── Arena shape rendering helpers ──────────────────────────────────────────────
+
+const SQRT3_2 = Math.sqrt(3) / 2;
+
+/** Trace a shape path on the canvas context (does NOT call beginPath — caller does). */
+function traceShapePath(ctx: CanvasRenderingContext2D, shape: CfArenaShape, inset: number, aW: number, aH: number) {
+  const cx = aW / 2;
+  const cy = aH / 2;
+  const circleR = Math.min(aW, aH) / 2 - 10;
+  const hexR = circleR - 5;
+  switch (shape) {
+    case 'rectangle': {
+      const m = inset;
+      ctx.rect(m + 1, m + 1, aW - 2 * m - 2, aH - 2 * m - 2);
+      break;
+    }
+    case 'circle': {
+      const r = circleR - inset;
+      if (r > 0) ctx.arc(cx, cy, r, 0, Math.PI * 2);
+      break;
+    }
+    case 'hexagon': {
+      const R = hexR - inset;
+      if (R <= 0) break;
+      for (let i = 0; i < 6; i++) {
+        const angle = (Math.PI / 3) * i;
+        const vx = cx + R * Math.cos(angle);
+        const vy = cy + R * Math.sin(angle);
+        if (i === 0) ctx.moveTo(vx, vy);
+        else ctx.lineTo(vx, vy);
+      }
+      ctx.closePath();
+      break;
+    }
+    case 'diamond': {
+      const hw = aW / 2 - 10 - inset;
+      const hh = aH / 2 - 10 - inset;
+      if (hw <= 0 || hh <= 0) break;
+      ctx.moveTo(cx, cy - hh);
+      ctx.lineTo(cx + hw, cy);
+      ctx.lineTo(cx, cy + hh);
+      ctx.lineTo(cx - hw, cy);
+      ctx.closePath();
+      break;
+    }
+  }
+}
+
+/** Max duration for each power-up effect (for countdown ring rendering). */
+function effectMaxDuration(type: CfPowerUpType): number {
+  switch (type) {
+    case 'speed': return 60;
+    case 'shield': return 300;
+    case 'phase': return 30;
+    case 'slow': return 90;
+    case 'thin': return 120;
+    case 'reverse': return 90;
+    case 'big': return 90;
+  }
+}
+
 export function CurveFeverGame({ wsUrl, gameId, initialRoomCode, quickPlay: autoQuickPlay }: GameComponentProps) {
   const mp = useMultiplayer<CurveFeverState>(wsUrl, gameId);
   const { t } = useI18n();
@@ -112,6 +187,17 @@ export function CurveFeverGame({ wsUrl, gameId, initialRoomCode, quickPlay: auto
   const [roomVisibility, setRoomVisibility] = useState<RoomVisibility>('private');
   const [roomName, setRoomName] = useState('');
   const [joinCode, setJoinCode] = useState('');
+  const [cfSpeed, setCfSpeed] = useState<CfSpeedSetting>('normal');
+  const [cfPowerUps, setCfPowerUps] = useState<CfPowerUpDensity>('normal');
+  const [cfThickness, setCfThickness] = useState<CfThickness>('normal');
+  const [cfNoGaps, setCfNoGaps] = useState(false);
+  const [cfShrinking, setCfShrinking] = useState(false);
+  const [cfSuddenDeath, setCfSuddenDeath] = useState(false);
+  const [cfDisabledPUs, setCfDisabledPUs] = useState<CfPowerUpType[]>([]);
+  const [cfObstacles, setCfObstacles] = useState(false);
+  const [cfTeamMode, setCfTeamMode] = useState(false);
+  const [cfArenaShape, setCfArenaShape] = useState<CfArenaShape>('rectangle');
+  const [cfMapSize, setCfMapSize] = useState<CfMapSize>('normal');
 
   // Canvas ref
   const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -127,6 +213,9 @@ export function CurveFeverGame({ wsUrl, gameId, initialRoomCode, quickPlay: auto
   // Screen shake
   const shakeRef = useRef<ShakeState>({ intensity: 0, decay: 0 });
 
+  // Interpolation: track when last server state arrived
+  const lastStateTimeRef = useRef(0);
+
   // Track which death events we already spawned particles for
   const processedDeathsRef = useRef<Set<string>>(new Set());
 
@@ -138,6 +227,11 @@ export function CurveFeverGame({ wsUrl, gameId, initialRoomCode, quickPlay: auto
   const knownPowerUpsRef = useRef<Set<number>>(new Set());
 
   const myToken = typeof window !== 'undefined' ? localStorage.getItem('wg_player_token') ?? '' : '';
+
+  // Track when server state arrives (for interpolation)
+  useEffect(() => {
+    if (gs?.phase === 'playing') lastStateTimeRef.current = performance.now();
+  }, [gs?.ticksElapsed]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // ── Auto-join logic ──────────────────────────────────────────────────────
   useEffect(() => {
@@ -279,12 +373,22 @@ export function CurveFeverGame({ wsUrl, gameId, initialRoomCode, quickPlay: auto
     }
   }, [gs?.powerUps]);
 
+  // ── Reset trails when entering countdown (new round or game start) ───────
+  useEffect(() => {
+    if (!gs || gs.phase !== 'countdown') return;
+    const tr = trailsRef.current;
+    tr.segments = gs.players.map(() => []);
+    tr.round = gs.round;
+  }, [gs?.phase === 'countdown' ? gs.round : null]); // eslint-disable-line react-hooks/exhaustive-deps
+
   // ── Trail accumulation from server state ─────────────────────────────────
   useEffect(() => {
     if (!gs) return;
+    // Only accumulate trails during active gameplay
+    if (gs.phase !== 'playing') return;
     const tr = trailsRef.current;
 
-    // Reset trails on new round
+    // Reset trails on new round (safety check)
     if (gs.round !== tr.round) {
       tr.segments = gs.players.map(() => []);
       tr.round = gs.round;
@@ -336,9 +440,13 @@ export function CurveFeverGame({ wsUrl, gameId, initialRoomCode, quickPlay: auto
       if (canvas.width !== bufW) canvas.width = bufW;
       if (canvas.height !== bufH) canvas.height = bufH;
 
-      // Scale all drawing from arena coords (800x600) to actual pixel buffer
-      const sx = bufW / ARENA_W;
-      const sy = bufH / ARENA_H;
+      // Dynamic arena dimensions from server state
+      const aW = state.arenaWidth || ARENA_W;
+      const aH = state.arenaHeight || ARENA_H;
+
+      // Scale all drawing from arena coords to actual pixel buffer
+      const sx = bufW / aW;
+      const sy = bufH / aH;
       ctx.setTransform(sx, 0, 0, sy, 0, 0);
 
       // Screen shake offset
@@ -355,22 +463,95 @@ export function CurveFeverGame({ wsUrl, gameId, initialRoomCode, quickPlay: auto
 
       // Background
       ctx.fillStyle = '#0a0a0f';
-      ctx.fillRect(-10, -10, ARENA_W + 20, ARENA_H + 20);
+      ctx.fillRect(-10, -10, aW + 20, aH + 20);
 
-      // Grid
+      const arenaShape = state.cfArenaShape ?? 'rectangle';
+
+      // Grid — clip to arena shape for non-rect
+      ctx.save();
+      if (arenaShape !== 'rectangle') {
+        ctx.beginPath();
+        traceShapePath(ctx, arenaShape, 0, aW, aH);
+        ctx.clip();
+      }
       ctx.strokeStyle = 'rgba(255,255,255,0.03)';
       ctx.lineWidth = 1;
-      for (let x = 0; x < ARENA_W; x += 40) {
-        ctx.beginPath(); ctx.moveTo(x, 0); ctx.lineTo(x, ARENA_H); ctx.stroke();
+      for (let gx = 0; gx < aW; gx += 40) {
+        ctx.beginPath(); ctx.moveTo(gx, 0); ctx.lineTo(gx, aH); ctx.stroke();
       }
-      for (let y = 0; y < ARENA_H; y += 40) {
-        ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(ARENA_W, y); ctx.stroke();
+      for (let gy = 0; gy < aH; gy += 40) {
+        ctx.beginPath(); ctx.moveTo(0, gy); ctx.lineTo(aW, gy); ctx.stroke();
       }
+      ctx.restore();
 
       // Arena border
+      ctx.beginPath();
+      traceShapePath(ctx, arenaShape, 0, aW, aH);
       ctx.strokeStyle = 'rgba(255,255,255,0.15)';
       ctx.lineWidth = 2;
-      ctx.strokeRect(1, 1, ARENA_W - 2, ARENA_H - 2);
+      ctx.stroke();
+
+      // Darken area outside non-rectangular arenas
+      if (arenaShape !== 'rectangle') {
+        ctx.save();
+        ctx.beginPath();
+        ctx.rect(0, 0, aW, aH);
+        traceShapePath(ctx, arenaShape, 0, aW, aH);
+        ctx.fillStyle = 'rgba(0,0,0,0.6)';
+        // Even-odd fill: fills outside shape but inside rect
+        (ctx as CanvasRenderingContext2D).fill('evenodd');
+        ctx.restore();
+      }
+
+      // Shrinking arena boundary
+      const shrink = state.shrinkInset ?? 0;
+      if (shrink > 0.5) {
+        // Fill deadly zone between outer and inner shape
+        ctx.save();
+        ctx.beginPath();
+        traceShapePath(ctx, arenaShape, 0, aW, aH);
+        traceShapePath(ctx, arenaShape, shrink, aW, aH);
+        ctx.fillStyle = 'rgba(220,38,38,0.08)';
+        (ctx as CanvasRenderingContext2D).fill('evenodd');
+        ctx.restore();
+
+        // Inner boundary line (dashed)
+        ctx.beginPath();
+        traceShapePath(ctx, arenaShape, shrink, aW, aH);
+        ctx.strokeStyle = 'rgba(239,68,68,0.5)';
+        ctx.lineWidth = 1.5;
+        ctx.setLineDash([6, 4]);
+        ctx.stroke();
+        ctx.setLineDash([]);
+      }
+
+      // ── Draw obstacles ──────────────────────────────────────────────────
+      if (state.obstacles?.length) {
+        for (const ob of state.obstacles) {
+          // Dark block with subtle border
+          ctx.fillStyle = 'rgba(120,120,140,0.35)';
+          ctx.beginPath();
+          ctx.roundRect(ob.x, ob.y, ob.w, ob.h, 4);
+          ctx.fill();
+          ctx.strokeStyle = 'rgba(160,160,180,0.5)';
+          ctx.lineWidth = 1.5;
+          ctx.stroke();
+          // Diagonal hatch lines for texture
+          ctx.save();
+          ctx.beginPath();
+          ctx.rect(ob.x, ob.y, ob.w, ob.h);
+          ctx.clip();
+          ctx.strokeStyle = 'rgba(180,180,200,0.12)';
+          ctx.lineWidth = 1;
+          for (let d = -ob.h; d < ob.w; d += 8) {
+            ctx.beginPath();
+            ctx.moveTo(ob.x + d, ob.y);
+            ctx.lineTo(ob.x + d + ob.h, ob.y + ob.h);
+            ctx.stroke();
+          }
+          ctx.restore();
+        }
+      }
 
       // ── Draw trails ─────────────────────────────────────────────────────
       const trails = trailsRef.current.segments;
@@ -379,8 +560,9 @@ export function CurveFeverGame({ wsUrl, gameId, initialRoomCode, quickPlay: auto
         const segments = trails[i] ?? [];
         const isDead = !p.alive;
 
+        const trailRadius = state.cfThickness === 'thin' ? 2 : state.cfThickness === 'thick' ? 5 : PLAYER_RADIUS;
         ctx.strokeStyle = p.color;
-        ctx.lineWidth = PLAYER_RADIUS * 2;
+        ctx.lineWidth = trailRadius * 2;
         ctx.lineCap = 'round';
         ctx.lineJoin = 'round';
         ctx.globalAlpha = isDead ? 0.3 : 1;
@@ -429,19 +611,43 @@ export function CurveFeverGame({ wsUrl, gameId, initialRoomCode, quickPlay: auto
         ctx.fillText(POWERUP_ICONS[pu.type], pu.x, pu.y + floatY);
       }
 
-      // ── Draw player heads (alive only) ──────────────────────────────────
+      // ── Draw player heads (alive only) with client-side interpolation ──
       ctx.shadowBlur = 0;
+
+      // Compute interpolation factor: how far ahead of the last server tick we are
+      const lastStateT = lastStateTimeRef.current;
+      const elapsed = lastStateT > 0 ? performance.now() - lastStateT : 0;
+      // Clamp to one tick interval max to avoid overshooting
+      const interpFrac = Math.min(elapsed / TICK_MS, 1);
+      // Estimate speed from ticksElapsed (same formula as server)
+      const speedPresets: Record<string, { base: number; inc: number; max: number }> = {
+        slow:   { base: 1.0, inc: 0.033, max: 2.3 },
+        normal: { base: 1.5, inc: 0.07,  max: 3.7 },
+        fast:   { base: 2.1, inc: 0.1,   max: 5.0 },
+      };
+      const sp = speedPresets[state.cfSpeed] ?? speedPresets.normal;
+      const estSpeed = Math.min(sp.base + (state.ticksElapsed / TICKS_PER_SEC) * sp.inc, sp.max);
+
       for (const p of state.players) {
         if (!p.alive) continue;
+
+        // Interpolated position: extrapolate forward based on angle and speed
+        let pSpeed = estSpeed;
+        if (p.effects.some(e => e.type === 'speed')) pSpeed *= 1.5;
+        if (p.effects.some(e => e.type === 'slow')) pSpeed *= 0.5;
+        const px = p.x + Math.cos(p.angle) * pSpeed * interpFrac;
+        const py = p.y + Math.sin(p.angle) * pSpeed * interpFrac;
 
         const hasPhase = p.effects.some(e => e.type === 'phase');
         const hasShield = p.hasShield;
         const hasSpeed = p.effects.some(e => e.type === 'speed');
+        const hasSlow = p.effects.some(e => e.type === 'slow');
+        const hasReverse = p.effects.some(e => e.type === 'reverse');
 
         // Shield ring
         if (hasShield) {
           ctx.beginPath();
-          ctx.arc(p.x, p.y, PLAYER_RADIUS + 6, 0, Math.PI * 2);
+          ctx.arc(px, py, PLAYER_RADIUS + 6, 0, Math.PI * 2);
           ctx.strokeStyle = POWERUP_COLORS.shield + '80';
           ctx.lineWidth = 2;
           ctx.shadowColor = POWERUP_COLORS.shield;
@@ -453,18 +659,47 @@ export function CurveFeverGame({ wsUrl, gameId, initialRoomCode, quickPlay: auto
         // Phase: ghostly transparency
         ctx.globalAlpha = hasPhase ? 0.5 : 1;
 
-        // Speed: extra glow
-        const headGlow = hasSpeed ? 20 : 14;
-        const headColor = hasSpeed ? POWERUP_COLORS.speed : p.color;
+        // Head color: priority speed > slow > reverse > normal
+        const headColor = hasSpeed ? POWERUP_COLORS.speed
+          : hasSlow ? POWERUP_COLORS.slow
+          : hasReverse ? POWERUP_COLORS.reverse
+          : p.color;
+        const headGlow = (hasSpeed || hasSlow || hasReverse) ? 20 : 14;
 
         ctx.beginPath();
-        ctx.arc(p.x, p.y, PLAYER_RADIUS + 2, 0, Math.PI * 2);
+        ctx.arc(px, py, PLAYER_RADIUS + 2, 0, Math.PI * 2);
         ctx.fillStyle = headColor;
         ctx.shadowColor = headColor;
         ctx.shadowBlur = headGlow;
         ctx.fill();
         ctx.shadowBlur = 0;
         ctx.globalAlpha = 1;
+
+        // ── Effect countdown rings ──────────────────────────────────────
+        const timedEffects = p.effects.filter(e => e.type !== 'shield');
+        if (timedEffects.length > 0) {
+          const ringBase = PLAYER_RADIUS + 9;
+          for (let ei = 0; ei < timedEffects.length; ei++) {
+            const eff = timedEffects[ei];
+            const maxDur = effectMaxDuration(eff.type);
+            const pct = eff.remainingTicks / maxDur;
+            const ringR = ringBase + ei * 4;
+            const effColor = POWERUP_COLORS[eff.type];
+            // Background track
+            ctx.beginPath();
+            ctx.arc(px, py, ringR, 0, Math.PI * 2);
+            ctx.strokeStyle = effColor + '20';
+            ctx.lineWidth = 1.5;
+            ctx.stroke();
+            // Progress arc
+            ctx.beginPath();
+            ctx.arc(px, py, ringR, -Math.PI / 2, -Math.PI / 2 + pct * Math.PI * 2);
+            ctx.strokeStyle = effColor + '90';
+            ctx.lineWidth = 1.5;
+            ctx.lineCap = 'round';
+            ctx.stroke();
+          }
+        }
       }
 
       // ── Draw & update particles ─────────────────────────────────────────
@@ -494,18 +729,20 @@ export function CurveFeverGame({ wsUrl, gameId, initialRoomCode, quickPlay: auto
       ctx.shadowBlur = 0;
 
       // ── Overlays ────────────────────────────────────────────────────────
-      const cx = ARENA_W / 2;
-      const cy = ARENA_H / 2;
+      const cx = aW / 2;
+      const cy = aH / 2;
 
       // Speed indicator (subtle, bottom-center during play)
       if (state.phase === 'playing') {
         const seconds = state.ticksElapsed / TICKS_PER_SEC;
-        const spd = Math.min(2.2 + seconds * 0.1, 5.5);
-        const pct = (spd - 2.2) / (5.5 - 2.2);
+        const presets = { slow: [1.5, 0.05, 3.5], normal: [2.2, 0.1, 5.5], fast: [3.2, 0.15, 7.5] } as const;
+        const [baseSpd, spdInc, maxSpd] = presets[state.cfSpeed] ?? presets.normal;
+        const spd = Math.min(baseSpd + seconds * spdInc, maxSpd);
+        const pct = (spd - baseSpd) / (maxSpd - baseSpd);
         const barW = 120;
         const barH = 3;
         const barX = cx - barW / 2;
-        const barY = ARENA_H - 18;
+        const barY = aH - 18;
         ctx.globalAlpha = 0.35;
         ctx.fillStyle = '#333';
         ctx.fillRect(barX, barY, barW, barH);
@@ -532,7 +769,7 @@ export function CurveFeverGame({ wsUrl, gameId, initialRoomCode, quickPlay: auto
         grad.addColorStop(0, 'rgba(0,0,0,0.3)');
         grad.addColorStop(1, 'rgba(0,0,0,0.7)');
         ctx.fillStyle = grad;
-        ctx.fillRect(0, 0, ARENA_W, ARENA_H);
+        ctx.fillRect(0, 0, aW, aH);
 
         ctx.textAlign = 'center';
         ctx.textBaseline = 'middle';
@@ -590,7 +827,7 @@ export function CurveFeverGame({ wsUrl, gameId, initialRoomCode, quickPlay: auto
         grad.addColorStop(0, 'rgba(0,0,0,0.4)');
         grad.addColorStop(1, 'rgba(0,0,0,0.75)');
         ctx.fillStyle = grad;
-        ctx.fillRect(0, 0, ARENA_W, ARENA_H);
+        ctx.fillRect(0, 0, aW, aH);
         ctx.textAlign = 'center';
         ctx.textBaseline = 'middle';
 
@@ -602,7 +839,7 @@ export function CurveFeverGame({ wsUrl, gameId, initialRoomCode, quickPlay: auto
             winGrad.addColorStop(0, rw.color + '15');
             winGrad.addColorStop(1, 'transparent');
             ctx.fillStyle = winGrad;
-            ctx.fillRect(0, 0, ARENA_W, ARENA_H);
+            ctx.fillRect(0, 0, aW, aH);
 
             ctx.fillStyle = rw.color;
             ctx.font = 'bold 44px system-ui, sans-serif';
@@ -641,7 +878,15 @@ export function CurveFeverGame({ wsUrl, gameId, initialRoomCode, quickPlay: auto
           ctx.fillStyle = 'rgba(255,255,255,0.8)';
           ctx.font = '14px system-ui, sans-serif';
           ctx.textAlign = 'left';
-          ctx.fillText(p.nickname || 'Player', cx - 68, y + 5);
+          const name1 = p.nickname || 'Player';
+          ctx.fillText(name1, cx - 68, y + 5);
+          // Bot tag
+          if (isBotToken(p.token)) {
+            const nameW = ctx.measureText(name1).width;
+            ctx.fillStyle = 'rgba(34,211,238,0.7)';
+            ctx.font = '8px system-ui, sans-serif';
+            ctx.fillText('BOT', cx - 68 + nameW + 4, y + 4);
+          }
           // Score
           ctx.textAlign = 'right';
           ctx.font = 'bold 16px system-ui, sans-serif';
@@ -649,6 +894,32 @@ export function CurveFeverGame({ wsUrl, gameId, initialRoomCode, quickPlay: auto
           ctx.fillText(String(p.score), cx + 88, y + 5);
           ctx.textAlign = 'center';
         });
+
+        // Round stats (below scoreboard)
+        if (state.roundStats?.length > 0) {
+          const statsY = startY + sorted.length * rowH + 12;
+          // Sort by survival time descending
+          const sortedStats = [...state.roundStats].sort((a, b) => b.survivalTicks - a.survivalTicks);
+          ctx.font = '9px system-ui, sans-serif';
+          ctx.fillStyle = 'rgba(255,255,255,0.3)';
+          ctx.textAlign = 'center';
+          // Header
+          ctx.fillText(`⏱  ${t('curvefever.stats.time')}    📏  ${t('curvefever.stats.dist')}    ⚡  PU    💀  Kills`, cx, statsY);
+          sortedStats.forEach((st, si) => {
+            const sy = statsY + 14 + si * 16;
+            const timeSec = (st.survivalTicks / TICKS_PER_SEC).toFixed(1);
+            ctx.fillStyle = st.color;
+            ctx.textAlign = 'left';
+            ctx.fillText(st.nickname, cx - 140, sy);
+            ctx.fillStyle = 'rgba(255,255,255,0.4)';
+            ctx.textAlign = 'right';
+            ctx.fillText(`${timeSec}s`, cx - 30, sy);
+            ctx.fillText(`${st.distance}px`, cx + 30, sy);
+            ctx.fillText(`${st.powerUpsCollected}`, cx + 75, sy);
+            ctx.fillText(`${st.kills}`, cx + 120, sy);
+          });
+          ctx.textAlign = 'center';
+        }
       }
 
       // Match end overlay
@@ -658,14 +929,14 @@ export function CurveFeverGame({ wsUrl, gameId, initialRoomCode, quickPlay: auto
         const winColor = wp?.color ?? '#f1c40f';
 
         ctx.fillStyle = 'rgba(0,0,0,0.8)';
-        ctx.fillRect(0, 0, ARENA_W, ARENA_H);
+        ctx.fillRect(0, 0, aW, aH);
 
         // Winner color radial glow
         const winGrad = ctx.createRadialGradient(cx, cy - 40, 0, cx, cy - 40, 300);
         winGrad.addColorStop(0, winColor + '20');
         winGrad.addColorStop(1, 'transparent');
         ctx.fillStyle = winGrad;
-        ctx.fillRect(0, 0, ARENA_W, ARENA_H);
+        ctx.fillRect(0, 0, aW, aH);
 
         ctx.textAlign = 'center';
         ctx.textBaseline = 'middle';
@@ -722,7 +993,15 @@ export function CurveFeverGame({ wsUrl, gameId, initialRoomCode, quickPlay: auto
           // Name
           ctx.fillStyle = isWin ? '#fff' : 'rgba(255,255,255,0.7)';
           ctx.font = `${isWin ? 'bold ' : ''}15px system-ui, sans-serif`;
-          ctx.fillText(p.nickname || 'Player', cx - 80, y + 5);
+          const name2 = p.nickname || 'Player';
+          ctx.fillText(name2, cx - 80, y + 5);
+          // Bot tag
+          if (isBotToken(p.token)) {
+            const nameW = ctx.measureText(name2).width;
+            ctx.fillStyle = 'rgba(34,211,238,0.7)';
+            ctx.font = '8px system-ui, sans-serif';
+            ctx.fillText('BOT', cx - 80 + nameW + 4, y + 4);
+          }
           // Score
           ctx.textAlign = 'right';
           ctx.font = 'bold 17px system-ui, sans-serif';
@@ -753,174 +1032,489 @@ export function CurveFeverGame({ wsUrl, gameId, initialRoomCode, quickPlay: auto
   const isHost = mp.playerIndex === 0;
   const winsNeeded = gs ? gs.winsNeeded : Math.ceil(bestOf / 2);
 
+  // Chat state
+  const [chatOpen, setChatOpen] = useState(false);
+  const [unread, setUnread] = useState(0);
+  const prevMsgLen = useRef(0);
+
+  useEffect(() => {
+    const total = (mp.roomMessages?.length ?? 0) + (mp.globalMessages?.length ?? 0);
+    if (total > prevMsgLen.current && !chatOpen) setUnread((u) => u + total - prevMsgLen.current);
+    prevMsgLen.current = total;
+  }, [mp.roomMessages?.length, mp.globalMessages?.length, chatOpen]);
+
   // ── Lobby UI ─────────────────────────────────────────────────────────────
   const showLobby = mp.phase === 'lobby' || (gs?.phase === 'lobby');
   if (showLobby) {
     const inRoom = !!mp.roomCode;
 
     return (
-      <div className="flex flex-col items-center gap-6 p-4 max-w-xl mx-auto">
-        <h1 className="text-3xl font-bold text-zinc-100">Curve Fever</h1>
+      <div className="grid gap-4 lg:grid-cols-[1fr_340px] w-full items-start max-w-5xl mx-auto px-4 py-2">
+        {/* ── Main area ── */}
+        <div className="flex flex-col items-center gap-4">
+          <h1 className="text-3xl font-bold text-zinc-100">Curve Fever</h1>
 
-        {!inRoom ? (
-          <>
-            {/* Create room */}
-            <div className="w-full bg-zinc-900 rounded-xl p-5 border border-zinc-800 space-y-4">
-              <h2 className="text-lg font-semibold text-zinc-200">{t('game.lobby.createRoom')}</h2>
+          {!inRoom ? (
+            <>
+              {/* Create room */}
+              <div className="w-full max-w-xl bg-zinc-900 rounded-xl p-5 border border-zinc-800 space-y-4">
+                <h2 className="text-lg font-semibold text-zinc-200">{t('game.lobby.createRoom')}</h2>
 
-              {/* Visibility */}
-              <div className="flex gap-2">
-                {(['private', 'public'] as const).map((v) => (
-                  <button
-                    key={v}
-                    onClick={() => setRoomVisibility(v)}
-                    className={`flex-1 py-2 rounded-lg text-sm font-medium transition-colors ${
-                      roomVisibility === v ? 'bg-indigo-600 text-white' : 'bg-zinc-800 text-zinc-400 hover:bg-zinc-700'
-                    }`}
-                  >
-                    {t(`game.lobby.${v}`)}
-                  </button>
-                ))}
-              </div>
-
-              {roomVisibility === 'public' && (
-                <input
-                  type="text"
-                  placeholder={t('game.lobby.roomName')}
-                  maxLength={24}
-                  value={roomName}
-                  onChange={(e) => setRoomName(e.target.value)}
-                  className="w-full px-3 py-2 rounded-lg bg-zinc-800 text-zinc-200 text-sm border border-zinc-700"
+                <NicknameEditor
+                  nickname={mp.myNickname}
+                  onSave={(nick) => mp.setNickname(nick)}
                 />
-              )}
 
-              {/* Best of */}
-              <div>
-                <label className="text-sm text-zinc-400 mb-1 block">Best of</label>
-                <div className="flex gap-2">
-                  {[3, 5, 7].map((n) => (
+                {/* Visibility */}
+                <div className="flex gap-1 p-1 rounded-lg bg-zinc-800">
+                  {(['private', 'public'] as const).map((v) => (
                     <button
-                      key={n}
-                      onClick={() => setBestOf(n)}
-                      className={`flex-1 py-2 rounded-lg text-sm font-medium transition-colors ${
-                        bestOf === n ? 'bg-indigo-600 text-white' : 'bg-zinc-800 text-zinc-400 hover:bg-zinc-700'
+                      key={v}
+                      onClick={() => setRoomVisibility(v)}
+                      className={`flex-1 py-1.5 rounded-md text-xs font-semibold transition-colors cursor-pointer ${
+                        roomVisibility === v ? 'bg-indigo-600 text-white' : 'text-zinc-400 hover:text-zinc-200'
                       }`}
                     >
-                      Bo{n}
+                      {t(`game.lobby.${v}`)}
                     </button>
                   ))}
                 </div>
-                <p className="text-xs text-zinc-600 mt-1">
-                  {t('curvefever.firstTo')} {Math.ceil(bestOf / 2)} {t('curvefever.winsMatch')}
-                </p>
-              </div>
 
-              {/* Max players */}
-              <div>
-                <label className="text-sm text-zinc-400 mb-1 block">{t('liarsbar.players')}</label>
-                <div className="flex gap-2">
-                  {[2, 3, 4, 5, 6].map((n) => (
-                    <button
-                      key={n}
-                      onClick={() => setMaxPlayers(n)}
-                      className={`flex-1 py-2 rounded-lg text-sm font-medium transition-colors ${
-                        maxPlayers === n ? 'bg-indigo-600 text-white' : 'bg-zinc-800 text-zinc-400 hover:bg-zinc-700'
-                      }`}
-                    >
-                      {n}
-                    </button>
-                  ))}
-                </div>
-              </div>
+                {roomVisibility === 'public' && (
+                  <input
+                    type="text"
+                    placeholder={t('game.lobby.roomName')}
+                    maxLength={24}
+                    value={roomName}
+                    onChange={(e) => setRoomName(e.target.value)}
+                    className="w-full px-3 py-2 rounded-lg bg-zinc-800 text-zinc-200 text-sm border border-zinc-700 placeholder:text-zinc-500"
+                  />
+                )}
 
-              <button
-                onClick={() => mp.createRoom({
-                  visibility: roomVisibility,
-                  roomName: roomName || undefined,
-                  cfConfig: { bestOf },
-                  maxPlayers,
-                })}
-                className="w-full py-3 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white font-semibold transition-colors"
-              >
-                {t('game.lobby.createRoom')}
-              </button>
-            </div>
-
-            {/* Join room */}
-            <div className="w-full bg-zinc-900 rounded-xl p-5 border border-zinc-800 space-y-3">
-              <h2 className="text-lg font-semibold text-zinc-200">{t('game.lobby.join')}</h2>
-              <input
-                type="text"
-                placeholder={t('game.lobby.roomCode')}
-                maxLength={6}
-                value={joinCode}
-                onChange={(e) => setJoinCode(e.target.value.toUpperCase())}
-                className="w-full px-3 py-2 rounded-lg bg-zinc-800 text-zinc-200 text-center font-mono text-lg tracking-widest border border-zinc-700"
-              />
-              <button
-                onClick={() => joinCode.length === 6 && mp.joinRoom(joinCode)}
-                disabled={joinCode.length !== 6}
-                className="w-full py-3 rounded-xl bg-emerald-600 hover:bg-emerald-500 disabled:opacity-40 text-white font-semibold transition-colors"
-              >
-                {t('game.lobby.join')}
-              </button>
-            </div>
-          </>
-        ) : (
-          /* In-room lobby */
-          <div className="w-full bg-zinc-900 rounded-xl p-5 border border-zinc-800 space-y-4">
-            <div className="flex items-center justify-between">
-              <h2 className="text-lg font-semibold text-zinc-200">
-                {t('game.lobby.roomCode')}: <span className="font-mono text-indigo-400">{mp.roomCode}</span>
-              </h2>
-              <span className="text-sm text-zinc-500">{mp.playerCount}/{mp.roomMaxPlayers}</span>
-            </div>
-
-            {gs && (
-              <div className="text-xs text-zinc-500 bg-zinc-800/50 px-3 py-1.5 rounded-lg">
-                Best of {gs.bestOf} · {t('curvefever.firstTo')} {gs.winsNeeded}
-              </div>
-            )}
-
-            {/* Player list */}
-            <div className="space-y-2">
-              {gs?.players.map((p, i) => (
-                <div key={p.token} className="flex items-center gap-3 px-3 py-2 rounded-lg bg-zinc-800">
-                  <div className="w-4 h-4 rounded-full" style={{ backgroundColor: p.color }} />
-                  <span className="text-zinc-200 font-medium">
-                    {p.nickname || getNickname(p.token)}
-                    {i === 0 && <span className="ml-2 text-xs text-amber-400">(Host)</span>}
+                {/* Best of */}
+                <div className="flex items-center gap-2">
+                  <span className="text-xs text-zinc-400">Best of</span>
+                  <div className="flex gap-1">
+                    {[3, 5, 7].map((n) => (
+                      <button
+                        key={n}
+                        onClick={() => setBestOf(n)}
+                        className={`w-8 h-8 rounded-lg text-sm font-bold transition-colors cursor-pointer ${
+                          bestOf === n ? 'bg-indigo-600 text-white' : 'bg-zinc-800 text-zinc-400 hover:text-zinc-200'
+                        }`}
+                      >
+                        {n}
+                      </button>
+                    ))}
+                  </div>
+                  <span className="text-[10px] text-zinc-600 ml-1">
+                    {t('curvefever.firstTo')} {Math.ceil(bestOf / 2)}
                   </span>
                 </div>
-              ))}
-            </div>
 
-            {isHost ? (
+                {/* Max players */}
+                <div className="flex items-center gap-2">
+                  <span className="text-xs text-zinc-400">{t('liarsbar.players')}</span>
+                  <div className="flex gap-1">
+                    {[2, 3, 4, 5, 6].map((n) => (
+                      <button
+                        key={n}
+                        onClick={() => setMaxPlayers(n)}
+                        className={`w-8 h-8 rounded-lg text-sm font-bold transition-colors cursor-pointer ${
+                          maxPlayers === n ? 'bg-indigo-600 text-white' : 'bg-zinc-800 text-zinc-400 hover:text-zinc-200'
+                        }`}
+                      >
+                        {n}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                {/* Game config */}
+                <div className="flex flex-col gap-2 p-3 rounded-xl bg-zinc-800/50 border border-zinc-700/30">
+                  <span className="text-[10px] font-semibold uppercase tracking-wider text-zinc-500">{t('curvefever.settings')}</span>
+
+                  {/* Speed */}
+                  <div className="flex items-center gap-2">
+                    <span className="text-xs text-zinc-400 w-20 shrink-0">{t('curvefever.speed')}</span>
+                    <div className="flex gap-1 flex-1">
+                      {(['slow', 'normal', 'fast'] as const).map((v) => (
+                        <button
+                          key={v}
+                          onClick={() => setCfSpeed(v)}
+                          className={`flex-1 py-1.5 rounded-md text-[11px] font-semibold transition-colors cursor-pointer ${
+                            cfSpeed === v ? 'bg-indigo-600 text-white' : 'bg-zinc-800 text-zinc-400 hover:text-zinc-200'
+                          }`}
+                        >
+                          {t(`curvefever.speed.${v}`)}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+
+                  {/* Power-ups */}
+                  <div className="flex items-center gap-2">
+                    <span className="text-xs text-zinc-400 w-20 shrink-0">Power-Ups</span>
+                    <div className="flex gap-1 flex-1">
+                      {(['none', 'few', 'normal', 'chaos'] as const).map((v) => (
+                        <button
+                          key={v}
+                          onClick={() => setCfPowerUps(v)}
+                          className={`flex-1 py-1.5 rounded-md text-[11px] font-semibold transition-colors cursor-pointer ${
+                            cfPowerUps === v ? 'bg-indigo-600 text-white' : 'bg-zinc-800 text-zinc-400 hover:text-zinc-200'
+                          }`}
+                        >
+                          {t(`curvefever.pu.${v}`)}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+
+                  {/* Per-power-up toggles */}
+                  {cfPowerUps !== 'none' && (
+                    <div className="flex flex-col gap-1.5 pl-1">
+                      {(['speed', 'shield', 'phase', 'slow', 'thin', 'reverse', 'big'] as CfPowerUpType[]).map((puType) => {
+                        const disabled = cfDisabledPUs.includes(puType);
+                        return (
+                          <label key={puType} className="flex items-start gap-2 cursor-pointer group">
+                            <button
+                              type="button"
+                              onClick={() => setCfDisabledPUs(prev =>
+                                prev.includes(puType) ? prev.filter(t => t !== puType) : [...prev, puType]
+                              )}
+                              className="relative shrink-0 cursor-pointer mt-0.5"
+                              style={{
+                                width: 28, height: 15, borderRadius: 8,
+                                background: disabled ? '#3f3f46' : '#4f46e5',
+                                border: `1px solid ${disabled ? 'rgba(63,63,70,0.5)' : 'rgba(99,102,241,0.4)'}`,
+                                transition: 'background 0.15s, border-color 0.15s',
+                              }}
+                            >
+                              <span style={{
+                                position: 'absolute', top: 1.5, left: disabled ? 1.5 : 13,
+                                width: 10, height: 10, borderRadius: 5,
+                                background: disabled ? '#71717a' : '#c7d2fe',
+                                transition: 'left 0.15s, background 0.15s',
+                              }} />
+                            </button>
+                            <div className="flex flex-col gap-0">
+                              <span className={`text-xs font-semibold flex items-center gap-1.5 ${disabled ? 'text-zinc-500 line-through' : 'text-zinc-200'}`}>
+                                <span>{POWERUP_ICONS[puType]}</span>
+                                {t(`curvefever.powerup.${puType}`)}
+                              </span>
+                              <span className="text-[10px] text-zinc-500 leading-tight">{t(`curvefever.powerup.${puType}.desc`)}</span>
+                            </div>
+                          </label>
+                        );
+                      })}
+                    </div>
+                  )}
+
+                  {/* Thickness */}
+                  <div className="flex items-center gap-2">
+                    <span className="text-xs text-zinc-400 w-20 shrink-0">{t('curvefever.thickness')}</span>
+                    <div className="flex gap-1 flex-1">
+                      {(['thin', 'normal', 'thick'] as const).map((v) => (
+                        <button
+                          key={v}
+                          onClick={() => setCfThickness(v)}
+                          className={`flex-1 py-1.5 rounded-md text-[11px] font-semibold transition-colors cursor-pointer ${
+                            cfThickness === v ? 'bg-indigo-600 text-white' : 'bg-zinc-800 text-zinc-400 hover:text-zinc-200'
+                          }`}
+                        >
+                          {t(`curvefever.thickness.${v}`)}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+
+                  {/* Arena Shape */}
+                  <div className="flex items-center gap-2">
+                    <span className="text-xs text-zinc-400 w-20 shrink-0">{t('curvefever.arenaShape')}</span>
+                    <div className="flex gap-1 flex-1">
+                      {(['rectangle', 'circle', 'hexagon', 'diamond'] as const).map((v) => (
+                        <button
+                          key={v}
+                          onClick={() => setCfArenaShape(v)}
+                          className={`flex-1 py-1.5 rounded-md text-[11px] font-semibold transition-colors cursor-pointer ${
+                            cfArenaShape === v ? 'bg-indigo-600 text-white' : 'bg-zinc-800 text-zinc-400 hover:text-zinc-200'
+                          }`}
+                        >
+                          {t(`curvefever.shape.${v}`)}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+
+                  {/* Map Size */}
+                  <div className="flex items-center gap-2">
+                    <span className="text-xs text-zinc-400 w-20 shrink-0">{t('curvefever.mapSize')}</span>
+                    <div className="flex gap-1 flex-1">
+                      {(['small', 'normal', 'large', 'huge'] as const).map((v) => (
+                        <button
+                          key={v}
+                          onClick={() => setCfMapSize(v)}
+                          className={`flex-1 py-1.5 rounded-md text-[11px] font-semibold transition-colors cursor-pointer ${
+                            cfMapSize === v ? 'bg-indigo-600 text-white' : 'bg-zinc-800 text-zinc-400 hover:text-zinc-200'
+                          }`}
+                        >
+                          {t(`curvefever.mapSize.${v}`)}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+
+                  {/* Toggle options */}
+                  {([
+                    [cfNoGaps, setCfNoGaps, 'curvefever.noGaps'] as const,
+                    [cfShrinking, setCfShrinking, 'curvefever.shrinking'] as const,
+                    [cfSuddenDeath, setCfSuddenDeath, 'curvefever.suddenDeath'] as const,
+                    [cfObstacles, setCfObstacles, 'curvefever.obstacles'] as const,
+                    [cfTeamMode, setCfTeamMode, 'curvefever.teamMode'] as const,
+                  ]).map(([val, setter, key]) => (
+                    <label key={key} className="flex items-center justify-between cursor-pointer group">
+                      <span className="text-xs text-zinc-300 group-hover:text-zinc-100 transition-colors select-none">{t(key)}</span>
+                      <button
+                        type="button"
+                        onClick={() => (setter as (v: boolean) => void)(!val)}
+                        className="relative shrink-0 cursor-pointer"
+                        style={{
+                          width: 34,
+                          height: 18,
+                          borderRadius: 9,
+                          background: val ? '#4f46e5' : '#3f3f46',
+                          border: `1px solid ${val ? 'rgba(99,102,241,0.4)' : 'rgba(63,63,70,0.5)'}`,
+                          transition: 'background 0.15s, border-color 0.15s',
+                        }}
+                      >
+                        <span
+                          style={{
+                            position: 'absolute',
+                            top: 2,
+                            left: val ? 17 : 2,
+                            width: 12,
+                            height: 12,
+                            borderRadius: 6,
+                            background: val ? '#c7d2fe' : '#71717a',
+                            transition: 'left 0.15s, background 0.15s',
+                          }}
+                        />
+                      </button>
+                    </label>
+                  ))}
+                </div>
+
+                <button
+                  onClick={() => mp.createRoom({
+                    visibility: roomVisibility,
+                    roomName: roomName || undefined,
+                    cfConfig: {
+                      bestOf: cfSuddenDeath ? 1 : bestOf,
+                      speed: cfSpeed,
+                      powerUpDensity: cfPowerUps,
+                      thickness: cfThickness,
+                      noGaps: cfNoGaps,
+                      shrinkingArena: cfShrinking,
+                      suddenDeath: cfSuddenDeath,
+                      disabledPowerUps: cfDisabledPUs.length > 0 ? cfDisabledPUs : undefined,
+                      obstacles: cfObstacles || undefined,
+                      teamMode: cfTeamMode || undefined,
+                      arenaShape: cfArenaShape !== 'rectangle' ? cfArenaShape : undefined,
+                      mapSize: cfMapSize !== 'normal' ? cfMapSize : undefined,
+                    },
+                    maxPlayers,
+                  })}
+                  className="w-full py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white font-bold transition-colors cursor-pointer active:scale-[0.98]"
+                >
+                  {t('game.lobby.createRoom')}
+                </button>
+
+                <div className="flex items-center gap-2">
+                  <div className="flex-1 h-px bg-zinc-700" />
+                  <span className="text-xs text-zinc-500">{t('uno.or')}</span>
+                  <div className="flex-1 h-px bg-zinc-700" />
+                </div>
+
+                <div className="flex gap-2">
+                  <input
+                    type="text"
+                    placeholder={t('game.lobby.roomCode')}
+                    maxLength={6}
+                    value={joinCode}
+                    onChange={(e) => setJoinCode(e.target.value.toUpperCase())}
+                    className="flex-1 px-3 py-2 rounded-lg bg-zinc-800 text-zinc-200 text-sm font-mono tracking-widest border border-zinc-700 placeholder:text-zinc-500 uppercase"
+                  />
+                  <button
+                    onClick={() => joinCode.length === 6 && mp.joinRoom(joinCode)}
+                    disabled={joinCode.length !== 6}
+                    className="px-4 py-2 rounded-lg bg-zinc-700 hover:bg-zinc-600 text-zinc-200 font-semibold transition-colors disabled:opacity-40 cursor-pointer disabled:cursor-not-allowed"
+                  >
+                    {t('game.lobby.join')}
+                  </button>
+                </div>
+              </div>
+            </>
+          ) : (
+            /* In-room lobby */
+            <div className="w-full max-w-xl bg-zinc-900 rounded-xl p-5 border border-zinc-800 space-y-4">
+              <div className="flex items-center justify-between">
+                <div>
+                  <span className="text-[10px] text-zinc-500 uppercase tracking-wider font-semibold">{t('game.room.title')}</span>
+                  <p className="font-mono text-xl font-black tracking-widest text-zinc-100">{mp.roomCode}</p>
+                </div>
+                <span className="text-sm text-zinc-500">{mp.playerCount}/{mp.roomMaxPlayers}</span>
+              </div>
+
               <button
-                onClick={() => mp.sendAction({ type: 'CF_START' })}
-                disabled={!gs || gs.players.length < 2}
-                className="w-full py-3 rounded-xl bg-emerald-600 hover:bg-emerald-500 disabled:opacity-40 text-white font-semibold transition-colors"
+                onClick={() => navigator.clipboard.writeText(`${window.location.origin}/games/curvefever?room=${mp.roomCode}`)}
+                className="w-full py-1.5 rounded-lg border border-zinc-700 hover:border-indigo-600 text-sm text-zinc-300 hover:text-indigo-300 transition-colors flex items-center justify-center gap-2 active:scale-[0.98] cursor-pointer"
               >
-                {t('liarsbar.startGame')}
+                {t('game.room.copyInvite')}
               </button>
-            ) : (
-              <p className="text-center text-zinc-500 text-sm">{t('curvefever.waiting')}</p>
-            )}
 
-            <button
-              onClick={() => mp.leaveRoom()}
-              className="w-full py-2 rounded-lg bg-zinc-800 hover:bg-zinc-700 text-zinc-400 text-sm transition-colors"
-            >
-              {t('game.actions.leaveRoom')}
-            </button>
-          </div>
-        )}
+              {gs && (
+                <div className="text-xs text-zinc-500 bg-zinc-800/50 px-3 py-2 rounded-lg space-y-1">
+                  <div>
+                    {gs.cfSuddenDeath ? t('curvefever.suddenDeath') : `Best of ${gs.bestOf} · ${t('curvefever.firstTo')} ${gs.winsNeeded}`}
+                  </div>
+                  <div className="flex flex-wrap gap-x-3 gap-y-0.5 text-[10px] text-zinc-600">
+                    <span>{t('curvefever.speed')}: {t(`curvefever.speed.${gs.cfSpeed}`)}</span>
+                    <span>Power-Ups: {t(`curvefever.pu.${gs.cfPowerUpDensity}`)}</span>
+                    <span>{t('curvefever.thickness')}: {t(`curvefever.thickness.${gs.cfThickness}`)}</span>
+                    {gs.cfNoGaps && <span className="text-amber-500">{t('curvefever.noGaps')}</span>}
+                    {gs.cfShrinkingArena && <span className="text-red-400">{t('curvefever.shrinking')}</span>}
+                    {gs.cfObstacles && <span className="text-orange-400">{t('curvefever.obstacles')}</span>}
+                    {gs.cfTeamMode && <span className="text-cyan-400">{t('curvefever.teamMode')}</span>}
+                    {gs.cfArenaShape !== 'rectangle' && <span className="text-violet-400">{t(`curvefever.shape.${gs.cfArenaShape}`)}</span>}
+                    {gs.arenaWidth !== 800 && <span className="text-teal-400">{t(`curvefever.mapSize.${gs.arenaWidth <= 600 ? 'small' : gs.arenaWidth <= 1000 ? 'large' : 'huge'}`)}</span>}
+                    {gs.cfDisabledPowerUps?.length > 0 && (
+                      <span className="text-zinc-500">
+                        {t('curvefever.disabled')}: {gs.cfDisabledPowerUps.map(pu => t(`curvefever.powerup.${pu}`)).join(', ')}
+                      </span>
+                    )}
+                  </div>
+                </div>
+              )}
 
-        {mp.error && (
-          <div className="text-red-400 text-sm bg-red-950/30 px-4 py-2 rounded-lg border border-red-900/50">
-            {mp.error}
+              {/* Player list */}
+              <div className="space-y-1.5">
+                {gs?.players.map((p, i) => {
+                  const isBot = isBotToken(p.token);
+                  const botSlot = isBot ? gs.bots?.find(b => b.token === p.token) : null;
+                  return (
+                    <div key={p.token} className="flex items-center gap-3 px-3 py-2 rounded-lg bg-zinc-800/60 border border-zinc-700/30">
+                      <div className="w-4 h-4 rounded-full shrink-0" style={{ backgroundColor: p.color }} />
+                      <span className="text-zinc-200 font-medium text-sm truncate flex-1">
+                        {p.nickname || getNickname(p.token)}
+                      </span>
+                      {isBot && botSlot && (
+                        <span className="text-[10px] font-semibold text-cyan-400 bg-cyan-400/10 px-2 py-0.5 rounded-full">
+                          {t('curvefever.botBadge')} · {t(`curvefever.botDifficulty.${botSlot.difficulty}`)}
+                        </span>
+                      )}
+                      {!isBot && i === 0 && (
+                        <span className="text-[10px] font-semibold text-amber-400 bg-amber-400/10 px-2 py-0.5 rounded-full">Host</span>
+                      )}
+                      {isBot && isHost && gs.phase === 'lobby' && (
+                        <button
+                          onClick={() => mp.sendAction({ type: 'CF_REMOVE_BOT', botToken: p.token })}
+                          className="text-xs text-zinc-500 hover:text-red-400 transition-colors cursor-pointer"
+                          title={t('curvefever.removeBot')}
+                        >
+                          ✕
+                        </button>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+
+              {/* Bot controls (host only, lobby phase) */}
+              {isHost && gs && gs.phase === 'lobby' && gs.players.length < 6 && (
+                <div className="flex items-center gap-2">
+                  <span className="text-xs text-zinc-500 shrink-0">{t('curvefever.addBot')}:</span>
+                  {(['easy', 'medium', 'hard'] as CfBotDifficulty[]).map(diff => (
+                    <button
+                      key={diff}
+                      onClick={() => mp.sendAction({ type: 'CF_ADD_BOT', difficulty: diff })}
+                      className="flex-1 py-1.5 rounded-lg text-xs font-medium border border-zinc-700 hover:border-cyan-600 text-zinc-300 hover:text-cyan-300 bg-zinc-800/50 hover:bg-cyan-950/30 transition-colors cursor-pointer"
+                    >
+                      {t(`curvefever.botDifficulty.${diff}`)}
+                    </button>
+                  ))}
+                </div>
+              )}
+
+              {isHost ? (
+                <button
+                  onClick={() => mp.sendAction({ type: 'CF_START' })}
+                  disabled={!gs || gs.players.length < 2}
+                  className="w-full py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 disabled:opacity-40 text-white font-bold transition-colors cursor-pointer active:scale-[0.98]"
+                >
+                  {t('liarsbar.startGame')}
+                </button>
+              ) : (
+                <div className="flex items-center justify-center gap-2 py-2">
+                  <div className="w-4 h-4 rounded-full animate-spin border-2 border-zinc-600 border-t-indigo-400" />
+                  <p className="text-zinc-500 text-sm">{t('curvefever.waiting')}</p>
+                </div>
+              )}
+
+              <button
+                onClick={() => mp.leaveRoom()}
+                className="w-full py-2 rounded-lg border border-zinc-700/50 hover:bg-zinc-800 text-zinc-500 hover:text-zinc-300 text-sm transition-colors cursor-pointer"
+              >
+                {t('game.actions.leaveRoom')}
+              </button>
+            </div>
+          )}
+
+          {mp.error && (
+            <div className="text-red-400 text-sm bg-red-950/30 px-4 py-2 rounded-lg border border-red-900/50 w-full max-w-xl">
+              {mp.error}
+            </div>
+          )}
+        </div>
+
+        {/* ── Sidebar ── */}
+        <aside className="flex flex-col gap-3 lg:sticky lg:top-24 h-fit">
+          {/* Connection status */}
+          <div className="flex items-center gap-2 text-xs px-4 py-2.5 rounded-xl bg-zinc-900/60 border border-zinc-800/50">
+            <span
+              className="w-1.5 h-1.5 rounded-full shrink-0"
+              style={{
+                background: mp.connection === 'connected' ? '#34d399'
+                  : mp.connection === 'connecting' ? '#fbbf24'
+                  : '#f43f5e',
+              }}
+            />
+            <span className="text-zinc-400">{t(`status.${mp.connection}`)}</span>
           </div>
-        )}
+
+          {/* Game info */}
+          <div className="text-xs px-4 py-3 rounded-xl bg-zinc-900/60 border border-zinc-800/50 text-zinc-500">
+            {t('curvefever.controls')}
+          </div>
+
+          {/* Chat */}
+          {inRoom && (
+            <ChatPanel
+              mode="both"
+              roomCode={mp.roomCode}
+              roomMessages={mp.roomMessages}
+              globalMessages={mp.globalMessages}
+              chatError={mp.chatError}
+              onSend={mp.sendChat}
+              collapsible
+              open={chatOpen}
+              onOpenChange={(open) => {
+                setChatOpen(open);
+                if (open) setUnread(0);
+              }}
+              showUnreadBadge={unread > 0}
+            />
+          )}
+        </aside>
       </div>
     );
   }
@@ -934,24 +1528,32 @@ export function CurveFeverGame({ wsUrl, gameId, initialRoomCode, quickPlay: auto
   return (
     <div className="relative w-full px-4 py-2">
       <ReconnectBanner mp={mp} />
+      <WaitingForConnectionOverlay
+        show={mp.phase === 'waiting' && mp.playerCount < (mp.roomMaxPlayers ?? 2) && !mp.gameState}
+        label={t('game.status.waiting')}
+      />
+      {mp.isSpectator && <SpectatorBanner spectatorCount={mp.spectatorCount} />}
 
-      {/* Arena — fills viewport height, centered */}
-      <div className="flex justify-center">
-        <div
-          ref={containerRef}
-          className="relative bg-zinc-950 rounded-xl overflow-hidden border border-zinc-800"
-          style={{
-            width: `min(100%, calc((100vh - 120px) * ${ARENA_W / ARENA_H}))`,
-            height: `min(calc(100vw * ${ARENA_H / ARENA_W}), calc(100vh - 120px))`,
-            maxWidth: '100%',
-          }}
-        >
-          <canvas
-            ref={canvasRef}
-            className="absolute inset-0 w-full h-full"
-          />
+      <div className="grid gap-4 lg:grid-cols-[1fr_280px] w-full items-start">
+        {/* ── Main arena area ── */}
+        <div className="flex flex-col items-center gap-2 min-w-0">
+          {/* Arena — fills viewport height, centered */}
+          <div className="flex justify-center w-full">
+            <div
+              ref={containerRef}
+              className="relative bg-zinc-950 rounded-xl overflow-hidden border border-zinc-800"
+              style={{
+                width: `min(100%, calc((100vh - 120px) * ${(gs?.arenaWidth || ARENA_W) / (gs?.arenaHeight || ARENA_H)}))`,
+                height: `min(calc(100vw * ${(gs?.arenaHeight || ARENA_H) / (gs?.arenaWidth || ARENA_W)}), calc(100vh - 120px))`,
+                maxWidth: '100%',
+              }}
+            >
+              <canvas
+                ref={canvasRef}
+                className="absolute inset-0 w-full h-full"
+              />
 
-          {/* Scoreboard overlay (top-left) */}
+              {/* Scoreboard overlay (top-left) */}
           <div className="absolute top-3 left-3 z-10 pointer-events-none">
             <div
               className="rounded-xl p-3 space-y-1.5 pointer-events-auto"
@@ -979,6 +1581,8 @@ export function CurveFeverGame({ wsUrl, gameId, initialRoomCode, quickPlay: auto
                   const isDead = !p.alive && gs?.phase === 'playing';
                   const isMe = p.token === myToken;
                   const isWinner = isMatchWinner && p.token === gs?.winner;
+                  const pIdx = gs?.playerIds.indexOf(p.token) ?? -1;
+                  const teamIdx = gs?.teams?.length ? gs.teams[pIdx] : -1;
 
                   return (
                     <div
@@ -987,6 +1591,7 @@ export function CurveFeverGame({ wsUrl, gameId, initialRoomCode, quickPlay: auto
                       style={{
                         opacity: isDead ? 0.4 : 1,
                         background: isMe ? 'rgba(255,255,255,0.06)' : isWinner ? 'rgba(245,158,11,0.1)' : 'transparent',
+                        borderLeft: teamIdx >= 0 ? `2px solid ${teamIdx === 0 ? '#3b82f6' : '#ef4444'}` : 'none',
                       }}
                     >
                       <div
@@ -1001,6 +1606,7 @@ export function CurveFeverGame({ wsUrl, gameId, initialRoomCode, quickPlay: auto
                       )}
                       <span className={`truncate flex-1 ${isWinner ? 'text-amber-300 font-semibold' : 'text-zinc-300'}`}>
                         {p.nickname || 'Player'}
+                        {isBotToken(p.token) && <span className="text-[8px] text-cyan-500 ml-1">BOT</span>}
                       </span>
                       <div className="flex gap-0.5 shrink-0">
                         {Array.from({ length: winsNeeded }).map((_, wi) => (
@@ -1112,20 +1718,89 @@ export function CurveFeverGame({ wsUrl, gameId, initialRoomCode, quickPlay: auto
               </span>
             </div>
           )}
-        </div>
-      </div>
+            </div>
+          </div>
 
-      {/* Bottom bar: controls hint + rematch */}
-      <div className="flex items-center justify-center gap-4 mt-2">
-        <p className="text-xs text-zinc-600">{t('curvefever.controls')}</p>
-        {gs?.phase === 'finished' && (
-          <button
-            onClick={() => mp.requestRematch()}
-            className="px-6 py-2 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-white font-semibold transition-colors"
-          >
-            Rematch
-          </button>
-        )}
+          {/* Bottom bar: controls hint + rematch + leave */}
+          <div className="flex items-center justify-center gap-4 mt-1">
+            <p className="text-xs text-zinc-600">{t('curvefever.controls')}</p>
+            {gs?.phase === 'finished' && (
+              <button
+                onClick={() => mp.requestRematch()}
+                className="px-6 py-2 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-white font-semibold transition-colors cursor-pointer"
+              >
+                Rematch
+              </button>
+            )}
+            <button
+              onClick={mp.leaveRoom}
+              className="text-[11px] text-zinc-600 hover:text-zinc-400 transition-colors cursor-pointer"
+            >
+              {t('game.actions.leaveRoom')}
+            </button>
+          </div>
+        </div>
+
+        {/* ── Sidebar ── */}
+        <aside className="flex flex-col gap-3 lg:sticky lg:top-24 h-fit">
+          {/* Connection status */}
+          <div className="flex items-center gap-2 text-xs px-4 py-2.5 rounded-xl bg-zinc-900/60 border border-zinc-800/50">
+            <span
+              className="w-1.5 h-1.5 rounded-full shrink-0"
+              style={{
+                background: mp.connection === 'connected' ? '#34d399'
+                  : mp.connection === 'connecting' ? '#fbbf24'
+                  : '#f43f5e',
+              }}
+            />
+            <span className="text-zinc-400">{t(`status.${mp.connection}`)}</span>
+          </div>
+
+          {/* Error */}
+          {mp.error && (
+            <div className="text-sm px-4 py-3 rounded-xl bg-red-950/20 border border-red-900/30 text-red-300">
+              {mp.error}
+            </div>
+          )}
+
+          {/* Room info */}
+          {mp.roomCode && (
+            <div className="flex flex-col gap-2 px-4 py-3 rounded-xl bg-zinc-900/60 border border-zinc-800/50">
+              <div className="flex items-center justify-between">
+                <span className="text-[10px] text-zinc-500 uppercase tracking-wider font-semibold">{t('game.room.title')}</span>
+                <span className="font-mono text-lg font-black tracking-widest text-zinc-100">{mp.roomCode}</span>
+              </div>
+              <button
+                onClick={() => navigator.clipboard.writeText(`${window.location.origin}/games/curvefever?room=${mp.roomCode}`)}
+                className="w-full py-1.5 rounded-lg border border-zinc-700 hover:border-indigo-600 text-sm text-zinc-300 hover:text-indigo-300 transition-colors flex items-center justify-center gap-2 active:scale-[0.98] cursor-pointer"
+              >
+                {t('game.room.copyInvite')}
+              </button>
+            </div>
+          )}
+
+          {/* Game info */}
+          <div className="text-xs px-4 py-3 rounded-xl bg-zinc-900/60 border border-zinc-800/50 text-zinc-500">
+            {t('curvefever.controls')}
+          </div>
+
+          {/* Chat */}
+          <ChatPanel
+            mode="both"
+            roomCode={mp.roomCode}
+            roomMessages={mp.roomMessages}
+            globalMessages={mp.globalMessages}
+            chatError={mp.chatError}
+            onSend={mp.sendChat}
+            collapsible
+            open={chatOpen}
+            onOpenChange={(open) => {
+              setChatOpen(open);
+              if (open) setUnread(0);
+            }}
+            showUnreadBadge={unread > 0}
+          />
+        </aside>
       </div>
     </div>
   );

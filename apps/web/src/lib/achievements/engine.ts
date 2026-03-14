@@ -2,7 +2,7 @@ import { ACHIEVEMENTS, TIER_XP, TIER_TOKENS } from './definitions';
 import type { AchievementId } from './definitions';
 import { loadStats, saveStats, unlock, loadUnlocked } from './store';
 import { getDailyChallenges, getTodayStr, incrementProgress, loadProgress as loadDailyProgress } from '@/lib/dailyChallenges';
-import { recordPlay } from '@/lib/playStreak';
+import { recordPlay, recordDailyStreak } from '@/lib/playStreak';
 import { recordRecentGame } from '@/lib/recentlyPlayed';
 import type { PlayerProgression, LevelUpResult } from '@/lib/progression';
 import {
@@ -117,15 +117,11 @@ export function trackAchievementEvent(
 
   // ── Play streak + recently played ──────────────────────────────────────────
   if (ev.type === 'game_played') {
-    const streakData = recordPlay();
+    recordPlay();
     recordRecentGame(ev.gameId);
     // Set gotd_played flag if this is today's Game of the Day
     if (ev.gameId === getGotdId()) {
       stats.flags['gotd_played'] = true;
-    }
-    // Set daily_week_streak flag if play streak reaches 7
-    if (streakData.currentStreak >= 7) {
-      stats.flags['daily_week_streak'] = true;
     }
     saveStats(stats);
   }
@@ -145,12 +141,18 @@ export function trackAchievementEvent(
         if (justCompleted) _lastCompletedDaily.push(ch.templateId);
       }
     }
-    // Check if ALL dailies for today are now complete → set flag
+    // Check if ALL dailies for today are now complete → set flag + update streak
     if (challenges.length > 0) {
       const dp = loadDailyProgress(today);
       const allComplete = challenges.every((ch) => dp.completed.includes(ch.templateId));
-      if (allComplete && !stats.flags['all_dailies_completed']) {
-        stats.flags['all_dailies_completed'] = true;
+      if (allComplete) {
+        const streakData = recordDailyStreak();
+        if (streakData.currentStreak >= 7) {
+          stats.flags['daily_week_streak'] = true;
+        }
+        if (!stats.flags['all_dailies_completed']) {
+          stats.flags['all_dailies_completed'] = true;
+        }
         saveStats(stats);
       }
     }
@@ -217,8 +219,17 @@ export function trackAchievementEvent(
     }
   }
 
-  // Uncapped XP for completed daily challenges
+  // Uncapped XP for completed daily challenges (10 XP each + 50 XP bonus for all)
   totalXp += _lastCompletedDaily.length * XP_REWARDS.DAILY_CHALLENGE_COMPLETION;
+  if (_lastCompletedDaily.length > 0) {
+    const today = getTodayStr();
+    const allChallenges = getDailyChallenges(today);
+    const dp = loadDailyProgress(today);
+    const allComplete = allChallenges.every((ch) => dp.completed.includes(ch.templateId));
+    if (allComplete) {
+      totalXp += XP_REWARDS.ALL_DAILIES_BONUS;
+    }
+  }
 
   // Tier-based XP + tokens for newly unlocked achievements
   let achTokens = 0;

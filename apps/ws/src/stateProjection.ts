@@ -173,8 +173,8 @@ function projectLiarsBar(state: LiarsBarState, ctx: ViewerCtx): LiarsBarState {
  */
 function projectCurveFever(state: CurveFeverState): CurveFeverState {
   // eslint-disable-next-line @typescript-eslint/no-unused-vars
-  const { trails: _t, gapCounters: _gc, gapRemaining: _gr, powerUpSpawnCounter: _sc, powerUpNextId: _ni, ...rest } = state;
-  return { ...rest, trails: [], gapCounters: [], gapRemaining: [], powerUpSpawnCounter: 0, powerUpNextId: 0 } as CurveFeverState;
+  const { trails: _t, gapCounters: _gc, gapRemaining: _gr, powerUpSpawnCounter: _sc, powerUpNextId: _ni, botReactionCounters: _brc, ...rest } = state;
+  return { ...rest, trails: [], gapCounters: [], gapRemaining: [], powerUpSpawnCounter: 0, powerUpNextId: 0, botReactionCounters: [] } as CurveFeverState;
 }
 
 // ── UNO projector ───────────────────────────────────────────────────────────

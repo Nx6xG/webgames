@@ -27,7 +27,7 @@ type TopTab = 'multiplayer' | 'singleplayer';
 const MP_GAME_IDS = [...MULTIPLAYER_GAME_IDS] as string[];
 
 // Singleplayer games with score tracking (keys from SCORE_CONFIGS)
-const SP_GAME_IDS = ['flappy', 'snake', 'tetris', '2048', 'breakout'] as const;
+const SP_GAME_IDS = ['flappy', 'snake', 'tetris', '2048', 'breakout', 'doodlejump', 'crossyroad'] as const;
 
 // Games with difficulty variants
 const SP_DIFFICULTY_GAMES: Record<string, { variants: { id: string; labelKey: string }[] }> = {
@@ -53,6 +53,8 @@ const SP_EMOJI: Record<string, string> = {
   '2048': '🔢',
   breakout: '🧱',
   minesweeper: '💣',
+  doodlejump: '🦘',
+  crossyroad: '🐔',
 };
 
 // ── Page ────────────────────────────────────────────────────────────────────────

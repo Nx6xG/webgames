@@ -658,7 +658,7 @@ export function ChessGame({ wsUrl, gameId, initialRoomCode, quickPlay: isQuickPl
                 key={boardSq}
                 style={{ backgroundColor: bg }}
                 onClick={() => handleSquareClick(boardSq)}
-                className="aspect-square w-full relative flex items-center justify-center leading-none text-3xl cursor-pointer select-none"
+                className="aspect-square w-full relative flex items-center justify-center leading-none text-4xl cursor-pointer select-none"
               >
                 {isLegalDest && !piece && (
                   <div className="w-[32%] h-[32%] rounded-full bg-black/20 pointer-events-none" />
@@ -671,8 +671,8 @@ export function ChessGame({ wsUrl, gameId, initialRoomCode, quickPlay: isQuickPl
                     className={[
                       'leading-none select-none z-10',
                       piece.color === 'w'
-                        ? 'text-white [text-shadow:0_1px_3px_rgba(0,0,0,1),0_0_6px_rgba(0,0,0,0.8)]'
-                        : 'text-zinc-900 [text-shadow:0_1px_1px_rgba(255,255,255,0.4)]',
+                        ? 'text-white [text-shadow:0_1px_4px_rgba(0,0,0,1),0_0_8px_rgba(0,0,0,0.9),0_0_2px_rgba(0,0,0,1)]'
+                        : 'text-zinc-900 [text-shadow:0_1px_2px_rgba(255,255,255,0.5),0_0_4px_rgba(255,255,255,0.3)]',
                     ].join(' ')}
                   >
                     {PIECE_CHAR[piece.color][piece.type]}
@@ -712,7 +712,7 @@ export function ChessGame({ wsUrl, gameId, initialRoomCode, quickPlay: isQuickPl
                     className="w-14 h-14 rounded-lg bg-zinc-800 hover:bg-indigo-700 border border-zinc-600 hover:border-indigo-500 flex flex-col items-center justify-center gap-0.5 transition-colors"
                     title={promoLabels[pt]}
                   >
-                    <span className="text-2xl leading-none">{PIECE_CHAR[myColor][pt]}</span>
+                    <span className="text-3xl leading-none">{PIECE_CHAR[myColor][pt]}</span>
                     <span className="text-[0.6rem] text-zinc-400">{promoLabels[pt]}</span>
                   </button>
                 ))}

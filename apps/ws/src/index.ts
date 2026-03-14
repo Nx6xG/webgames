@@ -493,12 +493,15 @@ roomManager.onPlayerEvicted((room, playerIndex) => {
     const cfState = room.state as import('shared').CurveFeverState;
     if (cfState.phase === 'lobby') {
       const roomTokens = new Set(room.players.map(p => p.playerToken));
-      const keepIndices = cfState.playerIds.map((t, i) => roomTokens.has(t) ? i : -1).filter(i => i >= 0);
+      // Keep human players still in room + all bots
+      const { isBotToken: isBotTk } = require('shared') as { isBotToken: (t: string) => boolean };
+      const keepIndices = cfState.playerIds.map((t, i) => (roomTokens.has(t) || isBotTk(t)) ? i : -1).filter(i => i >= 0);
       cfState.playerIds = keepIndices.map(i => cfState.playerIds[i]);
       cfState.players = keepIndices.map(i => cfState.players[i]);
       cfState.trails = keepIndices.map(i => cfState.trails[i]);
       cfState.gapCounters = keepIndices.map(i => cfState.gapCounters[i]);
       cfState.gapRemaining = keepIndices.map(i => cfState.gapRemaining[i]);
+      cfState.botReactionCounters = keepIndices.map(i => cfState.botReactionCounters?.[i] ?? 0);
       if (cfState.playerIds.length > 0) cfState.currentTurn = cfState.playerIds[0];
     } else {
       // During gameplay, stop tick loop if too few players remain
@@ -716,6 +719,11 @@ io.on('connection', (socket) => {
     socket.join(room.code);
     addPresence(room.code, 0, socket.id);
     socket.emit('room_created', { roomCode: room.code, playerIndex: 0, gameId: room.gameId, players: roomPlayers(room), maxPlayers: room.maxPlayers });
+    // Emit initial lobby state for lobby-phase games (curvefever, liarsbar, uno)
+    if (room.state) {
+      const projected = projectGameState(room.gameId, room.state, { playerIndex: 0, isSpectator: false });
+      socket.emit('game_state', { roomCode: room.code, gameId: room.gameId, state: projected, spectatorCount: 0 });
+    }
     // Empty history for the brand-new room
     socket.emit('chat_history', { scope: 'room', messages: [] });
     socketActivity.set(socket.id, { kind: 'room', gameId: room.gameId, roomCode: room.code, isPublic: room.visibility === 'public' });
@@ -1020,6 +1028,13 @@ io.on('connection', (socket) => {
         console.log(`[LD broadcast] ${room.code} → ${sockCount} sockets, lives: ${lbPlayers.map(p => `${p.id.slice(0, 6)}:${p.lives}`).join(', ')}`);
       }
       emitGameState(room, nextState);
+
+      // Sync bot config for curvefever rematch support
+      if (room.gameId === 'curvefever' && (action.type === 'CF_ADD_BOT' || action.type === 'CF_REMOVE_BOT')) {
+        const cfState = nextState as import('shared').CurveFeverState;
+        if (!room.gameConfig) room.gameConfig = {};
+        (room.gameConfig as Record<string, unknown>).bots = cfState.bots;
+      }
 
       // Record result and broadcast updated stats when a game just ended
       if (prevStatus === 'ongoing' && nextState.status !== 'ongoing') {

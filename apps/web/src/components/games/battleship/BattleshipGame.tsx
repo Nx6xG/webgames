@@ -18,6 +18,7 @@ import { getNameColorClass } from '@/lib/nameColors';
 import { RoomInviteButton } from '@/components/social/RoomInviteButton';
 import { useAchievements } from '@/hooks/useAchievements';
 import { ReconnectBanner } from '@/components/ui/ReconnectBanner';
+import { useBattleshipBot, type BotDifficulty } from './useBattleshipBot';
 
 // ── Cell display types ────────────────────────────────────────────────────────
 
@@ -660,8 +661,42 @@ const DEV = process.env.NODE_ENV !== 'production';
 
 export function BattleshipGame({ wsUrl, gameId, initialRoomCode, quickPlay: isQuickPlay }: GameComponentProps) {
   const router    = useRouter();
-  const mp        = useMultiplayer<BattleshipState>(wsUrl, gameId);
+  const mpRaw     = useMultiplayer<BattleshipState>(wsUrl, gameId);
   const { t }     = useI18n();
+
+  // ── Bot mode state ──────────────────────────────────────────────────────────
+  const [botMode, setBotMode]             = useState(false);
+  const [botDifficulty, setBotDifficulty] = useState<BotDifficulty>('medium');
+  const bot = useBattleshipBot(botDifficulty);
+
+  // ── Unified game interface — proxy to either mp (multiplayer) or bot ────────
+  const mp = botMode ? {
+    ...mpRaw,
+    phase: bot.phase as 'lobby' | 'waiting' | 'playing' | 'ended',
+    gameState: bot.gameState,
+    connection: bot.connection as 'connected',
+    playerIndex: bot.playerIndex,
+    playerCount: bot.playerCount,
+    roomMaxPlayers: bot.roomMaxPlayers,
+    isSpectator: bot.isSpectator,
+    spectatorCount: bot.spectatorCount,
+    roomCode: bot.roomCode,
+    roomReady: bot.roomReady,
+    countdown: bot.countdown,
+    matchCountdown: null as number | null,
+    players: bot.players,
+    sendAction: bot.sendAction as (action: Record<string, unknown>) => void,
+    leaveRoom: bot.leaveGame,
+    requestRematch: bot.requestRematch,
+    rematchVotes: bot.rematchVotes,
+    myVotedRematch: false as boolean,
+    rematchError: null as string | null,
+    roomMessages: [] as typeof mpRaw.roomMessages,
+    globalMessages: [] as typeof mpRaw.globalMessages,
+    error: bot.error,
+    clearError: bot.clearError,
+  } : mpRaw;
+
   const ach       = useAchievements('battleship', mp.roomCode);
 
   const [joinInput,       setJoinInput]       = useState(initialRoomCode ?? '');
@@ -1363,7 +1398,7 @@ export function BattleshipGame({ wsUrl, gameId, initialRoomCode, quickPlay: isQu
     <div className="grid gap-6 lg:grid-cols-[1fr_360px] w-full items-start">
       {/* ── Game area ──────────────────────────────────────────────────────── */}
       <div className="relative min-w-0 flex flex-col items-center gap-4 min-h-[400px]">
-        <ReconnectBanner mp={mp} />
+        {!botMode && <ReconnectBanner mp={mpRaw} />}
         {/* Keyframe for shot-result pop overlay */}
         <style>{`
           @keyframes bs-shot-pop {
@@ -1534,9 +1569,9 @@ export function BattleshipGame({ wsUrl, gameId, initialRoomCode, quickPlay: isQu
             </div>
           </div>
         )}
-        <CountdownOverlay countdown={mp.matchCountdown} />
+        <CountdownOverlay countdown={botMode ? null : mpRaw.matchCountdown} />
         <WaitingForConnectionOverlay
-          show={mp.phase === 'playing' && !mp.roomReady && !mp.isSpectator}
+          show={!botMode && mp.phase === 'playing' && !mp.roomReady && !mp.isSpectator}
           label={t('game.ready.waiting')}
         />
         <StatusBanner />
@@ -1726,26 +1761,36 @@ export function BattleshipGame({ wsUrl, gameId, initialRoomCode, quickPlay: isQu
 
         {(mp.phase === 'playing' || mp.phase === 'ended') && (
           <button
-            onClick={mp.leaveRoom}
+            onClick={botMode ? bot.leaveGame : mpRaw.leaveRoom}
             className="px-4 py-2 text-sm rounded-lg border border-zinc-700 text-zinc-400 hover:border-zinc-500 hover:text-zinc-200 transition-colors"
           >
-            {t('game.actions.leaveRoom')}
+            {botMode ? t('chess.bot.backToLobby') : t('game.actions.leaveRoom')}
           </button>
         )}
       </div>
 
       {/* ── Side panel ─────────────────────────────────────────────────────── */}
       <aside className="flex flex-col gap-3 lg:sticky lg:top-24 h-fit">
-        {/* Connection */}
-        <div className="rounded-xl border border-zinc-800 bg-zinc-900 px-4 py-3">
-          <div className="flex items-center gap-2 text-xs">
-            <span className={`w-2 h-2 rounded-full ${
-              mp.connection === 'connected'  ? 'bg-emerald-400' :
-              mp.connection === 'connecting' ? 'bg-amber-400 animate-pulse' : 'bg-rose-500'
-            }`} />
-            <span className="text-zinc-400">{t(`status.${mp.connection}`)}</span>
+        {/* Connection (multiplayer only) */}
+        {!botMode && (
+          <div className="rounded-xl border border-zinc-800 bg-zinc-900 px-4 py-3">
+            <div className="flex items-center gap-2 text-xs">
+              <span className={`w-2 h-2 rounded-full ${
+                mp.connection === 'connected'  ? 'bg-emerald-400' :
+                mp.connection === 'connecting' ? 'bg-amber-400 animate-pulse' : 'bg-rose-500'
+              }`} />
+              <span className="text-zinc-400">{t(`status.${mp.connection}`)}</span>
+            </div>
           </div>
-        </div>
+        )}
+        {/* Bot info */}
+        {botMode && mp.phase !== 'lobby' && (
+          <div className="rounded-xl border border-zinc-800 bg-zinc-900 px-4 py-3">
+            <div className="flex items-center justify-between">
+              <span className="text-xs text-zinc-400">vs Bot ({t(`chess.bot.${botDifficulty}`)})</span>
+            </div>
+          </div>
+        )}
 
         {/* Error */}
         {mp.error && (
@@ -1910,8 +1955,8 @@ export function BattleshipGame({ wsUrl, gameId, initialRoomCode, quickPlay: isQu
           </div>
         ) : null}
 
-        {/* Room info */}
-        {mp.roomCode && (
+        {/* Room info (multiplayer only) */}
+        {!botMode && mp.roomCode && (
           <div className="rounded-xl border border-zinc-800 bg-zinc-900 p-4 flex flex-col gap-3">
             <p className="text-xs text-zinc-500 uppercase tracking-wider font-semibold">{t('game.room.title')}</p>
             <div className="flex items-center gap-2">
@@ -1959,10 +2004,10 @@ export function BattleshipGame({ wsUrl, gameId, initialRoomCode, quickPlay: isQu
         )}
 
         {/* Nickname */}
-        <NicknameEditor nickname={mp.myNickname} onSave={mp.setNickname} />
+        {!botMode && <NicknameEditor nickname={mpRaw.myNickname} onSave={mpRaw.setNickname} />}
 
         {/* Chat */}
-        <ChatPanel
+        {!botMode && <ChatPanel
           mode="both"
           roomCode={mp.roomCode}
           roomMessages={mp.roomMessages}
@@ -1976,7 +2021,7 @@ export function BattleshipGame({ wsUrl, gameId, initialRoomCode, quickPlay: isQu
           showUnreadBadge
           unreadCount={unread}
           className="rounded-xl border border-zinc-800 bg-zinc-900"
-        />
+        />}
 
         {/* Stats & Rules */}
         <button

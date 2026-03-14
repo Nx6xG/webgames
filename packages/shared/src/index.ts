@@ -145,13 +145,27 @@ export type {
   CurveFeverState,
   CurveFeverAction,
   CurveFeverConfig,
+  CfSpeedSetting,
+  CfPowerUpDensity,
+  CfThickness,
   CfDeathEvent,
   CfKillFeedEntry,
   CfPowerUpType,
   CfPowerUp,
   CfActiveEffect,
+  CfObstacle,
+  CfRoundStats,
+  CfArenaShape,
+  CfBotDifficulty,
+  CfBotSlot,
+  CfMapSize,
   TrailSegment,
 } from './games/curvefever';
+import { MAP_SIZE_PRESETS as _mapSizePresets } from './games/curvefever';
+export const MAP_SIZE_PRESETS = _mapSizePresets;
+import { BOT_TOKEN_PREFIX as _botTokenPrefix, isBotToken as _isBotToken } from './games/curvefever';
+export const BOT_TOKEN_PREFIX = _botTokenPrefix;
+export const isBotToken = _isBotToken;
 import { UNO_HAND_SIZE as _unoHandSize, UNO_PENALTY_CARDS as _unoPenalty, UNO_TARGET_SCORES as _unoTargetScores, UNO_DEFAULT_TARGET as _unoDefaultTarget, UNO_DEFAULT_RULES as _unoDefaultRules } from './games/uno';
 export const UNO_HAND_SIZE = _unoHandSize;
 export const UNO_PENALTY_CARDS = _unoPenalty;

@@ -620,6 +620,20 @@ const ANIM_STYLES = `
   0%   { transform: rotate(0deg); }
   100% { transform: rotate(360deg); }
 }
+@keyframes uno-announce-in {
+  0%   { transform: scale(0.3) rotate(-8deg); opacity: 0; }
+  50%  { transform: scale(1.15) rotate(2deg); opacity: 1; }
+  70%  { transform: scale(0.95) rotate(-1deg); }
+  100% { transform: scale(1) rotate(0deg); opacity: 1; }
+}
+@keyframes uno-announce-out {
+  0%   { transform: scale(1); opacity: 1; }
+  100% { transform: scale(0.7) translateY(-30px); opacity: 0; }
+}
+@keyframes uno-announce-glow {
+  0%, 100% { text-shadow: 0 0 20px rgba(239,68,68,0.6), 0 0 60px rgba(239,68,68,0.3), 0 2px 4px rgba(0,0,0,0.5); }
+  50%      { text-shadow: 0 0 40px rgba(239,68,68,0.9), 0 0 80px rgba(239,68,68,0.5), 0 0 120px rgba(245,158,11,0.3), 0 2px 4px rgba(0,0,0,0.5); }
+}
 `;
 
 // ── Main component ──────────────────────────────────────────────────────────
@@ -655,6 +669,28 @@ export function UnoGame({ wsUrl, gameId, initialRoomCode, quickPlay: isQuickPlay
   const [chatOpen, setChatOpen] = useState(false);
   const [unread, setUnread] = useState(0);
   const prevTotalRef = useRef<number | null>(null);
+
+  // ── UNO announcement overlay ─────────────────────────────────────────────
+  const [unoAnnouncement, setUnoAnnouncement] = useState<{ nickname: string; timestamp: number } | null>(null);
+  const [unoAnnounceFading, setUnoAnnounceFading] = useState(false);
+  const prevLastActionRef = useRef<string | undefined>(undefined);
+
+  useEffect(() => {
+    if (!gs?.lastAction || gs.lastAction === prevLastActionRef.current) return;
+    prevLastActionRef.current = gs.lastAction;
+    const match = gs.lastAction.match(/^(.+?) called UNO!$/);
+    if (match) {
+      setUnoAnnouncement({ nickname: match[1], timestamp: Date.now() });
+      setUnoAnnounceFading(false);
+    }
+  }, [gs?.lastAction]);
+
+  useEffect(() => {
+    if (!unoAnnouncement) return;
+    const fadeTimer = setTimeout(() => setUnoAnnounceFading(true), 2000);
+    const clearTimer = setTimeout(() => { setUnoAnnouncement(null); setUnoAnnounceFading(false); }, 2500);
+    return () => { clearTimeout(fadeTimer); clearTimeout(clearTimer); };
+  }, [unoAnnouncement]);
 
   // ── End overlay ───────────────────────────────────────────────────────────
   const lastFinishKeyRef = useRef('');
@@ -819,6 +855,45 @@ export function UnoGame({ wsUrl, gameId, initialRoomCode, quickPlay: isQuickPlay
         {/* ── Main game area ──────────────────────────────────────────── */}
         <div className={`relative min-w-0 flex flex-col items-center ${gapMain} max-w-3xl mx-auto w-full`}>
           <ReconnectBanner mp={mp} />
+
+          {/* ── UNO announcement overlay ──────────────────────────────── */}
+          {unoAnnouncement && (
+            <div
+              className="fixed inset-0 z-50 flex items-center justify-center pointer-events-none"
+              style={{
+                animation: unoAnnounceFading
+                  ? 'uno-announce-out 0.5s ease-in forwards'
+                  : 'uno-announce-in 0.5s cubic-bezier(0.34, 1.56, 0.64, 1) forwards',
+              }}
+            >
+              <div className="flex flex-col items-center gap-1">
+                <span
+                  style={{
+                    fontSize: 16,
+                    fontWeight: 700,
+                    color: '#fbbf24',
+                    textShadow: '0 1px 4px rgba(0,0,0,0.6)',
+                    letterSpacing: '0.05em',
+                  }}
+                >
+                  {unoAnnouncement.nickname}
+                </span>
+                <span
+                  className="font-black"
+                  style={{
+                    fontSize: 52,
+                    color: '#ef4444',
+                    letterSpacing: '-0.02em',
+                    animation: 'uno-announce-glow 1s ease-in-out infinite',
+                    WebkitTextStroke: '1.5px rgba(0,0,0,0.3)',
+                  }}
+                >
+                  UNO!
+                </span>
+              </div>
+            </div>
+          )}
+
           <WaitingForConnectionOverlay
             show={mp.phase === 'waiting' && mp.playerCount < (mp.roomMaxPlayers ?? 2) && !mp.gameState}
             label={t('game.status.waiting')}

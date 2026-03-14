@@ -5,7 +5,7 @@ import { getTodayStr } from '@/lib/dailyChallenges/definitions';
 const STORAGE_KEY = 'webgames_play_streak_v1';
 
 export interface StreakData {
-  /** Last date a game was played (YYYY-MM-DD). */
+  /** Last date all dailies were completed (YYYY-MM-DD). */
   lastPlayDate: string;
   /** Current consecutive day streak. */
   currentStreak: number;
@@ -47,21 +47,30 @@ function yesterdayStr(): string {
 }
 
 /**
- * Call when a game is played. Updates the streak counter.
- * Returns the updated streak data.
+ * Call when a game is played. Records the play date but does NOT update streak.
+ * Streak only increases when all dailies are completed (see recordDailyStreak).
+ * Returns the current streak data.
  */
 export function recordPlay(): StreakData {
+  return loadStreak();
+}
+
+/**
+ * Call when all daily challenges are completed. Updates the streak counter.
+ * Returns the updated streak data.
+ */
+export function recordDailyStreak(): StreakData {
   const today = getTodayStr();
   const data = loadStreak();
 
-  // Already played today — no change
+  // Already completed all dailies today — no change
   if (data.lastPlayDate === today) return data;
 
   if (data.lastPlayDate === yesterdayStr()) {
     // Consecutive day
     data.currentStreak += 1;
   } else {
-    // Streak broken or first play
+    // Streak broken or first completion
     data.currentStreak = 1;
   }
 
@@ -73,7 +82,7 @@ export function recordPlay(): StreakData {
 
 /**
  * Returns the current streak, accounting for potential streak break.
- * If last play was before yesterday, streak is 0.
+ * If last completion was before yesterday, streak is 0.
  */
 export function getActiveStreak(): StreakData {
   const data = loadStreak();

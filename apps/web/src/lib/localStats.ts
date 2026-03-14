@@ -62,7 +62,7 @@ export interface LocalProfile {
 // ── All known game IDs (display order) ────────────────────────────────────────
 
 export const MULTIPLAYER_GAME_IDS = ['tictactoe', 'connect4', 'rps', 'chess', 'battleship', 'liarsbar', 'curvefever', 'uno'] as const;
-export const SINGLEPLAYER_GAME_IDS = ['2048', 'snake', 'tetris', 'flappy', 'sudoku', 'tictactoe-solo', 'pong', 'breakout', 'minesweeper'] as const;
+export const SINGLEPLAYER_GAME_IDS = ['2048', 'snake', 'tetris', 'flappy', 'sudoku', 'tictactoe-solo', 'pong', 'breakout', 'minesweeper', 'doodlejump', 'crossyroad', 'mahjong'] as const;
 export const ALL_GAME_IDS = [...MULTIPLAYER_GAME_IDS, ...SINGLEPLAYER_GAME_IDS] as const;
 
 export const GAME_EMOJI: Record<string, string> = {

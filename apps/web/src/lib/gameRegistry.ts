@@ -160,7 +160,7 @@ export const webRegistry: Record<GameId, WebGameEntry> = {
       id: 'curvefever',
       name: 'Curve Fever',
       description: 'Steer your snake and be the last one alive! 2-6 players real-time action.',
-      categories: ['multiplayer', 'arcade'],
+      categories: ['multiplayer', 'arcade', 'vs bot'],
       version: '1.0.0',
       routeSlug: 'curvefever',
       minPlayers: 2,

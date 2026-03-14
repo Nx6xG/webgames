@@ -141,6 +141,7 @@ export function DailyChallengesWidget() {
                       <p className="text-xs text-zinc-500 truncate">{t(ch.descKey)}</p>
                     </div>
                     <div className="shrink-0 flex items-center gap-2">
+                      <span className="text-[10px] tabular-nums text-amber-500/70 font-medium">+10 XP</span>
                       <span className="text-xs tabular-nums text-zinc-400">
                         {current}/{ch.target}
                       </span>
@@ -162,9 +163,16 @@ export function DailyChallengesWidget() {
                 );
               })}
 
-              {allDone && (
-                <p className="pt-2 text-center text-xs text-emerald-400 font-medium">
-                  {t('daily.allDone')}
+              {allDone ? (
+                <div className="pt-2 text-center space-y-0.5">
+                  <p className="text-xs text-emerald-400 font-medium">
+                    {t('daily.allDone')}
+                  </p>
+                  <p className="text-[10px] text-amber-400 font-semibold">+50 XP {t('daily.bonus')}</p>
+                </div>
+              ) : (
+                <p className="pt-1 text-center text-[10px] text-zinc-600">
+                  {t('daily.bonusHint')}
                 </p>
               )}
             </div>
