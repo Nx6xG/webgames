@@ -20,6 +20,7 @@ import { SpectatorBanner } from '@/components/ui/SpectatorBanner';
 import { ReconnectBanner } from '@/components/ui/ReconnectBanner';
 import { useChessBot, type ChessBotState } from './useChessBot';
 import type { BotDifficulty } from './botEngine';
+import { saveLastConfig, loadLastConfig, hasLastConfig } from '@/lib/lobbyPresets';
 
 // ── Piece rendering ────────────────────────────────────────────────────────────
 
@@ -1225,8 +1226,23 @@ export function ChessGame({ wsUrl, gameId, initialRoomCode, quickPlay: isQuickPl
                   </div>
                 </div>
                 {/* Start */}
+                {hasLastConfig('chess') && (
+                  <button
+                    onClick={() => {
+                      const c = loadLastConfig<Record<string, unknown>>('chess');
+                      if (!c) return;
+                      if (c.botDifficulty != null) setBotDifficulty(c.botDifficulty as BotDifficulty);
+                      if (c.botColorChoice != null) setBotColorChoice(c.botColorChoice as ChessColor | 'random');
+                      if (c.timePreset != null) setTimePreset(c.timePreset as string);
+                    }}
+                    className="w-full py-1.5 rounded-lg border border-zinc-700 hover:border-indigo-600 text-zinc-400 hover:text-indigo-300 text-xs font-medium transition-colors"
+                  >
+                    {t('game.lobby.lastSettings')}
+                  </button>
+                )}
                 <button
                   onClick={() => {
+                    saveLastConfig('chess', { botDifficulty, botColorChoice, timePreset });
                     const color: ChessColor = botColorChoice === 'random'
                       ? (Math.random() < 0.5 ? 'w' : 'b')
                       : botColorChoice;
@@ -1282,14 +1298,29 @@ export function ChessGame({ wsUrl, gameId, initialRoomCode, quickPlay: isQuickPl
                     ))}
                   </div>
                 </div>
+                {hasLastConfig('chess') && (
+                  <button
+                    onClick={() => {
+                      const c = loadLastConfig<Record<string, unknown>>('chess');
+                      if (!c) return;
+                      if (c.timePreset != null) setTimePreset(c.timePreset as string);
+                    }}
+                    className="w-full py-1.5 rounded-lg border border-zinc-700 hover:border-indigo-600 text-zinc-400 hover:text-indigo-300 text-xs font-medium transition-colors"
+                  >
+                    {t('game.lobby.lastSettings')}
+                  </button>
+                )}
                 <button
-                  onClick={() => mpRaw.createRoom({
-                    visibility: roomVisibility,
-                    roomName: roomName.trim() || undefined,
-                    chessConfig: selectedPreset.time > 0
-                      ? { timeSeconds: selectedPreset.time, incrementSeconds: selectedPreset.inc }
-                      : undefined,
-                  })}
+                  onClick={() => {
+                    saveLastConfig('chess', { timePreset });
+                    mpRaw.createRoom({
+                      visibility: roomVisibility,
+                      roomName: roomName.trim() || undefined,
+                      chessConfig: selectedPreset.time > 0
+                        ? { timeSeconds: selectedPreset.time, incrementSeconds: selectedPreset.inc }
+                        : undefined,
+                    });
+                  }}
                   disabled={mpRaw.connection !== 'connected'}
                   className="w-full py-2.5 rounded-lg bg-indigo-600 hover:bg-indigo-500 disabled:opacity-40 disabled:cursor-not-allowed text-white font-semibold text-sm transition-colors"
                 >

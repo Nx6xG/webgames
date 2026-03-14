@@ -120,6 +120,15 @@ const SINGLEPLAYER_GAMES = [
     tags:         ['singleplayer', 'puzzle', 'classic'],
     bestScoreKey: '',
   },
+  {
+    id:           'penalties',
+    titleKey:     'lobby.games.penalties.title',
+    descKey:      'lobby.games.penalties.desc',
+    emoji:        '⚽',
+    href:         '/games/penalties',
+    tags:         ['singleplayer', 'arcade'],
+    bestScoreKey: '',
+  },
 ] as const;
 import { GlobalChatWidget } from '@/components/chat/GlobalChatWidget';
 import { ProfileMenu } from '@/components/ProfileMenu';

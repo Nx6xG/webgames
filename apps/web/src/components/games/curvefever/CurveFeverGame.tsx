@@ -12,6 +12,7 @@ import { NicknameEditor } from '@/components/NicknameEditor';
 import { ChatPanelWithProfile as ChatPanel } from '@/components/chat/ChatPanelWithProfile';
 import { SpectatorBanner } from '@/components/ui/SpectatorBanner';
 import { WaitingForConnectionOverlay } from '@/components/WaitingForConnectionOverlay';
+import { saveLastConfig, loadLastConfig, hasLastConfig } from '@/lib/lobbyPresets';
 
 const ARENA_W = 800;
 const ARENA_H = 600;
@@ -1304,26 +1305,59 @@ export function CurveFeverGame({ wsUrl, gameId, initialRoomCode, quickPlay: auto
                   ))}
                 </div>
 
+                {hasLastConfig('curvefever') && (
+                  <button
+                    onClick={() => {
+                      const c = loadLastConfig<Record<string, unknown>>('curvefever');
+                      if (!c) return;
+                      if (c.bestOf != null) setBestOf(c.bestOf as number);
+                      if (c.maxPlayers != null) setMaxPlayers(c.maxPlayers as number);
+                      if (c.speed != null) setCfSpeed(c.speed as CfSpeedSetting);
+                      if (c.powerUpDensity != null) setCfPowerUps(c.powerUpDensity as CfPowerUpDensity);
+                      if (c.thickness != null) setCfThickness(c.thickness as CfThickness);
+                      if (c.noGaps != null) setCfNoGaps(c.noGaps as boolean);
+                      if (c.shrinkingArena != null) setCfShrinking(c.shrinkingArena as boolean);
+                      if (c.suddenDeath != null) setCfSuddenDeath(c.suddenDeath as boolean);
+                      if (c.disabledPowerUps != null) setCfDisabledPUs(c.disabledPowerUps as CfPowerUpType[]);
+                      if (c.obstacles != null) setCfObstacles(c.obstacles as boolean);
+                      if (c.teamMode != null) setCfTeamMode(c.teamMode as boolean);
+                      if (c.arenaShape != null) setCfArenaShape(c.arenaShape as CfArenaShape);
+                      if (c.mapSize != null) setCfMapSize(c.mapSize as CfMapSize);
+                    }}
+                    className="w-full py-1.5 rounded-xl border border-zinc-700 hover:border-indigo-600 text-zinc-400 hover:text-indigo-300 text-xs font-medium transition-colors cursor-pointer"
+                  >
+                    {t('game.lobby.lastSettings')}
+                  </button>
+                )}
+
                 <button
-                  onClick={() => mp.createRoom({
-                    visibility: roomVisibility,
-                    roomName: roomName || undefined,
-                    cfConfig: {
-                      bestOf: cfSuddenDeath ? 1 : bestOf,
-                      speed: cfSpeed,
-                      powerUpDensity: cfPowerUps,
-                      thickness: cfThickness,
-                      noGaps: cfNoGaps,
-                      shrinkingArena: cfShrinking,
-                      suddenDeath: cfSuddenDeath,
-                      disabledPowerUps: cfDisabledPUs.length > 0 ? cfDisabledPUs : undefined,
-                      obstacles: cfObstacles || undefined,
-                      teamMode: cfTeamMode || undefined,
-                      arenaShape: cfArenaShape !== 'rectangle' ? cfArenaShape : undefined,
-                      mapSize: cfMapSize !== 'normal' ? cfMapSize : undefined,
-                    },
-                    maxPlayers,
-                  })}
+                  onClick={() => {
+                    saveLastConfig('curvefever', {
+                      bestOf, maxPlayers, speed: cfSpeed, powerUpDensity: cfPowerUps, thickness: cfThickness,
+                      noGaps: cfNoGaps, shrinkingArena: cfShrinking, suddenDeath: cfSuddenDeath,
+                      disabledPowerUps: cfDisabledPUs, obstacles: cfObstacles, teamMode: cfTeamMode,
+                      arenaShape: cfArenaShape, mapSize: cfMapSize,
+                    });
+                    mp.createRoom({
+                      visibility: roomVisibility,
+                      roomName: roomName || undefined,
+                      cfConfig: {
+                        bestOf: cfSuddenDeath ? 1 : bestOf,
+                        speed: cfSpeed,
+                        powerUpDensity: cfPowerUps,
+                        thickness: cfThickness,
+                        noGaps: cfNoGaps,
+                        shrinkingArena: cfShrinking,
+                        suddenDeath: cfSuddenDeath,
+                        disabledPowerUps: cfDisabledPUs.length > 0 ? cfDisabledPUs : undefined,
+                        obstacles: cfObstacles || undefined,
+                        teamMode: cfTeamMode || undefined,
+                        arenaShape: cfArenaShape !== 'rectangle' ? cfArenaShape : undefined,
+                        mapSize: cfMapSize !== 'normal' ? cfMapSize : undefined,
+                      },
+                      maxPlayers,
+                    });
+                  }}
                   className="w-full py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white font-bold transition-colors cursor-pointer active:scale-[0.98]"
                 >
                   {t('game.lobby.createRoom')}

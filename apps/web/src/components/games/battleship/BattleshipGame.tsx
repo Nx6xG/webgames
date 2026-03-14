@@ -19,6 +19,7 @@ import { RoomInviteButton } from '@/components/social/RoomInviteButton';
 import { useAchievements } from '@/hooks/useAchievements';
 import { ReconnectBanner } from '@/components/ui/ReconnectBanner';
 import { useBattleshipBot, type BotDifficulty } from './useBattleshipBot';
+import { saveLastConfig, loadLastConfig, hasLastConfig } from '@/lib/lobbyPresets';
 
 // ── Cell display types ────────────────────────────────────────────────────────
 
@@ -1886,6 +1887,30 @@ export function BattleshipGame({ wsUrl, gameId, initialRoomCode, quickPlay: isQu
                       </button>
                     ))}
                   </div>
+                  {/* Fleet preview */}
+                  {(() => {
+                    const preset = fleetPreset === 'random' ? null : FLEET_PRESETS.find((p) => p.id === fleetPreset);
+                    if (!preset) return (
+                      <p className="text-[10px] text-zinc-600 italic">{t('battleship.fleet.randomHint')}</p>
+                    );
+                    return (
+                      <div className="flex flex-col gap-0.5">
+                        {preset.ships.map((ship) => {
+                          const baseKey = ship.id.replace(/\d+$/, '');
+                          return (
+                            <div key={ship.id} className="flex items-center gap-1.5">
+                              <div className="flex gap-px">
+                                {Array.from({ length: ship.length }, (_, i) => (
+                                  <span key={i} className="w-2.5 h-2.5 rounded-[2px] bg-indigo-500/60 border border-indigo-400/30" />
+                                ))}
+                              </div>
+                              <span className="text-[10px] text-zinc-500">{t(`battleship.ship.${baseKey}`)}</span>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    );
+                  })()}
                 </div>
                 {/* Salvo mode */}
                 <div className="flex flex-col gap-1">
@@ -1900,8 +1925,25 @@ export function BattleshipGame({ wsUrl, gameId, initialRoomCode, quickPlay: isQu
                   </label>
                 </div>
                 {/* Start */}
+                {hasLastConfig('battleship') && (
+                  <button
+                    onClick={() => {
+                      const c = loadLastConfig<Record<string, unknown>>('battleship');
+                      if (!c) return;
+                      if (c.fleetPreset != null) setFleetPreset(c.fleetPreset as string);
+                      if (c.boardSize != null) setBoardSizeCfg(c.boardSize as BoardSize);
+                      if (c.salvoMode != null) setSalvoModeCfg(c.salvoMode as boolean);
+                    }}
+                    className="w-full py-1.5 rounded-lg border border-zinc-700 hover:border-indigo-600 text-zinc-400 hover:text-indigo-300 text-xs font-medium transition-colors"
+                  >
+                    {t('game.lobby.lastSettings')}
+                  </button>
+                )}
                 <button
-                  onClick={() => bot.startGame({ fleetPreset, boardSize: boardSizeCfg, salvoMode: salvoModeCfg, shotTimerSec: 0 })}
+                  onClick={() => {
+                    saveLastConfig('battleship', { fleetPreset, boardSize: boardSizeCfg, salvoMode: salvoModeCfg, shotTimerSec: 0 });
+                    bot.startGame({ fleetPreset, boardSize: boardSizeCfg, salvoMode: salvoModeCfg, shotTimerSec: 0 });
+                  }}
                   className="w-full py-2.5 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-white font-semibold text-sm transition-colors"
                 >
                   {t('chess.bot.play')}
@@ -2026,8 +2068,26 @@ export function BattleshipGame({ wsUrl, gameId, initialRoomCode, quickPlay: isQu
                 ))}
               </div>
             </div>
+            {hasLastConfig('battleship') && (
+              <button
+                onClick={() => {
+                  const c = loadLastConfig<Record<string, unknown>>('battleship');
+                  if (!c) return;
+                  if (c.fleetPreset != null) setFleetPreset(c.fleetPreset as string);
+                  if (c.boardSize != null) setBoardSizeCfg(c.boardSize as BoardSize);
+                  if (c.salvoMode != null) setSalvoModeCfg(c.salvoMode as boolean);
+                  if (c.shotTimerSec != null) setShotTimerCfg(c.shotTimerSec as number);
+                }}
+                className="w-full py-1.5 rounded-lg border border-zinc-700 hover:border-indigo-600 text-zinc-400 hover:text-indigo-300 text-xs font-medium transition-colors"
+              >
+                {t('game.lobby.lastSettings')}
+              </button>
+            )}
             <button
-              onClick={() => mpRaw.createRoom({ visibility: roomVisibility, roomName: roomName.trim() || undefined, battleshipConfig: { fleetPreset, boardSize: boardSizeCfg, salvoMode: salvoModeCfg, shotTimerSec: shotTimerCfg } })}
+              onClick={() => {
+                saveLastConfig('battleship', { fleetPreset, boardSize: boardSizeCfg, salvoMode: salvoModeCfg, shotTimerSec: shotTimerCfg });
+                mpRaw.createRoom({ visibility: roomVisibility, roomName: roomName.trim() || undefined, battleshipConfig: { fleetPreset, boardSize: boardSizeCfg, salvoMode: salvoModeCfg, shotTimerSec: shotTimerCfg } });
+              }}
               disabled={mp.connection !== 'connected'}
               className="w-full py-2.5 rounded-lg bg-indigo-600 hover:bg-indigo-500 disabled:opacity-40 disabled:cursor-not-allowed text-white font-semibold text-sm transition-colors"
             >

@@ -13,6 +13,7 @@ import { useI18n } from '@/components/providers/LanguageProvider';
 import { useAchievements } from '@/hooks/useAchievements';
 import { SpectatorBanner } from '@/components/ui/SpectatorBanner';
 import { ReconnectBanner } from '@/components/ui/ReconnectBanner';
+import { saveLastConfig, loadLastConfig, hasLastConfig } from '@/lib/lobbyPresets';
 
 // ── Compact viewport ────────────────────────────────────────────────────────
 
@@ -1734,8 +1735,31 @@ export function UnoGame({ wsUrl, gameId, initialRoomCode, quickPlay: isQuickPlay
                 ))}
               </div>
 
+              {hasLastConfig('uno') && (
+                <button
+                  onClick={() => {
+                    const c = loadLastConfig<Record<string, unknown>>('uno');
+                    if (!c) return;
+                    if (c.maxPlayers != null) setMaxPlayers(c.maxPlayers as number);
+                    if (c.targetScore != null) setTargetScore(c.targetScore as number);
+                    if (c.stackDraw2 != null) setStackDraw2(c.stackDraw2 as boolean);
+                    if (c.stackDraw4 != null) setStackDraw4(c.stackDraw4 as boolean);
+                    if (c.allowDraw2OnDraw4 != null) setAllowDraw2OnDraw4(c.allowDraw2OnDraw4 as boolean);
+                    if (c.allowDraw4OnDraw2 != null) setAllowDraw4OnDraw2(c.allowDraw4OnDraw2 as boolean);
+                    if (c.playDrawnCard != null) setPlayDrawnCard(c.playDrawnCard as boolean);
+                    if (c.drawUntilPlayable != null) setDrawUntilPlayable(c.drawUntilPlayable as boolean);
+                    if (c.forcedPlay != null) setForcedPlay(c.forcedPlay as boolean);
+                  }}
+                  className="w-full py-1.5 rounded-xl border border-zinc-700 hover:border-indigo-600 text-zinc-400 hover:text-indigo-300 text-xs font-medium transition-colors cursor-pointer"
+                >
+                  {t('game.lobby.lastSettings')}
+                </button>
+              )}
               <button
-                onClick={() => mp.createRoom({ visibility: roomVisibility, roomName: roomName.trim() || undefined, maxPlayers, unoConfig: { targetScore, stackDraw2, stackDraw4, allowDraw2OnDraw4, allowDraw4OnDraw2, playDrawnCardImmediately: playDrawnCard, drawUntilPlayable, forcedPlay } })}
+                onClick={() => {
+                  saveLastConfig('uno', { maxPlayers, targetScore, stackDraw2, stackDraw4, allowDraw2OnDraw4, allowDraw4OnDraw2, playDrawnCard, drawUntilPlayable, forcedPlay });
+                  mp.createRoom({ visibility: roomVisibility, roomName: roomName.trim() || undefined, maxPlayers, unoConfig: { targetScore, stackDraw2, stackDraw4, allowDraw2OnDraw4, allowDraw4OnDraw2, playDrawnCardImmediately: playDrawnCard, drawUntilPlayable, forcedPlay } });
+                }}
                 className="w-full py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white font-bold transition-colors cursor-pointer active:scale-[0.98]"
               >
                 {t('game.lobby.createRoom')}

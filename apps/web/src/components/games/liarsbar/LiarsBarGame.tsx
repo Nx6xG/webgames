@@ -18,6 +18,7 @@ import { RoomInviteButton } from '@/components/social/RoomInviteButton';
 import { useAchievements } from '@/hooks/useAchievements';
 import { SpectatorBanner } from '@/components/ui/SpectatorBanner';
 import { ReconnectBanner } from '@/components/ui/ReconnectBanner';
+import { saveLastConfig, loadLastConfig, hasLastConfig } from '@/lib/lobbyPresets';
 
 // ── Compact viewport hook ────────────────────────────────────────────────────
 // Fires when viewport height ≤ 800px (covers 1366×768 and similar).
@@ -1010,8 +1011,24 @@ export function LiarsBarGame({ wsUrl, gameId, initialRoomCode, quickPlay: isQuic
                 ))}
               </div>
             </div>
+            {hasLastConfig('liarsbar') && (
+              <button
+                onClick={() => {
+                  const c = loadLastConfig<Record<string, unknown>>('liarsbar');
+                  if (!c) return;
+                  if (c.ldMode != null) setLdMode(c.ldMode as LdMode);
+                  if (c.maxPlayers != null) setMaxPlayers(c.maxPlayers as number);
+                }}
+                className="w-full py-1.5 rounded-lg border border-zinc-700 hover:border-indigo-600 text-zinc-400 hover:text-indigo-300 text-xs font-medium transition-colors"
+              >
+                {t('game.lobby.lastSettings')}
+              </button>
+            )}
             <button
-              onClick={() => mp.createRoom({ visibility: roomVisibility, roomName: roomName.trim() || undefined, ldConfig: { mode: ldMode }, maxPlayers })}
+              onClick={() => {
+                saveLastConfig('liarsbar', { ldMode, maxPlayers });
+                mp.createRoom({ visibility: roomVisibility, roomName: roomName.trim() || undefined, ldConfig: { mode: ldMode }, maxPlayers });
+              }}
               disabled={mp.connection !== 'connected'}
               className={`w-full ${compact ? 'py-2' : 'py-2.5'} rounded-lg bg-indigo-600 hover:bg-indigo-500 disabled:opacity-40 disabled:cursor-not-allowed text-white font-semibold text-sm transition-all active:scale-[0.98]`}
             >

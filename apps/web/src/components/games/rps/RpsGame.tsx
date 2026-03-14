@@ -19,6 +19,7 @@ import { useAchievements } from '@/hooks/useAchievements';
 import { SpectatorBanner } from '@/components/ui/SpectatorBanner';
 import { ReconnectBanner } from '@/components/ui/ReconnectBanner';
 import { useRpsBot } from './useRpsBot';
+import { saveLastConfig, loadLastConfig, hasLastConfig } from '@/lib/lobbyPresets';
 import type { BotDifficulty } from './botEngine';
 
 const PICKS: RpsPick[] = ['rock', 'paper', 'scissors'];
@@ -638,8 +639,24 @@ export function RpsGame({ wsUrl, gameId, initialRoomCode, quickPlay: isQuickPlay
             {/* Mode selector */}
             <LobbyModeSelector />
 
+            {hasLastConfig('rps') && (
+              <button
+                onClick={() => {
+                  const c = loadLastConfig<Record<string, unknown>>('rps');
+                  if (!c) return;
+                  if (c.rpsMode != null) setRpsMode(c.rpsMode as RpsMode);
+                  if (c.bestOfChoice != null) setBestOfChoice(c.bestOfChoice as number);
+                }}
+                className="w-full py-1.5 rounded-lg border border-zinc-700 hover:border-indigo-600 text-zinc-400 hover:text-indigo-300 text-xs font-medium transition-colors"
+              >
+                {t('game.lobby.lastSettings')}
+              </button>
+            )}
             <button
-              onClick={() => bot.startGame(rpsMode, rpsMode === 'best_of' ? bestOfChoice : 0)}
+              onClick={() => {
+                saveLastConfig('rps', { rpsMode, bestOfChoice });
+                bot.startGame(rpsMode, rpsMode === 'best_of' ? bestOfChoice : 0);
+              }}
               className="w-full py-2.5 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-white font-semibold text-sm transition-colors"
             >
               {t('rps.bot.play')}
@@ -687,12 +704,28 @@ export function RpsGame({ wsUrl, gameId, initialRoomCode, quickPlay: isQuickPlay
             {/* Mode selector */}
             <LobbyModeSelector />
 
+            {hasLastConfig('rps') && (
+              <button
+                onClick={() => {
+                  const c = loadLastConfig<Record<string, unknown>>('rps');
+                  if (!c) return;
+                  if (c.rpsMode != null) setRpsMode(c.rpsMode as RpsMode);
+                  if (c.bestOfChoice != null) setBestOfChoice(c.bestOfChoice as number);
+                }}
+                className="w-full py-1.5 rounded-lg border border-zinc-700 hover:border-indigo-600 text-zinc-400 hover:text-indigo-300 text-xs font-medium transition-colors"
+              >
+                {t('game.lobby.lastSettings')}
+              </button>
+            )}
             <button
-              onClick={() => mp.createRoom({
-                visibility: roomVisibility,
-                roomName: roomName.trim() || undefined,
-                rpsConfig: { mode: rpsMode, bestOf: rpsMode === 'best_of' ? bestOfChoice : undefined },
-              })}
+              onClick={() => {
+                saveLastConfig('rps', { rpsMode, bestOfChoice });
+                mp.createRoom({
+                  visibility: roomVisibility,
+                  roomName: roomName.trim() || undefined,
+                  rpsConfig: { mode: rpsMode, bestOf: rpsMode === 'best_of' ? bestOfChoice : undefined },
+                });
+              }}
               disabled={mp.connection !== 'connected'}
               className="w-full py-2.5 rounded-lg bg-indigo-600 hover:bg-indigo-500 disabled:opacity-40 disabled:cursor-not-allowed text-white font-semibold text-sm transition-colors"
             >

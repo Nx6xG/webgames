@@ -1,5 +1,19 @@
 # Patch Notes
 
+## 2026-03-14
+
+- **Curve Fever: Bots** — Spiele mit KI-Gegnern (Leicht / Mittel / Schwer), auch zusammen mit anderen Spielern
+- **Curve Fever: Kartengrößen** — Wähle zwischen Klein, Normal, Groß und Riesig
+- **Curve Fever: Flüssigeres Gameplay** — Höhere Tickrate (30 TPS) und clientseitige Interpolation für butterweiche Bewegungen
+- **Schiffe Versenken: vs Bot** — Spiele gegen eine KI mit 3 Schwierigkeitsstufen (Leicht: Zufallsschüsse, Mittel: Hunt/Target, Schwer: Wahrscheinlichkeitsberechnung)
+- **Tägliche Herausforderungen: XP-Update** — 10 XP pro Challenge, +50 XP Bonus fürs Abschließen aller Dailys
+- **Täglicher Streak** — Streak zählt jetzt nur hoch, wenn alle täglichen Herausforderungen abgeschlossen wurden
+- **Neues Spiel: Elfmeterschießen** — Schieß Elfmeter und halte als Torwart gegen die KI (3 Schwierigkeiten, Sudden Death)
+- **Neue Spiele: Doodle Jump, Crossy Road & Mahjong** — Drei neue Singleplayer-Spiele
+- **Singleplayer-Shops** — Einige Singleplayer-Spiele haben jetzt eigenständige Shops mit spielspezifischen Items
+
+---
+
 ## 2026-03-12
 
 - **Profil-Showcase** — Stelle dein Mini-Profil zusammen: Lieblingsspiel, 3 Stats und 3 Achievements, sichtbar für alle in der Online-Liste
