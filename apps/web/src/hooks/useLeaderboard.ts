@@ -7,7 +7,7 @@ import type { ServerToClientEvents, ClientToServerEvents, LeaderboardEntry, Lead
 
 type LBSocket = Socket<ServerToClientEvents, ClientToServerEvents>;
 
-export type LBTab = 'overall' | 'tictactoe' | 'connect4';
+export type LBTab = 'overall' | 'tictactoe' | 'connect4' | 'rps' | 'chess' | 'battleship' | 'liarsbar' | 'curvefever' | 'uno';
 
 const PLAYER_TOKEN_KEY = 'wg_player_token';
 const NICKNAME_KEY     = 'wg_nickname';

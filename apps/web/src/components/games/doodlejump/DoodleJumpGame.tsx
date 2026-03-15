@@ -31,6 +31,10 @@ const SPRING_H = 16;
 const GRAVITY = 0.3;
 const JUMP_VEL = 9;
 const SPRING_VEL = 14;
+const ROCKET_W = 14;
+const ROCKET_H = 20;
+const ROCKET_VEL = 20;
+const ROCKET_FLIGHT_DURATION = 90;
 const MAX_FALL_VEL = 10;
 
 const MOVE_SPEED = 3.5;
@@ -42,6 +46,17 @@ const COUNTDOWN_STEP_MS = 700;
 const BEST_KEY = 'webgames.doodlejump.bestScore';
 const BOOST_PRICE = 100;
 const BOOST_SCORE = 100;
+
+// ── Color themes (cycle every ~100 points) ──────────────────────────────────
+
+const DOODLE_THEMES = [
+  { bg1: '#1a1a2e', bg2: '#16213e', platNormal: '#4ade80', platMoving: '#22d3ee', platBreak: '#f87171', text: '#e2e8f0' }, // default green
+  { bg1: '#1e0a2e', bg2: '#2d1b4e', platNormal: '#c084fc', platMoving: '#f472b6', platBreak: '#fb923c', text: '#e9d5ff' }, // purple
+  { bg1: '#0a1e2e', bg2: '#0c2d4e', platNormal: '#38bdf8', platMoving: '#34d399', platBreak: '#fbbf24', text: '#bae6fd' }, // ocean
+  { bg1: '#2e1e0a', bg2: '#4e3b1b', platNormal: '#fbbf24', platMoving: '#f97316', platBreak: '#ef4444', text: '#fef3c7' }, // desert
+  { bg1: '#1e0a0a', bg2: '#3a1515', platNormal: '#fb7185', platMoving: '#a78bfa', platBreak: '#fde047', text: '#fecaca' }, // rose
+  { bg1: '#0a2e1e', bg2: '#1b4e3b', platNormal: '#34d399', platMoving: '#2dd4bf', platBreak: '#f472b6', text: '#a7f3d0' }, // forest
+];
 
 // ── Doodler skins ───────────────────────────────────────────────────────────
 
@@ -77,6 +92,9 @@ interface Platform {
   // spring state
   hasSpring?: boolean;
   springBounced?: boolean;
+  // rocket state
+  hasRocket?: boolean;
+  rocketUsed?: boolean;
 }
 
 // ── Game state (stored in ref) ──────────────────────────────────────────────
@@ -93,6 +111,8 @@ interface GameState {
   lastScoredY: number; // only score when landing higher than this
   nextPlatformY: number;
   platformIdCounter: number;
+  rocketActive: number;
+  themeIndex: number;
 }
 
 // ── Phase ───────────────────────────────────────────────────────────────────
@@ -140,6 +160,8 @@ function choosePlatformKind(score: number): PlatformKind {
   if (r < breakChance) return 'breakable';
   if (r < breakChance + movingChance) return 'moving';
   if (r < breakChance + movingChance + springChance) return 'spring';
+  const rocketChance = 0.008;
+  if (r < breakChance + movingChance + springChance + rocketChance) return 'rocket' as PlatformKind;
   return 'normal';
 }
 
@@ -175,6 +197,10 @@ function createPlatform(x: number, y: number, kind: PlatformKind): Platform {
   if (kind === 'spring') {
     p.hasSpring = true;
     p.kind = 'normal'; // spring is visually a normal platform + spring on top
+  }
+  if ((kind as string) === 'rocket') {
+    p.hasRocket = true;
+    p.kind = 'normal'; // rocket is visually a normal platform + rocket on top
   }
   return p;
 }
@@ -227,6 +253,8 @@ function createInitialState(): GameState {
     lastScoredY: -1,
     nextPlatformY: platforms[platforms.length - 1].y + randomRange(28, 45),
     platformIdCounter: platforms.length,
+    rocketActive: 0,
+    themeIndex: 0,
   };
 }
 
@@ -246,8 +274,9 @@ function drawRoundedRect(ctx: CanvasRenderingContext2D, x: number, y: number, w:
   ctx.closePath();
 }
 
-function drawPlatform(ctx: CanvasRenderingContext2D, p: Platform, screenY: number) {
-  const { x, w, kind, broken, hasSpring, springBounced } = p;
+function drawPlatform(ctx: CanvasRenderingContext2D, p: Platform, screenY: number, themeIndex: number = 0) {
+  const { x, w, kind, broken, hasSpring, springBounced, hasRocket, rocketUsed } = p;
+  const theme = DOODLE_THEMES[themeIndex] ?? DOODLE_THEMES[0];
 
   if (broken) {
     const bt = p.breakTimer ?? 0;
@@ -273,25 +302,25 @@ function drawPlatform(ctx: CanvasRenderingContext2D, p: Platform, screenY: numbe
     return;
   }
 
-  // Platform body
+  // Platform body (themed)
   let color1: string;
   let color2: string;
   switch (kind) {
     case 'normal':
-      color1 = '#22c55e';
-      color2 = '#16a34a';
+      color1 = theme.platNormal;
+      color2 = theme.platNormal;
       break;
     case 'moving':
-      color1 = '#3b82f6';
-      color2 = '#2563eb';
+      color1 = theme.platMoving;
+      color2 = theme.platMoving;
       break;
     case 'breakable':
-      color1 = '#d97706';
-      color2 = '#b45309';
+      color1 = theme.platBreak;
+      color2 = theme.platBreak;
       break;
     default:
-      color1 = '#22c55e';
-      color2 = '#16a34a';
+      color1 = theme.platNormal;
+      color2 = theme.platNormal;
   }
 
   // Gradient
@@ -341,6 +370,64 @@ function drawPlatform(ctx: CanvasRenderingContext2D, p: Platform, screenY: numbe
     // Base
     ctx.fillStyle = bounced ? '#facc15' : '#737373';
     ctx.fillRect(sx - 1, screenY - 2, SPRING_W + 2, 4);
+  }
+
+  // Rocket
+  if (hasRocket && !rocketUsed) {
+    const rx = x + w / 2 - ROCKET_W / 2;
+    const ry = screenY - ROCKET_H + 2;
+
+    // Rocket body (red)
+    ctx.fillStyle = '#ef4444';
+    ctx.beginPath();
+    ctx.moveTo(rx + ROCKET_W / 2, ry); // nose tip
+    ctx.lineTo(rx + ROCKET_W, ry + ROCKET_H * 0.6);
+    ctx.lineTo(rx + ROCKET_W, ry + ROCKET_H);
+    ctx.lineTo(rx, ry + ROCKET_H);
+    ctx.lineTo(rx, ry + ROCKET_H * 0.6);
+    ctx.closePath();
+    ctx.fill();
+
+    // Nose cone (orange)
+    ctx.fillStyle = '#f97316';
+    ctx.beginPath();
+    ctx.moveTo(rx + ROCKET_W / 2, ry);
+    ctx.lineTo(rx + ROCKET_W - 2, ry + ROCKET_H * 0.4);
+    ctx.lineTo(rx + 2, ry + ROCKET_H * 0.4);
+    ctx.closePath();
+    ctx.fill();
+
+    // Window (light blue circle)
+    ctx.fillStyle = '#7dd3fc';
+    ctx.beginPath();
+    ctx.arc(rx + ROCKET_W / 2, ry + ROCKET_H * 0.55, 3, 0, Math.PI * 2);
+    ctx.fill();
+
+    // Fins (darker red)
+    ctx.fillStyle = '#dc2626';
+    // Left fin
+    ctx.beginPath();
+    ctx.moveTo(rx, ry + ROCKET_H * 0.7);
+    ctx.lineTo(rx - 3, ry + ROCKET_H);
+    ctx.lineTo(rx, ry + ROCKET_H);
+    ctx.closePath();
+    ctx.fill();
+    // Right fin
+    ctx.beginPath();
+    ctx.moveTo(rx + ROCKET_W, ry + ROCKET_H * 0.7);
+    ctx.lineTo(rx + ROCKET_W + 3, ry + ROCKET_H);
+    ctx.lineTo(rx + ROCKET_W, ry + ROCKET_H);
+    ctx.closePath();
+    ctx.fill();
+
+    // Small flame at base
+    ctx.fillStyle = '#fbbf24';
+    ctx.beginPath();
+    ctx.moveTo(rx + 3, ry + ROCKET_H);
+    ctx.lineTo(rx + ROCKET_W / 2, ry + ROCKET_H + 6);
+    ctx.lineTo(rx + ROCKET_W - 3, ry + ROCKET_H);
+    ctx.closePath();
+    ctx.fill();
   }
 }
 
@@ -594,11 +681,12 @@ function drawDoodler(ctx: CanvasRenderingContext2D, x: number, screenY: number, 
   }
 }
 
-function drawBackground(ctx: CanvasRenderingContext2D, cameraY: number) {
+function drawBackground(ctx: CanvasRenderingContext2D, cameraY: number, themeIndex: number = 0) {
+  const theme = DOODLE_THEMES[themeIndex] ?? DOODLE_THEMES[0];
   // Dark gradient background
   const grad = ctx.createLinearGradient(0, 0, 0, CANVAS_H);
-  grad.addColorStop(0, '#0f0b25');
-  grad.addColorStop(1, '#1a1a2e');
+  grad.addColorStop(0, theme.bg1);
+  grad.addColorStop(1, theme.bg2);
   ctx.fillStyle = grad;
   ctx.fillRect(0, 0, CANVAS_W, CANVAS_H);
 
@@ -621,8 +709,9 @@ function drawBackground(ctx: CanvasRenderingContext2D, cameraY: number) {
   }
 }
 
-function drawScore(ctx: CanvasRenderingContext2D, score: number) {
-  ctx.fillStyle = '#ffffff';
+function drawScore(ctx: CanvasRenderingContext2D, score: number, themeIndex: number = 0) {
+  const theme = DOODLE_THEMES[themeIndex] ?? DOODLE_THEMES[0];
+  ctx.fillStyle = theme.text;
   ctx.font = 'bold 18px system-ui, sans-serif';
   ctx.textAlign = 'left';
   ctx.fillText(String(score), 12, 28);
@@ -858,23 +947,45 @@ export function DoodleJumpGame() {
     ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
 
     // Background
-    drawBackground(ctx, gs.cameraY);
+    drawBackground(ctx, gs.cameraY, gs.themeIndex);
 
     // Platforms
     for (const p of gs.platforms) {
       const screenY = CANVAS_H - (p.y - gs.cameraY) - PLATFORM_H;
       if (screenY > CANVAS_H + 20 || screenY < -40) continue;
-      drawPlatform(ctx, p, screenY);
+      drawPlatform(ctx, p, screenY, gs.themeIndex);
     }
 
     // Doodler — use activeSkinRef to avoid stale closure in RAF
     const doodlerScreenY = CANVAS_H - (gs.doodlerY - gs.cameraY) - DOODLER_H;
     const currentSkinId = shop.activeSkinRef.current;
     const currentSkinDef = DOODLE_SKINS.find((s) => s.id === currentSkinId) ?? DOODLE_SKINS[0];
+
+    // Rocket flame trail below doodler
+    if (gs.rocketActive > 0) {
+      const flameX = gs.doodlerX + DOODLER_W / 2;
+      const flameBaseY = doodlerScreenY + DOODLER_H;
+      const now = performance.now();
+      // Draw several flame particles
+      for (let i = 0; i < 6; i++) {
+        const spread = Math.sin(now * 0.02 + i * 1.3) * 6;
+        const fy = flameBaseY + i * 5 + Math.random() * 4;
+        const fr = 4 - i * 0.5;
+        const alpha = 1 - i * 0.15;
+        const colors = ['#fbbf24', '#f97316', '#ef4444', '#dc2626', '#b91c1c', '#991b1b'];
+        ctx.fillStyle = colors[i];
+        ctx.globalAlpha = alpha;
+        ctx.beginPath();
+        ctx.arc(flameX + spread, fy, Math.max(fr, 1), 0, Math.PI * 2);
+        ctx.fill();
+      }
+      ctx.globalAlpha = 1;
+    }
+
     drawDoodler(ctx, gs.doodlerX, doodlerScreenY, gs.velY, currentSkinDef.colors, currentSkinId);
 
     // Score
-    drawScore(ctx, gs.score);
+    drawScore(ctx, gs.score, gs.themeIndex);
 
     ctx.restore();
   }, [shop.activeSkinRef]);
@@ -907,8 +1018,28 @@ export function DoodleJumpGame() {
     if (gs.velX > MOVE_SPEED) gs.velX = MOVE_SPEED;
     if (gs.velX < -MOVE_SPEED) gs.velX = -MOVE_SPEED;
 
+    // ── Rocket flight ────────────────────────────────────────────────
+    if (gs.rocketActive > 0) {
+      gs.rocketActive -= dt;
+      gs.velY = ROCKET_VEL; // override gravity, keep flying up
+      if (gs.rocketActive <= 0) {
+        gs.rocketActive = 0;
+        // Safety: ensure there's at least one platform nearby below to land on
+        const landingRange = gs.doodlerY - CANVAS_H * 0.6;
+        const hasSafeLanding = gs.platforms.some(
+          (p) => !p.broken && p.y >= landingRange && p.y <= gs.doodlerY
+        );
+        if (!hasSafeLanding) {
+          const safeX = Math.max(10, Math.min(CANVAS_W - PLATFORM_W - 10, gs.doodlerX));
+          gs.platforms.push(createPlatform(safeX, gs.doodlerY - 60, 'normal'));
+        }
+      }
+    }
+
     // ── Physics ───────────────────────────────────────────────────────
-    gs.velY -= GRAVITY * dt;
+    if (gs.rocketActive <= 0) {
+      gs.velY -= GRAVITY * dt;
+    }
     if (gs.velY < -MAX_FALL_VEL) gs.velY = -MAX_FALL_VEL;
 
     gs.doodlerX += gs.velX * dt;
@@ -959,7 +1090,12 @@ export function DoodleJumpGame() {
             gs.lastScoredY = p.y;
           }
 
-          if (p.hasSpring && !p.springBounced) {
+          if (p.hasRocket && !p.rocketUsed) {
+            gs.velY = ROCKET_VEL;
+            gs.rocketActive = ROCKET_FLIGHT_DURATION;
+            p.rocketUsed = true;
+            sfx.springSound();
+          } else if (p.hasSpring && !p.springBounced) {
             gs.velY = SPRING_VEL;
             p.springBounced = true;
             sfx.springSound();
@@ -1004,6 +1140,12 @@ export function DoodleJumpGame() {
     if (milestone > lastScoreMilestone.current) {
       lastScoreMilestone.current = milestone;
       sfx.scoreSound();
+    }
+
+    // ── Theme cycling every ~100 points ──────────────────────────────
+    const newTheme = Math.floor(gs.score / 100) % DOODLE_THEMES.length;
+    if (newTheme !== gs.themeIndex) {
+      gs.themeIndex = newTheme;
     }
 
     // ── Generate new platforms ────────────────────────────────────────

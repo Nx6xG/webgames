@@ -140,12 +140,13 @@ export function PenaltiesGame() {
   });
 
   const REFLEX_CONFIG: Record<Difficulty, { flashDuration: number; delay: [number, number] }> = {
-    easy:   { flashDuration: 600, delay: [400, 600] },
-    medium: { flashDuration: 400, delay: [400, 800] },
-    hard:   { flashDuration: 250, delay: [500, 900] },
+    easy:   { flashDuration: 900, delay: [300, 500] },
+    medium: { flashDuration: 650, delay: [300, 600] },
+    hard:   { flashDuration: 400, delay: [400, 700] },
   };
 
   const resultRef = useRef<ShotResult | null>(null);
+  const shotHeightRef = useRef<'low' | 'high'>('low');
   // Net ripple for goals
   const netRippleRef = useRef(0);
 
@@ -305,6 +306,7 @@ export function PenaltiesGame() {
     const ty = zone.y + (Math.random() - 0.5) * spread * 0.4;
 
     savingRef.current = { chosenDir: null, botShotTarget: { x: tx, y: ty }, showArrows: false };
+    shotHeightRef.current = ty < GOAL_Y + GOAL_H * 0.4 ? 'high' : 'low';
 
     // Configure reflex timing based on difficulty
     const reflexCfg = REFLEX_CONFIG[diffRef.current];
@@ -431,10 +433,10 @@ export function PenaltiesGame() {
       const dy = clickY - reflex.targetY;
       const dist = Math.sqrt(dx * dx + dy * dy);
 
-      if (dist <= 60) {
+      if (dist <= 80) {
         // Close enough — guaranteed save
         triggerReflexResult(true);
-      } else if (dist <= 100) {
+      } else if (dist <= 130) {
         // Near — 50% chance
         triggerReflexResult(Math.random() < 0.5);
       } else {
@@ -480,6 +482,7 @@ export function PenaltiesGame() {
       targetX: tx, targetY: ty,
       progress: 0, currentX: W / 2, currentY: PENALTY_SPOT_Y, scale: 1, visible: true,
     };
+    shotHeightRef.current = ty < GOAL_Y + GOAL_H * 0.4 ? 'high' : 'low';
 
     kickerRef.current.kicking = true;
     kickerRef.current.kickProgress = 0;
@@ -607,7 +610,8 @@ export function PenaltiesGame() {
 
       const p = ball.progress;
       const eased = 1 - Math.pow(1 - p, 2.5);
-      const arc = -100 * Math.sin(p * Math.PI);
+      const arcHeight = shotHeightRef.current === 'high' ? -150 : -60;
+      const arc = arcHeight * Math.sin(p * Math.PI);
       ball.currentX = ball.startX + (ball.targetX - ball.startX) * eased;
       ball.currentY = ball.startY + (ball.targetY - ball.startY) * eased + arc;
       ball.scale = 1 - eased * 0.35;
@@ -674,7 +678,8 @@ export function PenaltiesGame() {
 
       const p = ball.progress;
       const eased = 1 - Math.pow(1 - p, 2.5);
-      const arc = -100 * Math.sin(p * Math.PI);
+      const arcHeight = shotHeightRef.current === 'high' ? -150 : -60;
+      const arc = arcHeight * Math.sin(p * Math.PI);
       ball.currentX = ball.startX + (ball.targetX - ball.startX) * eased;
       ball.currentY = ball.startY + (ball.targetY - ball.startY) * eased + arc;
       ball.scale = 1 - eased * 0.35;
@@ -694,8 +699,20 @@ export function PenaltiesGame() {
         if (reflex.savedByReflex === true) {
           // Reflex save — guaranteed save
           result = 'saved';
+        } else if (reflex.savedByReflex === false) {
+          // Failed reflex — ball scores unless it's off-frame (post/missed)
+          const lx = goalLeftX(ball.targetY);
+          const rx = goalRightX(ball.targetY);
+          const tx = ball.targetX;
+          const ty = ball.targetY;
+          if (tx < lx + POST_W / 2 || tx > rx - POST_W / 2 || ty < GOAL_Y || ty > GOAL_BOTTOM) {
+            if (Math.abs(tx - lx) < POST_W + 8 || Math.abs(tx - rx) < POST_W + 8 || Math.abs(ty - GOAL_Y) < POST_W + 8) result = 'post';
+            else result = 'missed';
+          } else {
+            result = 'goal';
+          }
         } else {
-          // Missed reflex or no click — use standard determination (ball likely scores)
+          // Fallback — use standard determination
           const dir = saving.chosenDir!;
           result = determineGkSave(ball.targetX, ball.targetY, gk.x, dir);
         }
@@ -952,6 +969,7 @@ export function PenaltiesGame() {
       diving: gk.diving, diveDir: gk.diveDir, diveProgress: gk.diveProgress,
       holdingBall: gk.holdingBall, facingFront: true,
       scale: 0.85,
+      shotHeight: shotHeightRef.current,
     });
 
     // ─── Ball (held by GK when saved)
@@ -1083,9 +1101,9 @@ export function PenaltiesGame() {
     if (ph === 'result_pause' && resultRef.current) {
       const res = resultRef.current;
       const role = roleRef.current;
-      const label = res === 'goal' ? 'TOR!'
-        : res === 'saved' ? 'GEHALTEN!'
-        : res === 'post' ? 'PFOSTEN!' : 'DANEBEN!';
+      const label = res === 'goal' ? t('penalties.result.goal')
+        : res === 'saved' ? t('penalties.result.saved')
+        : res === 'post' ? t('penalties.result.post') : t('penalties.result.missed');
 
       const color = res === 'goal'
         ? (role === 'shooter' ? '#4ade80' : '#f87171')
@@ -1143,6 +1161,7 @@ export function PenaltiesGame() {
     diving: boolean; diveDir: DiveDir; diveProgress: number;
     holdingBall: boolean; facingFront: boolean;
     scale: number;
+    shotHeight?: 'low' | 'high';
   }) {
     c.save();
     c.translate(x, y);
@@ -1151,15 +1170,18 @@ export function PenaltiesGame() {
 
     const dp = Math.min(opts.diveProgress, 1);
     const edp = easeOutCubic(dp);
+    const isHigh = opts.shotHeight === 'high';
 
     if (opts.diving && opts.diveDir !== 'center') {
       const angle = opts.diveDir === 'left' ? -0.7 * edp : 0.7 * edp;
       c.rotate(angle);
-      // Translate down slightly for diving effect
-      c.translate(0, -15 * edp);
+      // High shots: stretch up; low shots: drop/crouch down
+      const verticalShift = isHigh ? -25 * edp : 5 * edp;
+      c.translate(0, verticalShift);
     } else if (opts.diving && opts.diveDir === 'center') {
-      // Drop down slightly
-      c.translate(0, 8 * edp);
+      // Center dive: high = jump up, low = crouch down
+      const verticalShift = isHigh ? -12 * edp : 10 * edp;
+      c.translate(0, verticalShift);
     }
 
     // Shadow
@@ -1212,8 +1234,9 @@ export function PenaltiesGame() {
 
     // Arms + gloves
     const armLen = opts.diving ? 30 + 15 * edp : 20;
+    const highArmOffset = opts.diving && isHigh ? -0.35 * edp : 0;
     const armAngle = opts.diving
-      ? (opts.diveDir === 'center' ? -Math.PI / 2 : -Math.PI / 2 - 0.2)
+      ? (opts.diveDir === 'center' ? -Math.PI / 2 + highArmOffset : -Math.PI / 2 - 0.2 + highArmOffset)
       : -Math.PI / 4;
 
     // Left arm

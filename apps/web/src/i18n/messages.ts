@@ -491,6 +491,7 @@ export const messages: Record<Lang, Record<string, string>> = {
     'doodlejump.tapToStart':        'Drücke zum Starten',
     'doodlejump.boost.name':        'Start bei 100',
     'doodlejump.boost.unlock':      'Erreiche 100 Punkte',
+    'doodlejump.rocket':            'Rakete',
     // ── Crossy Road ─────────────────────────────────────────────────────
     'lobby.games.crossyroad.title': 'Crossy Road',
     'lobby.games.crossyroad.desc':  'Überquere endlose Straßen, Flüsse und Gleise. Timing ist alles – ein falscher Schritt und es ist vorbei!',
@@ -661,6 +662,10 @@ export const messages: Record<Lang, Record<string, string>> = {
     'penalties.reflex.now':         'JETZT!',
     'penalties.reflex.fast':        'Schnelle Reaktion!',
     'penalties.reflex.slow':        'Zu langsam!',
+    'penalties.result.goal':        'TOR!',
+    'penalties.result.saved':       'GEHALTEN!',
+    'penalties.result.post':        'PFOSTEN!',
+    'penalties.result.missed':      'DANEBEN!',
 
     // ── Geometry Dash ───────────────────────────────────────────────────────
     'lobby.games.geometrydash.title': 'Geometry Dash',
@@ -2485,6 +2490,7 @@ export const messages: Record<Lang, Record<string, string>> = {
     'doodlejump.tapToStart':        'Press to Start',
     'doodlejump.boost.name':        'Start at 100',
     'doodlejump.boost.unlock':      'Reach 100 points',
+    'doodlejump.rocket':            'Rocket',
     // ── Crossy Road ─────────────────────────────────────────────────────
     'lobby.games.crossyroad.title': 'Crossy Road',
     'lobby.games.crossyroad.desc':  'Cross endless roads, rivers and railroads. Timing is everything — one wrong step and it is over!',
@@ -2655,6 +2661,10 @@ export const messages: Record<Lang, Record<string, string>> = {
     'penalties.reflex.now':         'NOW!',
     'penalties.reflex.fast':        'Quick reflexes!',
     'penalties.reflex.slow':        'Too slow!',
+    'penalties.result.goal':        'GOAL!',
+    'penalties.result.saved':       'SAVED!',
+    'penalties.result.post':        'POST!',
+    'penalties.result.missed':      'WIDE!',
 
     // ── Geometry Dash ───────────────────────────────────────────────────────
     'lobby.games.geometrydash.title': 'Geometry Dash',

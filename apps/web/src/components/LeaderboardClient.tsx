@@ -16,10 +16,16 @@ export function LeaderboardClient({ wsUrl }: { wsUrl: string }) {
   const { t } = useI18n();
 
   const TABS: { key: LBTab; label: string }[] = [
-    { key: 'overall',   label: t('leaderboard.overall') },
+    { key: 'overall',    label: t('leaderboard.overall') },
     // Game names reuse their lobby title keys so translations stay consistent.
-    { key: 'tictactoe', label: t('lobby.games.tictactoe.title') },
-    { key: 'connect4',  label: t('lobby.games.connect4.title') },
+    { key: 'tictactoe',  label: t('lobby.games.tictactoe.title') },
+    { key: 'connect4',   label: t('lobby.games.connect4.title') },
+    { key: 'rps',        label: t('lobby.games.rps.title') },
+    { key: 'chess',      label: t('lobby.games.chess.title') },
+    { key: 'battleship', label: t('lobby.games.battleship.title') },
+    { key: 'liarsbar',   label: t('lobby.games.liarsbar.title') },
+    { key: 'curvefever', label: t('lobby.games.curvefever.title') },
+    { key: 'uno',        label: t('lobby.games.uno.title') },
   ];
 
   return (
@@ -55,7 +61,7 @@ export function LeaderboardClient({ wsUrl }: { wsUrl: string }) {
           </div>
 
           {/* Tabs */}
-          <div className="flex gap-1 p-1 bg-zinc-900 rounded-xl mb-6 w-fit">
+          <div className="flex gap-1 p-1 bg-zinc-900 rounded-xl mb-6 max-w-full overflow-x-auto">
             {TABS.map(({ key, label }) => (
               <button
                 key={key}
