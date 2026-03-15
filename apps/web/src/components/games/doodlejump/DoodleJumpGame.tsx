@@ -40,28 +40,8 @@ const COUNTDOWN_STEPS = 3;
 const COUNTDOWN_STEP_MS = 700;
 
 const BEST_KEY = 'webgames.doodlejump.bestScore';
-const BOOST_KEY = 'webgames.doodlejump.boostStart100';
-const BOOST_ACTIVE_KEY = 'webgames.doodlejump.boostActive';
 const BOOST_PRICE = 100;
 const BOOST_SCORE = 100;
-
-function loadBoostOwned(): boolean {
-  if (typeof window === 'undefined') return false;
-  try { return localStorage.getItem(BOOST_KEY) === '1'; } catch { return false; }
-}
-
-function saveBoostOwned() {
-  try { localStorage.setItem(BOOST_KEY, '1'); } catch {}
-}
-
-function loadBoostActive(): boolean {
-  if (typeof window === 'undefined') return false;
-  try { return localStorage.getItem(BOOST_ACTIVE_KEY) === '1'; } catch { return false; }
-}
-
-function saveBoostActive(v: boolean) {
-  try { localStorage.setItem(BOOST_ACTIVE_KEY, v ? '1' : '0'); } catch {}
-}
 
 // ── Doodler skins ───────────────────────────────────────────────────────────
 
@@ -197,6 +177,40 @@ function createPlatform(x: number, y: number, kind: PlatformKind): Platform {
     p.kind = 'normal'; // spring is visually a normal platform + spring on top
   }
   return p;
+}
+
+/** Generate platforms matching difficulty at a given score (for boost start). */
+function generateBoostedPlatforms(targetScore: number): Platform[] {
+  const platforms: Platform[] = [];
+  // Ground platform
+  platforms.push({
+    x: CANVAS_W / 2 - (PLATFORM_W + 20) / 2,
+    y: 0,
+    w: PLATFORM_W + 20,
+    kind: 'normal',
+  });
+
+  let y = 50;
+  while (y < CANVAS_H + 200) {
+    const difficulty = Math.min(targetScore / 150, 1);
+    const minGap = 28 + difficulty * 17;
+    const maxGap = 45 + difficulty * 40;
+    const gap = randomRange(minGap, maxGap);
+    const x = randomRange(10, CANVAS_W - PLATFORM_W - 10);
+    const kind = choosePlatformKind(targetScore);
+    const plat = createPlatform(x, y, kind);
+    platforms.push(plat);
+    y += gap;
+
+    // Safety platform after breakable
+    if (kind === 'breakable') {
+      const safeGap = randomRange(28, 50);
+      y += safeGap;
+      const safeX = randomRange(10, CANVAS_W - PLATFORM_W - 10);
+      platforms.push(createPlatform(safeX, y, 'normal'));
+    }
+  }
+  return platforms;
 }
 
 function createInitialState(): GameState {
@@ -784,7 +798,6 @@ export function DoodleJumpGame() {
   const [score, setScore] = useState(0);
   const [best, setBest] = useState(0);
   const [countdownNum, setCountdownNum] = useState(0);
-  const [boostOwned, setBoostOwned] = useState(false);
   const [boostActive, setBoostActive] = useState(false);
   const boostActiveRef = useRef(false);
 
@@ -813,16 +826,6 @@ export function DoodleJumpGame() {
     bestRef.current = b;
   }, []);
 
-  // Load boost state
-  useEffect(() => {
-    const owned = loadBoostOwned();
-    setBoostOwned(owned);
-    if (owned) {
-      const active = loadBoostActive();
-      setBoostActive(active);
-      boostActiveRef.current = active;
-    }
-  }, []);
 
   // Achievement tracking
   useEffect(() => {
@@ -1093,15 +1096,19 @@ export function DoodleJumpGame() {
   const startCountdown = useCallback(() => {
     if (countdownTimerRef.current) clearTimeout(countdownTimerRef.current);
 
-    // Reset game state
+    // Reset game state — use boosted platforms if boost is active
+    const useBoosted = boostActiveRef.current;
     gsRef.current = createInitialState();
     savedRef.current = false;
     lastScoreMilestone.current = 0;
 
-    // Apply boost if active
-    if (boostActiveRef.current) {
+    if (useBoosted) {
+      gsRef.current.platforms = generateBoostedPlatforms(BOOST_SCORE);
       gsRef.current.score = BOOST_SCORE;
       setScore(BOOST_SCORE);
+      // Consume the boost (single-use)
+      setBoostActive(false);
+      boostActiveRef.current = false;
     } else {
       setScore(0);
     }
@@ -1146,27 +1153,15 @@ export function DoodleJumpGame() {
   }, [startCountdown]);
 
   const buyBoost = useCallback(() => {
-    if (boostOwned || shop.wallet < BOOST_PRICE || bestRef.current < BOOST_SCORE) return;
+    if (boostActive || shop.wallet < BOOST_PRICE || bestRef.current < BOOST_SCORE) return;
     const p = loadSkinProgress('doodlejump');
     if (p.wallet < BOOST_PRICE) return;
     p.wallet -= BOOST_PRICE;
     saveSkinProgress('doodlejump', p);
     shop.save(p);
-    saveBoostOwned();
-    setBoostOwned(true);
     setBoostActive(true);
     boostActiveRef.current = true;
-    saveBoostActive(true);
-  }, [boostOwned, shop]);
-
-  const toggleBoost = useCallback(() => {
-    setBoostActive((prev) => {
-      const next = !prev;
-      boostActiveRef.current = next;
-      saveBoostActive(next);
-      return next;
-    });
-  }, []);
+  }, [boostActive, shop]);
 
   const togglePause = useCallback(() => {
     if (phaseRef.current === 'playing') {
@@ -1305,22 +1300,15 @@ export function DoodleJumpGame() {
                   {t('skinShop.title') !== 'skinShop.title' ? t('skinShop.title') : 'Shop'}
                 </button>
               </div>
-              {/* Boost toggle / buy / locked */}
-              {boostOwned ? (
-                <button
-                  onClick={(e) => { e.stopPropagation(); toggleBoost(); }}
-                  className={`mt-2 flex items-center gap-2 px-3 py-1.5 rounded-lg border text-xs font-semibold transition-all ${
-                    boostActive
-                      ? 'border-emerald-600/50 bg-emerald-950/40 text-emerald-400'
-                      : 'border-zinc-700 bg-zinc-800/60 text-zinc-500'
-                  }`}
-                >
+              {/* Boost: ready / buy / locked */}
+              {boostActive ? (
+                <div className="mt-2 flex items-center gap-2 px-3 py-1.5 rounded-lg border border-emerald-600/50 bg-emerald-950/40 text-xs font-semibold text-emerald-400">
                   <span>🚀</span>
                   <span>{t('doodlejump.boost.name')}</span>
-                  <span className={`w-3.5 h-3.5 rounded-full border-2 flex items-center justify-center ${boostActive ? 'border-emerald-500 bg-emerald-500' : 'border-zinc-600'}`}>
-                    {boostActive && <span className="text-[8px] text-white font-black">✓</span>}
+                  <span className="w-3.5 h-3.5 rounded-full border-2 border-emerald-500 bg-emerald-500 flex items-center justify-center">
+                    <span className="text-[8px] text-white font-black">✓</span>
                   </span>
-                </button>
+                </div>
               ) : best >= BOOST_SCORE ? (
                 <button
                   onClick={(e) => { e.stopPropagation(); buyBoost(); }}
@@ -1398,22 +1386,15 @@ export function DoodleJumpGame() {
                   {t('skinShop.title') !== 'skinShop.title' ? t('skinShop.title') : 'Shop'}
                 </button>
               </div>
-              {/* Boost toggle / buy / locked */}
-              {boostOwned ? (
-                <button
-                  onClick={(e) => { e.stopPropagation(); toggleBoost(); }}
-                  className={`mb-3 flex items-center gap-2 px-3 py-1.5 rounded-lg border text-xs font-semibold transition-all ${
-                    boostActive
-                      ? 'border-emerald-600/50 bg-emerald-950/40 text-emerald-400'
-                      : 'border-zinc-700 bg-zinc-800/60 text-zinc-500'
-                  }`}
-                >
+              {/* Boost: ready / buy / locked */}
+              {boostActive ? (
+                <div className="mb-3 flex items-center gap-2 px-3 py-1.5 rounded-lg border border-emerald-600/50 bg-emerald-950/40 text-xs font-semibold text-emerald-400">
                   <span>🚀</span>
                   <span>{t('doodlejump.boost.name')}</span>
-                  <span className={`w-3.5 h-3.5 rounded-full border-2 flex items-center justify-center ${boostActive ? 'border-emerald-500 bg-emerald-500' : 'border-zinc-600'}`}>
-                    {boostActive && <span className="text-[8px] text-white font-black">✓</span>}
+                  <span className="w-3.5 h-3.5 rounded-full border-2 border-emerald-500 bg-emerald-500 flex items-center justify-center">
+                    <span className="text-[8px] text-white font-black">✓</span>
                   </span>
-                </button>
+                </div>
               ) : best >= BOOST_SCORE ? (
                 <button
                   onClick={(e) => { e.stopPropagation(); buyBoost(); }}

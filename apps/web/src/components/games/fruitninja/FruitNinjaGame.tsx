@@ -136,9 +136,9 @@ function distToSegment(px: number, py: number, x1: number, y1: number, x2: numbe
   return Math.hypot(px - (x1 + t * dx), py - (y1 + t * dy));
 }
 
-function spawnFruit(diff: DiffConfig, isBomb: boolean): Fruit {
+function spawnFruit(diff: DiffConfig, isBomb: boolean, spawnX?: number): Fruit {
   const def = FRUIT_DEFS[Math.floor(Math.random() * FRUIT_DEFS.length)];
-  const x = 100 + Math.random() * (W - 200);
+  const x = spawnX ?? (100 + Math.random() * (W - 200));
   const angle = -Math.PI / 2 + (Math.random() - 0.5) * 0.8;
   const speed = diff.throwSpeed + Math.random() * 4;
   return {
@@ -480,9 +480,14 @@ export function FruitNinjaGame() {
         g.waveTimer = 0;
         g.waveCount++;
         const count = diff.minFruits + Math.floor(Math.random() * (diff.maxFruits - diff.minFruits + 1));
+        // Spread spawn positions across zones to avoid overlap
+        const margin = 100;
+        const usableW = W - margin * 2;
+        const zoneW = usableW / count;
         for (let i = 0; i < count; i++) {
           const isBomb = Math.random() < diff.bombChance;
-          g.fruits.push(spawnFruit(diff, isBomb));
+          const zoneX = margin + zoneW * i + Math.random() * zoneW;
+          g.fruits.push(spawnFruit(diff, isBomb, zoneX));
         }
       }
 
@@ -493,6 +498,15 @@ export function FruitNinjaGame() {
         f.y += f.vy;
         f.vy += diff.gravity;
         f.rotation += f.rotSpeed;
+
+        // Horizontal bounds — bounce off left/right edges
+        if (f.x - f.radius < 0) {
+          f.x = f.radius;
+          f.vx = Math.abs(f.vx);
+        } else if (f.x + f.radius > W) {
+          f.x = W - f.radius;
+          f.vx = -Math.abs(f.vx);
+        }
 
         // Check if missed (fell below screen)
         if (f.y > H + 60 && !f.missed && !f.isBomb) {

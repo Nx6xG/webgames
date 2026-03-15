@@ -62,6 +62,10 @@ interface ActivePower {
   timeLeft: number; // ms remaining
 }
 
+function hasPower(powers: ActivePower[], type: PowerUpType): boolean {
+  return powers.some(p => p.type === type);
+}
+
 interface BossBullet {
   pos: Vec2;
   vel: Vec2;
@@ -82,7 +86,7 @@ interface GameState {
   asteroids: Asteroid[];
   particles: Particle[];
   powerUps: PowerUp[];
-  activePower: ActivePower | null;
+  activePowers: ActivePower[];
   hasShield: boolean;
   score: number;
   lives: number;
@@ -331,7 +335,7 @@ export function AsteroidsGame() {
       asteroids: spawnWaveAsteroids(config.startCount, shipPos, config.speedMult),
       particles: [],
       powerUps: [],
-      activePower: null,
+      activePowers: [],
       hasShield: false,
       score: 0,
       lives: 3,
@@ -448,27 +452,26 @@ export function AsteroidsGame() {
         game.ship.invulnerable -= dt;
       }
 
-      // ── Active power-up timer ──
-      if (game.activePower) {
-        game.activePower.timeLeft -= dt;
-        if (game.activePower.timeLeft <= 0) {
-          // Shield wears off too
-          if (game.activePower.type === 'shield') game.hasShield = false;
-          game.activePower = null;
+      // ── Active power-up timers ──
+      for (let i = game.activePowers.length - 1; i >= 0; i--) {
+        game.activePowers[i].timeLeft -= dt;
+        if (game.activePowers[i].timeLeft <= 0) {
+          if (game.activePowers[i].type === 'shield') game.hasShield = false;
+          game.activePowers.splice(i, 1);
         }
       }
 
       // ── Shooting ──
-      const activeType = game.activePower?.type;
-      const cooldown = activeType === 'rapid' ? 60 : 150;
-      const maxBullets = activeType === 'rapid' ? 10 : MAX_BULLETS;
+      const isRapid = hasPower(game.activePowers, 'rapid');
+      const cooldown = isRapid ? 60 : 150;
+      const maxBullets = isRapid ? 10 : MAX_BULLETS;
       shootCooldownRef.current -= dt;
       if (keys.has(' ') && game.bullets.length < maxBullets && shootCooldownRef.current <= 0) {
         shootCooldownRef.current = cooldown;
         const baseAngle = game.ship.angle;
         const shipVelFactor = 0.5;
 
-        if (activeType === 'multishot') {
+        if (hasPower(game.activePowers, 'multishot')) {
           // 5 bullets in a spread: -30, -15, 0, +15, +30 degrees
           const offsets = [-0.524, -0.262, 0, 0.262, 0.524]; // radians
           for (const off of offsets) {
@@ -482,7 +485,7 @@ export function AsteroidsGame() {
               life: BULLET_LIFE,
             });
           }
-        } else if (activeType === 'double') {
+        } else if (hasPower(game.activePowers, 'double')) {
           const spread = 0.08; // ~4.5 degrees
           for (const off of [-spread, spread]) {
             const a = baseAngle + off;
@@ -495,7 +498,7 @@ export function AsteroidsGame() {
               life: BULLET_LIFE,
             });
           }
-        } else if (activeType === 'triple') {
+        } else if (hasPower(game.activePowers, 'triple')) {
           const spread = 0.15; // ~8.6 degrees
           for (const off of [-spread, 0, spread]) {
             const a = baseAngle + off;
@@ -524,7 +527,7 @@ export function AsteroidsGame() {
       // ── Update bullets ──
       game.bullets = game.bullets.filter(b => {
         // Homing: steer toward nearest asteroid (or boss)
-        if (activeType === 'homing' && (game.asteroids.length > 0 || (game.boss && game.boss.alive))) {
+        if (hasPower(game.activePowers, 'homing') && (game.asteroids.length > 0 || (game.boss && game.boss.alive))) {
           let nearestDist = Infinity;
           let nearestPos: Vec2 | null = null;
           for (const a of game.asteroids) {
@@ -559,7 +562,7 @@ export function AsteroidsGame() {
       });
 
       // ── Update asteroids ──
-      const timeSlowMult = activeType === 'timeslow' ? 0.3 : 1;
+      const timeSlowMult = hasPower(game.activePowers, 'timeslow') ? 0.3 : 1;
       for (const a of game.asteroids) {
         a.pos.x += a.vel.x * timeSlowMult;
         a.pos.y += a.vel.y * timeSlowMult;
@@ -586,9 +589,13 @@ export function AsteroidsGame() {
 
         // Collision with ship
         if (dist(game.ship.pos, pu.pos) < POWERUP_RADIUS + SHIP_SIZE * 0.6) {
-          // Activate power-up (replaces current)
-          if (game.activePower?.type === 'shield') game.hasShield = false;
-          game.activePower = { type: pu.type, timeLeft: POWERUP_ACTIVE_DURATION };
+          // Activate power-up (stacks with existing)
+          const existing = game.activePowers.find(p => p.type === pu.type);
+          if (existing) {
+            existing.timeLeft = POWERUP_ACTIVE_DURATION; // refresh timer
+          } else {
+            game.activePowers.push({ type: pu.type, timeLeft: POWERUP_ACTIVE_DURATION });
+          }
           if (pu.type === 'shield') game.hasShield = true;
           // Collect particles
           game.particles.push(...makeParticles(pu.pos, 8, POWERUP_COLORS[pu.type]));
@@ -600,7 +607,7 @@ export function AsteroidsGame() {
       // ── Bullet-asteroid collision ──
       const newAsteroids: Asteroid[] = [];
       const bulletsToRemove = new Set<number>();
-      const bulletHitRadius = activeType === 'bigbullet' ? 6 : 2;
+      const bulletHitRadius = hasPower(game.activePowers, 'bigbullet') ? 6 : 2;
 
       for (let ai = game.asteroids.length - 1; ai >= 0; ai--) {
         const a = game.asteroids[ai];
@@ -657,7 +664,7 @@ export function AsteroidsGame() {
             // Shield absorbs the hit
             if (game.hasShield) {
               game.hasShield = false;
-              game.activePower = null;
+              game.activePowers = game.activePowers.filter(p => p.type !== 'shield');
               game.particles.push(...makeParticles(game.ship.pos, 15, '#06b6d4'));
               game.ship.invulnerable = 500; // brief invuln after shield break
               break;
@@ -667,8 +674,8 @@ export function AsteroidsGame() {
             game.particles.push(...makeParticles(game.ship.pos, 20, '#f87171'));
             sfx.deathSound();
 
-            // Lose active power on death
-            game.activePower = null;
+            // Lose all active powers on death
+            game.activePowers = [];
             game.hasShield = false;
 
             if (game.lives <= 0) {
@@ -764,14 +771,14 @@ export function AsteroidsGame() {
             game.bossBullets.splice(bi, 1);
             if (game.hasShield) {
               game.hasShield = false;
-              game.activePower = null;
+              game.activePowers = game.activePowers.filter(p => p.type !== 'shield');
               game.particles.push(...makeParticles(game.ship.pos, 15, '#06b6d4'));
               game.ship.invulnerable = 500;
             } else {
               game.lives--;
               game.particles.push(...makeParticles(game.ship.pos, 20, '#f87171'));
               sfx.deathSound();
-              game.activePower = null;
+              game.activePowers = [];
               game.hasShield = false;
               if (game.lives <= 0) {
                 sfx.gameOverSound();
@@ -805,14 +812,14 @@ export function AsteroidsGame() {
         if (dist(game.ship.pos, { x: game.boss.x, y: game.boss.y }) < BOSS_RADIUS + SHIP_SIZE * 0.6) {
           if (game.hasShield) {
             game.hasShield = false;
-            game.activePower = null;
+            game.activePowers = game.activePowers.filter(p => p.type !== 'shield');
             game.particles.push(...makeParticles(game.ship.pos, 15, '#06b6d4'));
             game.ship.invulnerable = 500;
           } else {
             game.lives--;
             game.particles.push(...makeParticles(game.ship.pos, 20, '#f87171'));
             sfx.deathSound();
-            game.activePower = null;
+            game.activePowers = [];
             game.hasShield = false;
             if (game.lives <= 0) {
               sfx.gameOverSound();
@@ -1102,7 +1109,7 @@ function drawGame(
   game: GameState,
   stars: ReturnType<typeof generateStars>,
 ) {
-  const { ship, bullets, asteroids, particles, powerUps, activePower, hasShield } = game;
+  const { ship, bullets, asteroids, particles, powerUps, activePowers, hasShield } = game;
 
   // Clear
   ctx.fillStyle = '#09090b';
@@ -1232,8 +1239,8 @@ function drawGame(
   }
 
   // Bullets (player)
-  const isHomingBullet = activePower?.type === 'homing';
-  const isBigBullet = activePower?.type === 'bigbullet';
+  const isHomingBullet = hasPower(activePowers, 'homing');
+  const isBigBullet = hasPower(activePowers, 'bigbullet');
   const bulletRadius = isBigBullet ? 5 : 2;
   if (isBigBullet) {
     ctx.fillStyle = '#fb923c'; // orange tint
@@ -1353,35 +1360,41 @@ function drawGame(
   }
 
   // Time slow visual effect (subtle vignette tint)
-  if (activePower?.type === 'timeslow') {
+  if (hasPower(activePowers, 'timeslow')) {
     ctx.fillStyle = 'rgba(200, 200, 255, 0.04)';
     ctx.fillRect(0, 0, W, H);
   }
 
-  // Active power-up HUD indicator (top center)
-  if (activePower) {
+  // Active power-up HUD indicators (top center, stacked)
+  if (activePowers.length > 0) {
     const barW = 100;
     const barH = 6;
-    const barX = W / 2 - barW / 2;
-    const barY = 12;
-    const fraction = activePower.timeLeft / POWERUP_ACTIVE_DURATION;
-    const color = POWERUP_COLORS[activePower.type];
-    const label = POWERUP_LABELS[activePower.type];
+    const rowHeight = 22;
+    const startY = 12;
 
-    // Label
-    ctx.fillStyle = color;
-    ctx.font = 'bold 11px monospace';
-    ctx.textAlign = 'center';
-    ctx.textBaseline = 'top';
-    ctx.fillText(label, W / 2, barY - 1);
+    for (let pi = 0; pi < activePowers.length; pi++) {
+      const ap = activePowers[pi];
+      const barX = W / 2 - barW / 2;
+      const barY = startY + pi * rowHeight;
+      const fraction = ap.timeLeft / POWERUP_ACTIVE_DURATION;
+      const color = POWERUP_COLORS[ap.type];
+      const label = POWERUP_LABELS[ap.type];
 
-    // Bar background
-    ctx.fillStyle = 'rgba(255,255,255,0.15)';
-    ctx.fillRect(barX, barY + 14, barW, barH);
+      // Label
+      ctx.fillStyle = color;
+      ctx.font = 'bold 11px monospace';
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'top';
+      ctx.fillText(label, W / 2, barY - 1);
 
-    // Bar fill
-    ctx.fillStyle = color;
-    ctx.fillRect(barX, barY + 14, barW * fraction, barH);
+      // Bar background
+      ctx.fillStyle = 'rgba(255,255,255,0.15)';
+      ctx.fillRect(barX, barY + 14, barW, barH);
+
+      // Bar fill
+      ctx.fillStyle = color;
+      ctx.fillRect(barX, barY + 14, barW * fraction, barH);
+    }
   }
 
   // Lives indicators

@@ -435,6 +435,9 @@ export function PacmanGame() {
   const [difficulty, setDifficulty] = useState<Difficulty>('medium');
   const [cdNum, setCdNum] = useState(3);
   const [bestScore, setBestScore] = useState(0);
+  const [hudScore, setHudScore] = useState(0);
+  const [hudLevel, setHudLevel] = useState(1);
+  const [hudLives, setHudLives] = useState(3);
 
   const phaseRef = useRef<Phase>('menu');
   const stateRef = useRef<GameState>(createInitialState());
@@ -506,6 +509,9 @@ export function PacmanGame() {
     moveAccRef.current = 0;
     ghostMoveAccRef.current = 0;
     savedRef.current = false;
+    setHudScore(0);
+    setHudLevel(1);
+    setHudLives(3);
     setCdNum(3);
     setPhase('countdown');
   }, []);
@@ -711,6 +717,11 @@ export function PacmanGame() {
         }
 
         scoreDisplayRef.current = gs.score;
+
+        // Update React HUD state when values change
+        setHudScore(prev => prev !== gs.score ? gs.score : prev);
+        setHudLevel(prev => prev !== gs.level ? gs.level : prev);
+        setHudLives(prev => prev !== gs.lives ? gs.lives : prev);
       }
 
       // Render
@@ -802,9 +813,9 @@ export function PacmanGame() {
       {/* Header */}
       <div className="w-full max-w-[440px] flex items-center gap-3">
         <span className="text-4xl font-black text-zinc-100 tracking-tight mr-auto">Pac-Man</span>
-        <ScoreBox label={t('pacman.score')} value={scoreDisplayRef.current} />
-        <ScoreBox label={t('pacman.level')} value={stateRef.current.level} />
-        <ScoreBox label={t('pacman.lives')} value={stateRef.current.lives} />
+        <ScoreBox label={t('pacman.score')} value={hudScore} />
+        <ScoreBox label={t('pacman.level')} value={hudLevel} />
+        <ScoreBox label={t('pacman.lives')} value={hudLives} />
         <button
           onClick={handleRestart}
           className="px-4 py-2 rounded-lg bg-zinc-700 hover:bg-zinc-600 text-zinc-100 text-sm font-semibold transition-colors shrink-0"
@@ -855,8 +866,8 @@ export function PacmanGame() {
         {phase === 'ended' && (
           <div className="absolute inset-0 rounded-xl bg-zinc-950/85 flex flex-col items-center justify-center gap-3 backdrop-blur-[2px] z-10">
             <p className="text-2xl font-black text-zinc-100">{t('game.over')}</p>
-            <p className="text-sm text-zinc-400">{t('pacman.score')}: {scoreDisplayRef.current}</p>
-            <p className="text-sm text-zinc-500">{t('pacman.level')}: {stateRef.current.level}</p>
+            <p className="text-sm text-zinc-400">{t('pacman.score')}: {hudScore}</p>
+            <p className="text-sm text-zinc-500">{t('pacman.level')}: {hudLevel}</p>
             <button
               onClick={handleRestart}
               className="px-6 py-2 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white text-sm font-semibold transition-colors"

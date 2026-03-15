@@ -1284,31 +1284,6 @@ export function WhackAMoleGame() {
         ctx.restore();
       }
 
-      // ── Wave announcement flash (center screen) ──────────────────────
-      if (g.waveAnnouncementTimer > 0 && g.phase === 'playing') {
-        const alpha = Math.min(1, g.waveAnnouncementTimer / 0.3) * Math.min(1, g.waveAnnouncementTimer);
-        const scale = 1 + (1 - Math.min(1, g.waveAnnouncementTimer / 0.3)) * 0.2;
-        ctx.save();
-        ctx.globalAlpha = alpha;
-        ctx.translate(W / 2, H / 2 - 40);
-        ctx.scale(scale, scale);
-        ctx.font = 'bold 42px system-ui, sans-serif';
-        ctx.textAlign = 'center';
-        ctx.textBaseline = 'middle';
-        // Glow
-        ctx.shadowColor = g.waveAnnouncementColor;
-        ctx.shadowBlur = 20;
-        // Outline
-        ctx.strokeStyle = 'rgba(0,0,0,0.6)';
-        ctx.lineWidth = 4;
-        ctx.strokeText(t(g.waveAnnouncementLabel), 0, 0);
-        // Fill
-        ctx.fillStyle = g.waveAnnouncementColor;
-        ctx.fillText(t(g.waveAnnouncementLabel), 0, 0);
-        ctx.shadowBlur = 0;
-        ctx.restore();
-      }
-
       // ── Dirt clumps around holes ───────────────────────────────────────
       for (const clump of DIRT_CLUMPS) {
         ctx.fillStyle = clump.shade;
@@ -1451,6 +1426,31 @@ export function WhackAMoleGame() {
           ctx.quadraticCurveTo(tx + tuft.lean * tuft.h + sway, ty - tuft.h * 0.6, tx + sway, ty - tuft.h);
           ctx.stroke();
         }
+      }
+
+      // ── Wave announcement flash (center screen) ──────────────────────
+      if (g.waveAnnouncementTimer > 0 && g.phase === 'playing') {
+        const alpha = Math.min(1, g.waveAnnouncementTimer / 0.3) * Math.min(1, g.waveAnnouncementTimer);
+        const scale = 1 + (1 - Math.min(1, g.waveAnnouncementTimer / 0.3)) * 0.2;
+        ctx.save();
+        ctx.globalAlpha = alpha;
+        ctx.translate(W / 2, H / 2 - 40);
+        ctx.scale(scale, scale);
+        ctx.font = 'bold 42px system-ui, sans-serif';
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        // Glow
+        ctx.shadowColor = g.waveAnnouncementColor;
+        ctx.shadowBlur = 20;
+        // Outline
+        ctx.strokeStyle = 'rgba(0,0,0,0.6)';
+        ctx.lineWidth = 4;
+        ctx.strokeText(t(g.waveAnnouncementLabel), 0, 0);
+        // Fill
+        ctx.fillStyle = g.waveAnnouncementColor;
+        ctx.fillText(t(g.waveAnnouncementLabel), 0, 0);
+        ctx.shadowBlur = 0;
+        ctx.restore();
       }
 
       // ── Draw particles ─────────────────────────────────────────────────
