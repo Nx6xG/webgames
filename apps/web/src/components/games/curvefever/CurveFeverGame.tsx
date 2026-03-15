@@ -417,6 +417,19 @@ export function CurveFeverGame({ wsUrl, gameId, initialRoomCode, quickPlay: auto
         }
       } else {
         if (segs.length === 0) segs.push([]);
+        const curSeg = segs[segs.length - 1];
+        // Detect wall teleport: if the position jumped more than half the arena, start a new segment
+        if (curSeg.length > 0) {
+          const last = curSeg[curSeg.length - 1];
+          const dx = Math.abs(p.x - last.x);
+          const dy = Math.abs(p.y - last.y);
+          const arenaW = gs.arenaWidth ?? 800;
+          const arenaH = gs.arenaHeight ?? 600;
+          if (dx > arenaW * 0.4 || dy > arenaH * 0.4) {
+            // Wall warp — break the segment so no line is drawn across the arena
+            segs.push([]);
+          }
+        }
         segs[segs.length - 1].push({ x: p.x, y: p.y });
       }
     }
@@ -1787,12 +1800,20 @@ export function CurveFeverGame({ wsUrl, gameId, initialRoomCode, quickPlay: auto
           <div className="flex items-center justify-center gap-4 mt-1">
             <p className="text-xs text-zinc-600">{t('curvefever.controls')}</p>
             {gs?.phase === 'finished' && !replayMode && (
-              <button
-                onClick={() => mp.requestRematch()}
-                className="px-6 py-2 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-white font-semibold transition-colors cursor-pointer"
-              >
-                Rematch
-              </button>
+              <>
+                <button
+                  onClick={() => mp.requestRematch()}
+                  className="px-6 py-2 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-white font-semibold transition-colors cursor-pointer"
+                >
+                  Rematch
+                </button>
+                <button
+                  onClick={() => mp.returnToLobby()}
+                  className="px-4 py-2 rounded-lg bg-zinc-700 hover:bg-zinc-600 text-zinc-200 font-semibold text-sm transition-colors cursor-pointer"
+                >
+                  {t('game.lobby.title') !== 'game.lobby.title' ? t('game.lobby.title') : 'Lobby'}
+                </button>
+              </>
             )}
             <button
               onClick={mp.leaveRoom}

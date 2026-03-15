@@ -1309,6 +1309,32 @@ io.on('connection', (socket) => {
     }
   });
 
+  // ── return_to_lobby ──────────────────────────────────────────────────────
+  socket.on('return_to_lobby', ({ roomCode }) => {
+    const code = roomCode.toUpperCase().trim();
+    const room = roomManager.getRoom(code);
+    if (!room || roomManager.isSpectator(socket.id)) return;
+    const player = roomManager.getPlayer(room, socket.id);
+    if (!player) return;
+
+    if (!room.state || room.state.status === 'ongoing') {
+      socket.emit('rematch_error', { code: 'GAME_NOT_OVER', message: 'The game is still in progress.' });
+      return;
+    }
+
+    // Stop any tick loop
+    stopTickLoop(room.code);
+
+    // Reset room state but keep config and players
+    room.state = null;
+    room.rematchVotes.clear();
+
+    // Notify all players to return to lobby/waiting phase
+    io.to(code).emit('returned_to_lobby', { roomCode: code });
+    emitRoomReady(room);
+    console.log(`[lobby] ${code} returned to lobby`);
+  });
+
   // ── get_history ───────────────────────────────────────────────────────────
   socket.on('get_history', () => {
     const nickname = nicknameMap.get(socket.id);

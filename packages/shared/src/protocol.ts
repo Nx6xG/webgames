@@ -364,6 +364,9 @@ export interface ServerToClientEvents {
   /** Broadcast to the room when both players accepted — game resets */
   rematch_started: (data: { state: AnyGameState }) => void;
 
+  /** Broadcast when a player requests returning to lobby — resets to waiting phase */
+  returned_to_lobby: (data: { roomCode: string }) => void;
+
   /** Emitted to requester (get_stats) or broadcast to room after a game ends */
   stats_updated: (data: { gameId: GameId; stats: GameStats }) => void;
   /** Broadcast to all sockets after any game ends, or sent to requester of get_all_stats */
@@ -466,6 +469,9 @@ export interface ClientToServerEvents {
   leave_room: (data: { roomCode: string }) => void;
 
   request_rematch: (data: { roomCode: string }) => void;
+
+  /** Return all players to the lobby/waiting phase with settings preserved. */
+  return_to_lobby: (data: { roomCode: string }) => void;
 
   /** Fetch current platform stats for a game (server replies with stats_updated) */
   get_stats: (data: { gameId: GameId }) => void;

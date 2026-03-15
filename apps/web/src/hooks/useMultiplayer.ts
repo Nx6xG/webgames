@@ -90,6 +90,7 @@ export interface MultiplayerActions {
   leaveRoom: () => void;
   sendAction: (action: AnyGameAction) => void;
   requestRematch: () => void;
+  returnToLobby: () => void;
   clearError: () => void;
   /** Send a chat message to 'room' or 'global' scope. */
   sendChat: (scope: ChatScope, message: string) => void;
@@ -419,6 +420,19 @@ export function useMultiplayer<TState extends AnyGameState = AnyGameState>(
       setTimeout(() => set((prev) => ({ ...prev, rematchError: null })), 4000);
     });
 
+    socket.on('returned_to_lobby', () =>
+      set((prev) => ({
+        ...prev,
+        phase: 'waiting',
+        gameState: null,
+        rematchVotes: 0,
+        myVotedRematch: false,
+        rematchError: null,
+        error: null,
+        stateHistory: [],
+      })),
+    );
+
     socket.on('chat_history', ({ scope, messages }) => {
       if (scope === 'global') {
         set((prev) => ({ ...prev, globalMessages: messages }));
@@ -550,6 +564,12 @@ export function useMultiplayer<TState extends AnyGameState = AnyGameState>(
     socketRef.current?.emit('request_rematch', { roomCode: code });
   }, []);
 
+  const returnToLobby = useCallback(() => {
+    const code = roomCodeRef.current;
+    if (!code) return;
+    socketRef.current?.emit('return_to_lobby', { roomCode: code });
+  }, []);
+
   const quickPlay = useCallback(() => {
     set((prev) => ({ ...prev, error: null }));
     socketRef.current?.emit('quick_play', {
@@ -620,5 +640,5 @@ export function useMultiplayer<TState extends AnyGameState = AnyGameState>(
     socketRef.current?.emit('get_online_users');
   }, []);
 
-  return { ...s, createRoom, joinRoom, quickPlay, leaveRoom, sendAction, requestRematch, clearError, sendChat, setNickname, setAvatarId, setNameColor, setAvatarFrame, sendRoomInvite, fetchOnlineUsers };
+  return { ...s, createRoom, joinRoom, quickPlay, leaveRoom, sendAction, requestRematch, returnToLobby, clearError, sendChat, setNickname, setAvatarId, setNameColor, setAvatarFrame, sendRoomInvite, fetchOnlineUsers };
 }
