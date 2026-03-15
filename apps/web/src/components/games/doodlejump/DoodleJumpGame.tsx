@@ -31,10 +31,11 @@ const SPRING_H = 16;
 const GRAVITY = 0.3;
 const JUMP_VEL = 9;
 const SPRING_VEL = 14;
-const ROCKET_W = 14;
-const ROCKET_H = 20;
+const ROCKET_W = 18;
+const ROCKET_H = 26;
 const ROCKET_VEL = 20;
 const ROCKET_FLIGHT_DURATION = 90;
+const ROCKET_SCORE_INTERVAL = 50; // award 1 point per this many pixels of height during rocket/spring flight
 const MAX_FALL_VEL = 10;
 
 const MOVE_SPEED = 3.5;
@@ -113,6 +114,7 @@ interface GameState {
   platformIdCounter: number;
   rocketActive: number;
   themeIndex: number;
+  flightScoreY: number; // last height at which a flight score point was awarded
 }
 
 // ── Phase ───────────────────────────────────────────────────────────────────
@@ -208,7 +210,7 @@ function createPlatform(x: number, y: number, kind: PlatformKind): Platform {
 /** Generate platforms matching difficulty at a given score (for boost start). */
 function generateBoostedPlatforms(targetScore: number): Platform[] {
   const platforms: Platform[] = [];
-  // Ground platform
+  // Ground platform — extra wide
   platforms.push({
     x: CANVAS_W / 2 - (PLATFORM_W + 20) / 2,
     y: 0,
@@ -217,16 +219,19 @@ function generateBoostedPlatforms(targetScore: number): Platform[] {
   });
 
   let y = 50;
+  let count = 0;
   while (y < CANVAS_H + 200) {
     const difficulty = Math.min(targetScore / 150, 1);
     const minGap = 28 + difficulty * 17;
     const maxGap = 45 + difficulty * 40;
     const gap = randomRange(minGap, maxGap);
     const x = randomRange(10, CANVAS_W - PLATFORM_W - 10);
-    const kind = choosePlatformKind(targetScore);
+    // First 3 platforms are always normal for a safe start
+    const kind = count < 3 ? 'normal' : choosePlatformKind(targetScore);
     const plat = createPlatform(x, y, kind);
     platforms.push(plat);
     y += gap;
+    count++;
 
     // Safety platform after breakable
     if (kind === 'breakable') {
@@ -234,6 +239,7 @@ function generateBoostedPlatforms(targetScore: number): Platform[] {
       y += safeGap;
       const safeX = randomRange(10, CANVAS_W - PLATFORM_W - 10);
       platforms.push(createPlatform(safeX, y, 'normal'));
+      count++;
     }
   }
   return platforms;
@@ -255,6 +261,7 @@ function createInitialState(): GameState {
     platformIdCounter: platforms.length,
     rocketActive: 0,
     themeIndex: 0,
+    flightScoreY: 0,
   };
 }
 
@@ -376,58 +383,128 @@ function drawPlatform(ctx: CanvasRenderingContext2D, p: Platform, screenY: numbe
   if (hasRocket && !rocketUsed) {
     const rx = x + w / 2 - ROCKET_W / 2;
     const ry = screenY - ROCKET_H + 2;
+    const cx = rx + ROCKET_W / 2;
+    const now = performance.now();
 
-    // Rocket body (red)
-    ctx.fillStyle = '#ef4444';
+    // Glow behind rocket
+    ctx.save();
+    const glowGrad = ctx.createRadialGradient(cx, ry + ROCKET_H * 0.5, 2, cx, ry + ROCKET_H * 0.5, ROCKET_W * 1.2);
+    glowGrad.addColorStop(0, 'rgba(251, 191, 36, 0.25)');
+    glowGrad.addColorStop(1, 'rgba(251, 191, 36, 0)');
+    ctx.fillStyle = glowGrad;
+    ctx.fillRect(rx - ROCKET_W * 0.5, ry - 4, ROCKET_W * 2, ROCKET_H + 16);
+    ctx.restore();
+
+    // Rocket body — metallic gradient
+    const bodyGrad = ctx.createLinearGradient(rx, ry, rx + ROCKET_W, ry);
+    bodyGrad.addColorStop(0, '#cbd5e1');
+    bodyGrad.addColorStop(0.3, '#f1f5f9');
+    bodyGrad.addColorStop(0.5, '#e2e8f0');
+    bodyGrad.addColorStop(0.7, '#f8fafc');
+    bodyGrad.addColorStop(1, '#94a3b8');
+    ctx.fillStyle = bodyGrad;
     ctx.beginPath();
-    ctx.moveTo(rx + ROCKET_W / 2, ry); // nose tip
-    ctx.lineTo(rx + ROCKET_W, ry + ROCKET_H * 0.6);
+    ctx.moveTo(cx, ry); // nose tip
+    ctx.quadraticCurveTo(rx + ROCKET_W + 1, ry + ROCKET_H * 0.35, rx + ROCKET_W, ry + ROCKET_H * 0.85);
     ctx.lineTo(rx + ROCKET_W, ry + ROCKET_H);
     ctx.lineTo(rx, ry + ROCKET_H);
-    ctx.lineTo(rx, ry + ROCKET_H * 0.6);
+    ctx.lineTo(rx, ry + ROCKET_H * 0.85);
+    ctx.quadraticCurveTo(rx - 1, ry + ROCKET_H * 0.35, cx, ry);
     ctx.closePath();
     ctx.fill();
 
-    // Nose cone (orange)
-    ctx.fillStyle = '#f97316';
+    // Nose cone — red gradient
+    const noseGrad = ctx.createLinearGradient(rx, ry, rx + ROCKET_W, ry);
+    noseGrad.addColorStop(0, '#dc2626');
+    noseGrad.addColorStop(0.5, '#ef4444');
+    noseGrad.addColorStop(1, '#b91c1c');
+    ctx.fillStyle = noseGrad;
     ctx.beginPath();
-    ctx.moveTo(rx + ROCKET_W / 2, ry);
-    ctx.lineTo(rx + ROCKET_W - 2, ry + ROCKET_H * 0.4);
-    ctx.lineTo(rx + 2, ry + ROCKET_H * 0.4);
+    ctx.moveTo(cx, ry);
+    ctx.quadraticCurveTo(rx + ROCKET_W, ry + ROCKET_H * 0.25, rx + ROCKET_W - 1, ry + ROCKET_H * 0.35);
+    ctx.lineTo(rx + 1, ry + ROCKET_H * 0.35);
+    ctx.quadraticCurveTo(rx, ry + ROCKET_H * 0.25, cx, ry);
     ctx.closePath();
     ctx.fill();
 
-    // Window (light blue circle)
-    ctx.fillStyle = '#7dd3fc';
+    // Window — porthole with glass shine
+    const winY = ry + ROCKET_H * 0.5;
+    const winR = ROCKET_W * 0.18;
+    ctx.fillStyle = '#1e3a5f';
     ctx.beginPath();
-    ctx.arc(rx + ROCKET_W / 2, ry + ROCKET_H * 0.55, 3, 0, Math.PI * 2);
+    ctx.arc(cx, winY, winR + 1, 0, Math.PI * 2);
+    ctx.fill();
+    const winGrad = ctx.createRadialGradient(cx - 1, winY - 1, 0, cx, winY, winR);
+    winGrad.addColorStop(0, '#93c5fd');
+    winGrad.addColorStop(0.7, '#3b82f6');
+    winGrad.addColorStop(1, '#1e40af');
+    ctx.fillStyle = winGrad;
+    ctx.beginPath();
+    ctx.arc(cx, winY, winR, 0, Math.PI * 2);
+    ctx.fill();
+    // Glass shine
+    ctx.fillStyle = 'rgba(255,255,255,0.5)';
+    ctx.beginPath();
+    ctx.arc(cx - 1, winY - 1, winR * 0.4, 0, Math.PI * 2);
     ctx.fill();
 
-    // Fins (darker red)
-    ctx.fillStyle = '#dc2626';
+    // Fins — sleek triangular
+    const finW = 5;
+    const finH = ROCKET_H * 0.35;
+    const finY = ry + ROCKET_H * 0.65;
     // Left fin
+    const lfGrad = ctx.createLinearGradient(rx - finW, finY, rx, finY);
+    lfGrad.addColorStop(0, '#dc2626');
+    lfGrad.addColorStop(1, '#ef4444');
+    ctx.fillStyle = lfGrad;
     ctx.beginPath();
-    ctx.moveTo(rx, ry + ROCKET_H * 0.7);
-    ctx.lineTo(rx - 3, ry + ROCKET_H);
+    ctx.moveTo(rx, finY);
+    ctx.lineTo(rx - finW, finY + finH + 2);
     ctx.lineTo(rx, ry + ROCKET_H);
     ctx.closePath();
     ctx.fill();
     // Right fin
+    const rfGrad = ctx.createLinearGradient(rx + ROCKET_W, finY, rx + ROCKET_W + finW, finY);
+    rfGrad.addColorStop(0, '#ef4444');
+    rfGrad.addColorStop(1, '#dc2626');
+    ctx.fillStyle = rfGrad;
     ctx.beginPath();
-    ctx.moveTo(rx + ROCKET_W, ry + ROCKET_H * 0.7);
-    ctx.lineTo(rx + ROCKET_W + 3, ry + ROCKET_H);
+    ctx.moveTo(rx + ROCKET_W, finY);
+    ctx.lineTo(rx + ROCKET_W + finW, finY + finH + 2);
     ctx.lineTo(rx + ROCKET_W, ry + ROCKET_H);
     ctx.closePath();
     ctx.fill();
 
-    // Small flame at base
-    ctx.fillStyle = '#fbbf24';
+    // Exhaust ring at base
+    ctx.strokeStyle = '#64748b';
+    ctx.lineWidth = 1.5;
     ctx.beginPath();
-    ctx.moveTo(rx + 3, ry + ROCKET_H);
-    ctx.lineTo(rx + ROCKET_W / 2, ry + ROCKET_H + 6);
-    ctx.lineTo(rx + ROCKET_W - 3, ry + ROCKET_H);
+    ctx.ellipse(cx, ry + ROCKET_H, ROCKET_W * 0.35, 2, 0, 0, Math.PI * 2);
+    ctx.stroke();
+
+    // Animated flame at base
+    const flicker = Math.sin(now * 0.03) * 2;
+    const flameH = 8 + flicker;
+    const flameGrad = ctx.createLinearGradient(cx, ry + ROCKET_H, cx, ry + ROCKET_H + flameH);
+    flameGrad.addColorStop(0, '#fbbf24');
+    flameGrad.addColorStop(0.4, '#f97316');
+    flameGrad.addColorStop(1, 'rgba(239, 68, 68, 0)');
+    ctx.fillStyle = flameGrad;
+    ctx.beginPath();
+    ctx.moveTo(cx - ROCKET_W * 0.3, ry + ROCKET_H);
+    ctx.quadraticCurveTo(cx, ry + ROCKET_H + flameH + 2, cx + ROCKET_W * 0.3, ry + ROCKET_H);
     ctx.closePath();
     ctx.fill();
+
+    // Body outline
+    ctx.strokeStyle = '#475569';
+    ctx.lineWidth = 0.8;
+    ctx.beginPath();
+    ctx.moveTo(cx, ry);
+    ctx.quadraticCurveTo(rx + ROCKET_W + 1, ry + ROCKET_H * 0.35, rx + ROCKET_W, ry + ROCKET_H);
+    ctx.lineTo(rx, ry + ROCKET_H);
+    ctx.quadraticCurveTo(rx - 1, ry + ROCKET_H * 0.35, cx, ry);
+    ctx.stroke();
   }
 }
 
@@ -887,8 +964,8 @@ export function DoodleJumpGame() {
   const [score, setScore] = useState(0);
   const [best, setBest] = useState(0);
   const [countdownNum, setCountdownNum] = useState(0);
-  const [boostActive, setBoostActive] = useState(false);
-  const boostActiveRef = useRef(false);
+  const [boostCount, setBoostCount] = useState(0);
+  const boostCountRef = useRef(0);
 
   // ── Refs ──────────────────────────────────────────────────────────────
   const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -1024,14 +1101,18 @@ export function DoodleJumpGame() {
       gs.velY = ROCKET_VEL; // override gravity, keep flying up
       if (gs.rocketActive <= 0) {
         gs.rocketActive = 0;
-        // Safety: ensure there's at least one platform nearby below to land on
-        const landingRange = gs.doodlerY - CANVAS_H * 0.6;
+        gs.flightScoreY = 0; // reset flight scoring
+        // Safety: ensure there are solid (non-breakable) platforms nearby to land on
+        const landingRange = gs.doodlerY - CANVAS_H * 0.8;
         const hasSafeLanding = gs.platforms.some(
-          (p) => !p.broken && p.y >= landingRange && p.y <= gs.doodlerY
+          (p) => !p.broken && p.kind !== 'breakable' && p.y >= landingRange && p.y <= gs.doodlerY + 100
         );
         if (!hasSafeLanding) {
-          const safeX = Math.max(10, Math.min(CANVAS_W - PLATFORM_W - 10, gs.doodlerX));
-          gs.platforms.push(createPlatform(safeX, gs.doodlerY - 60, 'normal'));
+          // Place 2 safety platforms at different heights so landing is guaranteed
+          for (const offset of [-60, -160]) {
+            const safeX = randomRange(10, CANVAS_W - PLATFORM_W - 10);
+            gs.platforms.push(createPlatform(safeX, gs.doodlerY + offset, 'normal'));
+          }
         }
       }
     }
@@ -1044,6 +1125,20 @@ export function DoodleJumpGame() {
 
     gs.doodlerX += gs.velX * dt;
     gs.doodlerY += gs.velY * dt;
+
+    // ── Flight scoring (rocket / spring height counts as points) ────
+    if (gs.velY > JUMP_VEL && gs.doodlerY > 0) {
+      if (gs.flightScoreY === 0) gs.flightScoreY = gs.doodlerY; // mark start
+      const heightGained = gs.doodlerY - gs.flightScoreY;
+      const bonusPoints = Math.floor(heightGained / ROCKET_SCORE_INTERVAL);
+      if (bonusPoints > 0) {
+        gs.score += bonusPoints;
+        gs.flightScoreY += bonusPoints * ROCKET_SCORE_INTERVAL;
+        gs.lastScoredY = Math.max(gs.lastScoredY, gs.doodlerY);
+      }
+    } else if (gs.velY <= JUMP_VEL && gs.flightScoreY > 0) {
+      gs.flightScoreY = 0; // reset when no longer in boosted flight
+    }
 
     // Screen wrap
     if (gs.doodlerX + DOODLER_W < 0) {
@@ -1239,18 +1334,21 @@ export function DoodleJumpGame() {
     if (countdownTimerRef.current) clearTimeout(countdownTimerRef.current);
 
     // Reset game state — use boosted platforms if boost is active
-    const useBoosted = boostActiveRef.current;
+    const useBoosted = boostCountRef.current > 0;
     gsRef.current = createInitialState();
     savedRef.current = false;
     lastScoreMilestone.current = 0;
 
     if (useBoosted) {
-      gsRef.current.platforms = generateBoostedPlatforms(BOOST_SCORE);
+      const boostedPlats = generateBoostedPlatforms(BOOST_SCORE);
+      gsRef.current.platforms = boostedPlats;
+      gsRef.current.nextPlatformY = boostedPlats[boostedPlats.length - 1].y + randomRange(28, 45);
       gsRef.current.score = BOOST_SCORE;
       setScore(BOOST_SCORE);
-      // Consume the boost (single-use)
-      setBoostActive(false);
-      boostActiveRef.current = false;
+      // Consume one boost charge
+      const newCount = boostCountRef.current - 1;
+      setBoostCount(newCount);
+      boostCountRef.current = newCount;
     } else {
       setScore(0);
     }
@@ -1295,15 +1393,16 @@ export function DoodleJumpGame() {
   }, [startCountdown]);
 
   const buyBoost = useCallback(() => {
-    if (boostActive || shop.wallet < BOOST_PRICE || bestRef.current < BOOST_SCORE) return;
+    if (shop.wallet < BOOST_PRICE || bestRef.current < BOOST_SCORE) return;
     const p = loadSkinProgress('doodlejump');
     if (p.wallet < BOOST_PRICE) return;
     p.wallet -= BOOST_PRICE;
     saveSkinProgress('doodlejump', p);
     shop.save(p);
-    setBoostActive(true);
-    boostActiveRef.current = true;
-  }, [boostActive, shop]);
+    const newCount = boostCountRef.current + 1;
+    setBoostCount(newCount);
+    boostCountRef.current = newCount;
+  }, [shop]);
 
   const togglePause = useCallback(() => {
     if (phaseRef.current === 'playing') {
@@ -1442,29 +1541,28 @@ export function DoodleJumpGame() {
                   {t('skinShop.title') !== 'skinShop.title' ? t('skinShop.title') : 'Shop'}
                 </button>
               </div>
-              {/* Boost: ready / buy / locked */}
-              {boostActive ? (
-                <div className="mt-2 flex items-center gap-2 px-3 py-1.5 rounded-lg border border-emerald-600/50 bg-emerald-950/40 text-xs font-semibold text-emerald-400">
-                  <span>🚀</span>
-                  <span>{t('doodlejump.boost.name')}</span>
-                  <span className="w-3.5 h-3.5 rounded-full border-2 border-emerald-500 bg-emerald-500 flex items-center justify-center">
-                    <span className="text-[8px] text-white font-black">✓</span>
-                  </span>
+              {/* Boost: count + buy / locked */}
+              {best >= BOOST_SCORE ? (
+                <div className="mt-2 flex items-center gap-2">
+                  {boostCount > 0 && (
+                    <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-emerald-600/50 bg-emerald-950/40 text-xs font-semibold text-emerald-400">
+                      <span>🚀</span>
+                      <span>×{boostCount}</span>
+                    </div>
+                  )}
+                  <button
+                    onClick={(e) => { e.stopPropagation(); buyBoost(); }}
+                    disabled={shop.wallet < BOOST_PRICE}
+                    className={`flex items-center gap-2 px-3 py-1.5 rounded-lg border text-xs font-semibold transition-all ${
+                      shop.wallet >= BOOST_PRICE
+                        ? 'border-amber-700/50 bg-amber-950/40 text-amber-400 hover:bg-amber-950/60 active:scale-95'
+                        : 'border-zinc-700 bg-zinc-800/40 text-zinc-600 cursor-not-allowed'
+                    }`}
+                  >
+                    <span>+🚀</span>
+                    <span className="flex items-center gap-0.5">● {BOOST_PRICE}</span>
+                  </button>
                 </div>
-              ) : best >= BOOST_SCORE ? (
-                <button
-                  onClick={(e) => { e.stopPropagation(); buyBoost(); }}
-                  disabled={shop.wallet < BOOST_PRICE}
-                  className={`mt-2 flex items-center gap-2 px-3 py-1.5 rounded-lg border text-xs font-semibold transition-all ${
-                    shop.wallet >= BOOST_PRICE
-                      ? 'border-amber-700/50 bg-amber-950/40 text-amber-400 hover:bg-amber-950/60 active:scale-95'
-                      : 'border-zinc-700 bg-zinc-800/40 text-zinc-600 cursor-not-allowed'
-                  }`}
-                >
-                  <span>🚀</span>
-                  <span>{t('doodlejump.boost.name')}</span>
-                  <span className="flex items-center gap-0.5">● {BOOST_PRICE}</span>
-                </button>
               ) : (
                 <div className="mt-2 flex items-center gap-2 px-3 py-1.5 rounded-lg border border-zinc-800 bg-zinc-900/40 text-xs font-semibold text-zinc-600">
                   <span>🚀</span>
@@ -1528,29 +1626,28 @@ export function DoodleJumpGame() {
                   {t('skinShop.title') !== 'skinShop.title' ? t('skinShop.title') : 'Shop'}
                 </button>
               </div>
-              {/* Boost: ready / buy / locked */}
-              {boostActive ? (
-                <div className="mb-3 flex items-center gap-2 px-3 py-1.5 rounded-lg border border-emerald-600/50 bg-emerald-950/40 text-xs font-semibold text-emerald-400">
-                  <span>🚀</span>
-                  <span>{t('doodlejump.boost.name')}</span>
-                  <span className="w-3.5 h-3.5 rounded-full border-2 border-emerald-500 bg-emerald-500 flex items-center justify-center">
-                    <span className="text-[8px] text-white font-black">✓</span>
-                  </span>
+              {/* Boost: count + buy / locked */}
+              {best >= BOOST_SCORE ? (
+                <div className="mb-3 flex items-center gap-2">
+                  {boostCount > 0 && (
+                    <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-emerald-600/50 bg-emerald-950/40 text-xs font-semibold text-emerald-400">
+                      <span>🚀</span>
+                      <span>×{boostCount}</span>
+                    </div>
+                  )}
+                  <button
+                    onClick={(e) => { e.stopPropagation(); buyBoost(); }}
+                    disabled={shop.wallet < BOOST_PRICE}
+                    className={`flex items-center gap-2 px-3 py-1.5 rounded-lg border text-xs font-semibold transition-all ${
+                      shop.wallet >= BOOST_PRICE
+                        ? 'border-amber-700/50 bg-amber-950/40 text-amber-400 hover:bg-amber-950/60 active:scale-95'
+                        : 'border-zinc-700 bg-zinc-800/40 text-zinc-600 cursor-not-allowed'
+                    }`}
+                  >
+                    <span>+🚀</span>
+                    <span className="flex items-center gap-0.5">● {BOOST_PRICE}</span>
+                  </button>
                 </div>
-              ) : best >= BOOST_SCORE ? (
-                <button
-                  onClick={(e) => { e.stopPropagation(); buyBoost(); }}
-                  disabled={shop.wallet < BOOST_PRICE}
-                  className={`mb-3 flex items-center gap-2 px-3 py-1.5 rounded-lg border text-xs font-semibold transition-all ${
-                    shop.wallet >= BOOST_PRICE
-                      ? 'border-amber-700/50 bg-amber-950/40 text-amber-400 hover:bg-amber-950/60 active:scale-95'
-                      : 'border-zinc-700 bg-zinc-800/40 text-zinc-600 cursor-not-allowed'
-                  }`}
-                >
-                  <span>🚀</span>
-                  <span>{t('doodlejump.boost.name')}</span>
-                  <span className="flex items-center gap-0.5">● {BOOST_PRICE}</span>
-                </button>
               ) : (
                 <div className="mb-3 flex items-center gap-2 px-3 py-1.5 rounded-lg border border-zinc-800 bg-zinc-900/40 text-xs font-semibold text-zinc-600">
                   <span>🚀</span>

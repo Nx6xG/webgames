@@ -391,10 +391,10 @@ export function PenaltiesGame() {
       else if (clickX > W / 2 + 50) diveDir = 'right';
       else diveDir = 'center';
     } else {
-      // Missed reflex — dive toward target (too late)
-      if (targetX < W / 2 - 50) diveDir = 'left';
-      else if (targetX > W / 2 + 50) diveDir = 'right';
-      else diveDir = 'center';
+      // Missed reflex — dive to the WRONG side so it looks like a miss
+      if (targetX < W / 2 - 50) diveDir = Math.random() < 0.7 ? 'right' : 'center';
+      else if (targetX > W / 2 + 50) diveDir = Math.random() < 0.7 ? 'left' : 'center';
+      else diveDir = Math.random() < 0.5 ? 'left' : 'right';
     }
 
     saving.chosenDir = diveDir;
@@ -699,8 +699,8 @@ export function PenaltiesGame() {
         if (reflex.savedByReflex === true) {
           // Reflex save — guaranteed save
           result = 'saved';
-        } else if (reflex.savedByReflex === false) {
-          // Failed reflex — ball scores unless it's off-frame (post/missed)
+        } else {
+          // Failed reflex or no click — ball scores unless it's off-frame (post/missed)
           const lx = goalLeftX(ball.targetY);
           const rx = goalRightX(ball.targetY);
           const tx = ball.targetX;
@@ -711,10 +711,6 @@ export function PenaltiesGame() {
           } else {
             result = 'goal';
           }
-        } else {
-          // Fallback — use standard determination
-          const dir = saving.chosenDir!;
-          result = determineGkSave(ball.targetX, ball.targetY, gk.x, dir);
         }
         resultRef.current = result;
 

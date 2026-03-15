@@ -211,11 +211,16 @@ function makeGrassLane(row: number, dir: 1 | -1, difficulty: number): Lane {
       trees.push({ col });
     }
   }
-  // Occasional coin
-  if (Math.random() < 0.15) {
-    const col = randInt(0, COLS - 1);
-    if (!usedCols.has(col)) {
-      coins.push({ col, collected: false });
+  // Coins — spawn 1-2 per grass lane fairly often
+  const coinChance = 0.35;
+  if (Math.random() < coinChance) {
+    const numCoins = Math.random() < 0.3 ? 2 : 1;
+    for (let i = 0; i < numCoins; i++) {
+      const col = randInt(0, COLS - 1);
+      if (!usedCols.has(col)) {
+        usedCols.add(col);
+        coins.push({ col, collected: false });
+      }
     }
   }
   return { type: 'grass', row, trees, vehicles: [], logs: [], trains: [], coins, direction: dir };

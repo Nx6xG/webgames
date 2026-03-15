@@ -445,8 +445,8 @@ export const unoEngine: GameEngine<UnoState, UnoAction> = {
       if (cardIdx === -1) throw new Error('INVALID_ACTION: Card not in hand');
       const card = s.hands[pIdx][cardIdx];
 
-      // Check playability (skip if playing drawn card — already validated above)
-      if (s.drawnCardId === null && !canPlayCard(card, s.topCard, s.chosenColor)) {
+      // Check playability (skip if playing drawn card or stacking on pending draw — already validated above)
+      if (s.drawnCardId === null && !(s.pendingDraw > 0 && s.pendingDrawSource) && !canPlayCard(card, s.topCard, s.chosenColor)) {
         throw new Error('INVALID_ACTION: Card cannot be played');
       }
 
