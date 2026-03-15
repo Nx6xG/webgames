@@ -125,6 +125,26 @@ export function PenaltiesGame() {
     showArrows: true,
   });
 
+  const reflexRef = useRef({
+    flashStart: 0,
+    flashDuration: 400,
+    delayMs: 600,
+    targetX: 0,
+    targetY: 0,
+    active: false,
+    clicked: false,
+    phase: 'waiting' as 'waiting' | 'flashing' | 'done',
+    savedByReflex: null as boolean | null,  // null = not decided, true = save, false = miss
+    clickX: 0,
+    clickY: 0,
+  });
+
+  const REFLEX_CONFIG: Record<Difficulty, { flashDuration: number; delay: [number, number] }> = {
+    easy:   { flashDuration: 600, delay: [400, 600] },
+    medium: { flashDuration: 400, delay: [400, 800] },
+    hard:   { flashDuration: 250, delay: [500, 900] },
+  };
+
   const resultRef = useRef<ShotResult | null>(null);
   // Net ripple for goals
   const netRippleRef = useRef(0);
@@ -284,7 +304,24 @@ export function PenaltiesGame() {
     const tx = zone.x + (Math.random() - 0.5) * spread;
     const ty = zone.y + (Math.random() - 0.5) * spread * 0.4;
 
-    savingRef.current = { chosenDir: null, botShotTarget: { x: tx, y: ty }, showArrows: true };
+    savingRef.current = { chosenDir: null, botShotTarget: { x: tx, y: ty }, showArrows: false };
+
+    // Configure reflex timing based on difficulty
+    const reflexCfg = REFLEX_CONFIG[diffRef.current];
+    const delayMs = reflexCfg.delay[0] + Math.random() * (reflexCfg.delay[1] - reflexCfg.delay[0]);
+    reflexRef.current = {
+      flashStart: 0,
+      flashDuration: reflexCfg.flashDuration,
+      delayMs,
+      targetX: tx,
+      targetY: ty,
+      active: false,
+      clicked: false,
+      phase: 'waiting',
+      savedByReflex: null,
+      clickX: 0,
+      clickY: 0,
+    };
 
     gkRef.current = {
       x: W / 2, y: GOAL_BOTTOM - 10,
@@ -297,6 +334,118 @@ export function PenaltiesGame() {
     };
     kickerRef.current = { x: W / 2, y: PENALTY_SPOT_Y + 40, kickProgress: 0, kicking: false };
   }, []);
+
+  // ── Reflex save timer ────────────────────────────────────────────────
+
+  useEffect(() => {
+    if (phase !== 'saving') return;
+    const reflex = reflexRef.current;
+    reflex.phase = 'waiting';
+    reflex.clicked = false;
+    reflex.savedByReflex = null;
+
+    let flashTimer: ReturnType<typeof setTimeout> | null = null;
+
+    // After delay, start flashing
+    const delayTimer = setTimeout(() => {
+      if (phaseRef.current !== 'saving') return;
+      reflex.phase = 'flashing';
+      reflex.flashStart = Date.now();
+      reflex.active = true;
+
+      // After flash duration, end the flash window
+      flashTimer = setTimeout(() => {
+        if (phaseRef.current !== 'saving') return;
+        reflex.phase = 'done';
+        reflex.active = false;
+
+        // If player didn't click in time, trigger the ball flight (likely goal)
+        if (!reflex.clicked) {
+          triggerReflexResult(false);
+        }
+      }, reflex.flashDuration);
+    }, reflex.delayMs);
+
+    return () => {
+      clearTimeout(delayTimer);
+      if (flashTimer) clearTimeout(flashTimer);
+    };
+  }, [phase]);
+
+  // ── Trigger reflex result ──────────────────────────────────────────
+
+  const triggerReflexResult = useCallback((saved: boolean) => {
+    if (phaseRef.current !== 'saving') return;
+    const reflex = reflexRef.current;
+    const saving = savingRef.current;
+
+    // Determine dive direction based on where the target is
+    const targetX = saving.botShotTarget.x;
+    let diveDir: DiveDir = 'center';
+    if (saved && reflex.clicked) {
+      // Dive toward the click position
+      const clickX = reflex.clickX;
+      if (clickX < W / 2 - 50) diveDir = 'left';
+      else if (clickX > W / 2 + 50) diveDir = 'right';
+      else diveDir = 'center';
+    } else {
+      // Missed reflex — dive toward target (too late)
+      if (targetX < W / 2 - 50) diveDir = 'left';
+      else if (targetX > W / 2 + 50) diveDir = 'right';
+      else diveDir = 'center';
+    }
+
+    saving.chosenDir = diveDir;
+    reflex.savedByReflex = saved;
+
+    const diveTarget = diveDir === 'left' ? GOAL_BL + 50
+      : diveDir === 'right' ? GOAL_BR - 50
+      : W / 2;
+
+    gkRef.current.diveDir = diveDir;
+    gkRef.current.targetX = diveTarget;
+    gkRef.current.diving = true;
+    gkRef.current.diveProgress = 0;
+
+    kickerRef.current.kicking = true;
+    kickerRef.current.kickProgress = 0;
+
+    sfx.kickSound();
+    setPhase('gk_diving');
+  }, []);
+
+  // ── Handle reflex click ──────────────────────────────────────────────
+
+  const handleReflexClick = useCallback((clickX: number, clickY: number) => {
+    if (phaseRef.current !== 'saving') return;
+    const reflex = reflexRef.current;
+    if (reflex.clicked) return; // already clicked
+
+    reflex.clicked = true;
+    reflex.clickX = clickX;
+    reflex.clickY = clickY;
+
+    if (reflex.phase === 'flashing' && reflex.active) {
+      // Calculate distance to crosshair target
+      const dx = clickX - reflex.targetX;
+      const dy = clickY - reflex.targetY;
+      const dist = Math.sqrt(dx * dx + dy * dy);
+
+      if (dist <= 60) {
+        // Close enough — guaranteed save
+        triggerReflexResult(true);
+      } else if (dist <= 100) {
+        // Near — 50% chance
+        triggerReflexResult(Math.random() < 0.5);
+      } else {
+        // Too far — miss
+        triggerReflexResult(false);
+      }
+    } else {
+      // Clicked before flash or after flash — miss
+      triggerReflexResult(false);
+    }
+  }, [triggerReflexResult]);
 
   // ── Reset ─────────────────────────────────────────────────────────────
 
@@ -363,30 +512,6 @@ export function PenaltiesGame() {
     setPhase('ball_flying');
   }, []);
 
-  // ── Handle dive ───────────────────────────────────────────────────────
-
-  const handleDive = useCallback((dir: DiveDir) => {
-    if (phaseRef.current !== 'saving') return;
-
-    savingRef.current.chosenDir = dir;
-    savingRef.current.showArrows = false;
-
-    const diveTarget = dir === 'left' ? GOAL_BL + 50
-      : dir === 'right' ? GOAL_BR - 50
-      : W / 2;
-
-    gkRef.current.diveDir = dir;
-    gkRef.current.targetX = diveTarget;
-    gkRef.current.diving = true;
-    gkRef.current.diveProgress = 0;
-
-    kickerRef.current.kicking = true;
-    kickerRef.current.kickProgress = 0;
-
-    sfx.kickSound();
-    setPhase('gk_diving');
-  }, []);
-
   // ── Input handlers ────────────────────────────────────────────────────
 
   useEffect(() => {
@@ -417,8 +542,7 @@ export function PenaltiesGame() {
         };
         handleShoot();
       } else if (phaseRef.current === 'saving') {
-        const third = W / 3;
-        handleDive(pos.x < third ? 'left' : pos.x > third * 2 ? 'right' : 'center');
+        handleReflexClick(pos.x, pos.y);
       }
     }
 
@@ -432,8 +556,7 @@ export function PenaltiesGame() {
         };
         handleShoot();
       } else if (phaseRef.current === 'saving') {
-        const third = W / 3;
-        handleDive(pos.x < third ? 'left' : pos.x > third * 2 ? 'right' : 'center');
+        handleReflexClick(pos.x, pos.y);
       }
     }
 
@@ -445,19 +568,21 @@ export function PenaltiesGame() {
       canvas.removeEventListener('click', onClick);
       canvas.removeEventListener('touchstart', onTouch);
     };
-  }, [phase, handleShoot, handleDive]);
+  }, [phase, handleShoot, handleReflexClick]);
 
+  // Keyboard: Space bar triggers reflex click at goal center during saving
   useEffect(() => {
     function onKey(e: KeyboardEvent) {
-      if (phaseRef.current === 'saving') {
-        if (e.key === 'ArrowLeft' || e.key === 'a' || e.key === 'A') { e.preventDefault(); handleDive('left'); }
-        else if (e.key === 'ArrowRight' || e.key === 'd' || e.key === 'D') { e.preventDefault(); handleDive('right'); }
-        else if (e.key === 'ArrowDown' || e.key === 's' || e.key === 'S' || e.key === ' ') { e.preventDefault(); handleDive('center'); }
+      if (phaseRef.current === 'saving' && (e.key === ' ' || e.key === 'Enter')) {
+        e.preventDefault();
+        // Click at the reflex target position (best possible click)
+        const reflex = reflexRef.current;
+        handleReflexClick(reflex.targetX, reflex.targetY);
       }
     }
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
-  }, [handleDive]);
+  }, [handleReflexClick]);
 
   // ── Ball flight (shooting) ────────────────────────────────────────────
 
@@ -564,8 +689,16 @@ export function PenaltiesGame() {
 
       if (p >= 1) {
         clearInterval(interval);
-        const dir = saving.chosenDir!;
-        const result = determineGkSave(ball.targetX, ball.targetY, gk.x, dir);
+        const reflex = reflexRef.current;
+        let result: ShotResult;
+        if (reflex.savedByReflex === true) {
+          // Reflex save — guaranteed save
+          result = 'saved';
+        } else {
+          // Missed reflex or no click — use standard determination (ball likely scores)
+          const dir = saving.chosenDir!;
+          result = determineGkSave(ball.targetX, ball.targetY, gk.x, dir);
+        }
         resultRef.current = result;
 
         if (result === 'saved') {
@@ -874,43 +1007,75 @@ export function PenaltiesGame() {
       c.setLineDash([]);
     }
 
-    // ─── Saving zone indicators
-    if (ph === 'saving' && savingRef.current.showArrows) {
-      const zones = [
-        { x: GOAL_CX - GOAL_BOTTOM_W * 0.3, label: '◀', sub: '← A' },
-        { x: GOAL_CX, label: '▼', sub: '↓ S' },
-        { x: GOAL_CX + GOAL_BOTTOM_W * 0.3, label: '▶', sub: '→ D' },
-      ];
-      const pulse = 0.5 + 0.3 * Math.sin(time * 4);
+    // ─── Reflex save indicators
+    if (ph === 'saving') {
+      const reflex = reflexRef.current;
 
-      // Zone divider lines
-      c.strokeStyle = `rgba(255,255,255,${0.1 + pulse * 0.08})`;
-      c.lineWidth = 1;
-      c.setLineDash([4, 4]);
-      for (const xOff of [-1, 1]) {
-        const topX = GOAL_CX + xOff * GOAL_TOP_W * 0.17;
-        const botX = GOAL_CX + xOff * GOAL_BOTTOM_W * 0.17;
-        c.beginPath(); c.moveTo(topX, GOAL_Y); c.lineTo(botX, GOAL_BOTTOM); c.stroke();
-      }
-      c.setLineDash([]);
-
-      for (const z of zones) {
-        const zy = GOAL_Y + GOAL_H * 0.45;
-        // Glow
-        const glow = c.createRadialGradient(z.x, zy, 0, z.x, zy, 40);
-        glow.addColorStop(0, `rgba(255,255,255,${0.06 * pulse})`);
-        glow.addColorStop(1, 'rgba(255,255,255,0)');
-        c.fillStyle = glow;
-        c.beginPath(); c.arc(z.x, zy, 40, 0, Math.PI * 2); c.fill();
-
-        c.fillStyle = `rgba(255,255,255,${0.4 + pulse * 0.3})`;
-        c.font = 'bold 40px system-ui';
+      if (reflex.phase === 'waiting') {
+        // Pulsing "GET READY" text
+        const pulse = 0.6 + 0.4 * Math.sin(time * 5);
+        c.save();
+        c.font = 'bold 28px system-ui';
         c.textAlign = 'center'; c.textBaseline = 'middle';
-        c.fillText(z.label, z.x, zy);
+        c.strokeStyle = 'rgba(0,0,0,0.5)';
+        c.lineWidth = 4;
+        c.strokeText(t('penalties.reflex.ready'), W / 2, GOAL_Y + GOAL_H * 0.45);
+        c.fillStyle = `rgba(255,200,50,${pulse})`;
+        c.fillText(t('penalties.reflex.ready'), W / 2, GOAL_Y + GOAL_H * 0.45);
+        c.restore();
+      } else if (reflex.phase === 'flashing' && reflex.active) {
+        // Draw the crosshair at the target position
+        const tx = reflex.targetX;
+        const ty = reflex.targetY;
+        const elapsed = Date.now() - reflex.flashStart;
+        const flashProg = elapsed / reflex.flashDuration;
+        const pulse = 0.7 + 0.3 * Math.sin(time * 12);
+        const fadeIn = Math.min(flashProg * 4, 1); // quick fade in
+        const alpha = fadeIn * pulse;
 
-        c.font = 'bold 12px system-ui';
-        c.fillStyle = `rgba(255,255,255,${0.3 + pulse * 0.2})`;
-        c.fillText(z.sub, z.x, zy + 35);
+        // Outer glow
+        const glow = c.createRadialGradient(tx, ty, 0, tx, ty, 50);
+        glow.addColorStop(0, `rgba(255,255,80,${0.25 * alpha})`);
+        glow.addColorStop(0.5, `rgba(255,200,0,${0.1 * alpha})`);
+        glow.addColorStop(1, 'rgba(255,200,0,0)');
+        c.fillStyle = glow;
+        c.beginPath(); c.arc(tx, ty, 50, 0, Math.PI * 2); c.fill();
+
+        // Outer ring (pulsing)
+        const ringSize = 24 + 4 * Math.sin(time * 10);
+        c.strokeStyle = `rgba(255,255,100,${0.9 * alpha})`;
+        c.lineWidth = 3;
+        c.beginPath(); c.arc(tx, ty, ringSize, 0, Math.PI * 2); c.stroke();
+
+        // Inner ring
+        c.strokeStyle = `rgba(255,255,255,${0.8 * alpha})`;
+        c.lineWidth = 2;
+        c.beginPath(); c.arc(tx, ty, 10, 0, Math.PI * 2); c.stroke();
+
+        // Cross lines
+        const s = 30;
+        const g = 12;
+        c.strokeStyle = `rgba(255,255,100,${0.85 * alpha})`;
+        c.lineWidth = 2.5;
+        c.beginPath(); c.moveTo(tx - s, ty); c.lineTo(tx - g, ty); c.stroke();
+        c.beginPath(); c.moveTo(tx + g, ty); c.lineTo(tx + s, ty); c.stroke();
+        c.beginPath(); c.moveTo(tx, ty - s); c.lineTo(tx, ty - g); c.stroke();
+        c.beginPath(); c.moveTo(tx, ty + g); c.lineTo(tx, ty + s); c.stroke();
+
+        // Center dot
+        c.fillStyle = `rgba(255,255,255,${alpha})`;
+        c.beginPath(); c.arc(tx, ty, 3, 0, Math.PI * 2); c.fill();
+
+        // "NOW!" text
+        c.save();
+        c.font = 'bold 18px system-ui';
+        c.textAlign = 'center'; c.textBaseline = 'middle';
+        c.strokeStyle = 'rgba(0,0,0,0.6)';
+        c.lineWidth = 3;
+        c.strokeText(t('penalties.reflex.now'), W / 2, GOAL_BOTTOM + 30);
+        c.fillStyle = `rgba(255,80,80,${alpha})`;
+        c.fillText(t('penalties.reflex.now'), W / 2, GOAL_BOTTOM + 30);
+        c.restore();
       }
     }
 
@@ -947,6 +1112,7 @@ export function PenaltiesGame() {
     if (ph === 'aiming' || ph === 'saving') {
       c.save();
       const roleText = ph === 'aiming' ? t('penalties.youShoot') : t('penalties.youSave');
+      // Note: youSave text updated via i18n to reflect reflex mechanic
 
       // Background pill
       c.font = 'bold 15px system-ui';
@@ -1391,7 +1557,7 @@ export function PenaltiesGame() {
           className="w-full rounded-xl border"
           style={{
             borderColor: 'var(--border)',
-            cursor: phase === 'aiming' ? 'crosshair' : phase === 'saving' ? 'pointer' : 'default',
+            cursor: phase === 'aiming' ? 'crosshair' : phase === 'saving' ? 'crosshair' : 'default',
           }}
         />
 

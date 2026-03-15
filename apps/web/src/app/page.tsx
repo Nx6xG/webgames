@@ -673,6 +673,17 @@ export default function HomePage() {
   const showMultiplayer  = filter !== 'singleplayer';
   const showSingleplayer = filter !== 'multiplayer';
 
+  // Favorites: combined list of favorited multiplayer + singleplayer games
+  const favoriteMultiplayer = useMemo(() => {
+    return Object.values(webRegistry).filter((e) => favSet.has(e.manifest.id));
+  }, [favSet]);
+
+  const favoriteSingleplayer = useMemo(() => {
+    return SINGLEPLAYER_GAMES.filter((g) => favSet.has(g.id));
+  }, [favSet]);
+
+  const hasFavorites = favoriteMultiplayer.length > 0 || favoriteSingleplayer.length > 0;
+
   // Search filtering
   const searchLower = search.trim().toLowerCase();
 
@@ -858,6 +869,39 @@ export default function HomePage() {
           )}
         </div>
       </div>
+
+      {/* Favorites section */}
+      {hasFavorites && !searchLower && (
+        <section className="max-w-5xl mx-auto px-6 pb-12">
+          <h2 className="text-xs font-semibold uppercase tracking-widest text-amber-500/80 mb-6 flex items-center gap-2">
+            <span>⭐</span> {t('lobby.favorites')}
+          </h2>
+          <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-4">
+            {favoriteMultiplayer.map((entry) => (
+              <GameCard
+                key={`fav-${entry.manifest.id}`}
+                entry={entry}
+                overlayData={statsMap?.get(entry.manifest.id) ?? null}
+                badge={badgeMap.get(entry.manifest.id) ?? null}
+                onOpenModal={() => openMultiplayerModal(entry)}
+                isFav={favSet.has(entry.manifest.id)}
+                onToggleFav={() => handleToggleFavorite(entry.manifest.id)}
+              />
+            ))}
+            {favoriteSingleplayer.map((game) => (
+              <SingleplayerCard
+                key={`fav-${game.id}`}
+                game={game}
+                overlayData={statsMap?.get(game.id) ?? null}
+                badge={badgeMap.get(game.id) ?? null}
+                onOpenModal={() => openSingleplayerModal(game)}
+                isFav={favSet.has(game.id)}
+                onToggleFav={() => handleToggleFavorite(game.id)}
+              />
+            ))}
+          </div>
+        </section>
+      )}
 
       {/* Multiplayer games grid */}
       {showMultiplayer && filteredMultiplayer.length > 0 && (

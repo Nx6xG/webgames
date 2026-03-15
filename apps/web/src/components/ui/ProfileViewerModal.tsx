@@ -80,7 +80,7 @@ export function ProfileViewerModal({ profile, onClose, loading, userId }: Profil
     >
       <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" />
 
-      <div className="relative w-[min(92vw,420px)] rounded-xl border border-zinc-700 bg-zinc-900 shadow-2xl overflow-hidden max-sm:w-full max-sm:mx-3">
+      <div className="relative w-[min(92vw,420px)] rounded-xl border border-zinc-700 bg-zinc-900 shadow-2xl max-sm:w-full max-sm:mx-3">
         {/* Close button */}
         <button
           onClick={onClose}
@@ -93,7 +93,7 @@ export function ProfileViewerModal({ profile, onClose, loading, userId }: Profil
         </button>
 
         {/* Banner */}
-        <div className={`${bannerClass} h-20`} />
+        <div className={`${bannerClass} h-20 rounded-t-xl`} />
 
         {/* Card body */}
         <div className={`${cardBgClass} px-5 pb-5`}>

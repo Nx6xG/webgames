@@ -1305,7 +1305,7 @@ export function DoodleJumpGame() {
                   {t('skinShop.title') !== 'skinShop.title' ? t('skinShop.title') : 'Shop'}
                 </button>
               </div>
-              {/* Boost toggle / buy */}
+              {/* Boost toggle / buy / locked */}
               {boostOwned ? (
                 <button
                   onClick={(e) => { e.stopPropagation(); toggleBoost(); }}
@@ -1335,7 +1335,13 @@ export function DoodleJumpGame() {
                   <span>{t('doodlejump.boost.name')}</span>
                   <span className="flex items-center gap-0.5">● {BOOST_PRICE}</span>
                 </button>
-              ) : null}
+              ) : (
+                <div className="mt-2 flex items-center gap-2 px-3 py-1.5 rounded-lg border border-zinc-800 bg-zinc-900/40 text-xs font-semibold text-zinc-600">
+                  <span>🚀</span>
+                  <span>{t('doodlejump.boost.name')}</span>
+                  <span className="text-[10px]">🔒 {t('doodlejump.boost.unlock')}</span>
+                </div>
+              )}
               <p className="text-[11px] text-zinc-500 mt-3">
                 {t('doodlejump.hint') !== 'doodlejump.hint' ? t('doodlejump.hint') : 'Arrow keys / A,D to move'}
               </p>
@@ -1392,7 +1398,7 @@ export function DoodleJumpGame() {
                   {t('skinShop.title') !== 'skinShop.title' ? t('skinShop.title') : 'Shop'}
                 </button>
               </div>
-              {/* Boost toggle / buy */}
+              {/* Boost toggle / buy / locked */}
               {boostOwned ? (
                 <button
                   onClick={(e) => { e.stopPropagation(); toggleBoost(); }}
@@ -1422,7 +1428,13 @@ export function DoodleJumpGame() {
                   <span>{t('doodlejump.boost.name')}</span>
                   <span className="flex items-center gap-0.5">● {BOOST_PRICE}</span>
                 </button>
-              ) : null}
+              ) : (
+                <div className="mb-3 flex items-center gap-2 px-3 py-1.5 rounded-lg border border-zinc-800 bg-zinc-900/40 text-xs font-semibold text-zinc-600">
+                  <span>🚀</span>
+                  <span>{t('doodlejump.boost.name')}</span>
+                  <span className="text-[10px]">🔒 {t('doodlejump.boost.unlock')}</span>
+                </div>
+              )}
               <div className="w-full max-w-[280px]">
                 <ScoreboardPanel
                   gameId="doodlejump"

@@ -66,11 +66,11 @@ export function DailyChallengesWidget() {
 
   return (
     <section className="max-w-5xl mx-auto px-6 pb-10">
-      <div className="rounded-2xl border border-[var(--cardBorder)] bg-[var(--card)] overflow-hidden">
+      <div className="rounded-2xl border border-[var(--cardBorder)] bg-[var(--card)]">
         {/* Header — always visible, clickable to toggle */}
         <button
           onClick={toggle}
-          className="w-full flex items-center gap-3 p-5 pb-4 text-left cursor-pointer hover:bg-white/[0.02] transition-colors"
+          className="w-full flex items-center gap-3 p-5 pb-4 text-left cursor-pointer hover:bg-white/[0.02] transition-colors rounded-t-2xl"
         >
           <span className="text-lg">🎯</span>
           <h2 className="text-sm font-bold uppercase tracking-wider text-zinc-300 flex-1">

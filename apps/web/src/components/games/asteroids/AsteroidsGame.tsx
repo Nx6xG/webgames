@@ -98,16 +98,17 @@ interface GameState {
 const W = 800;
 const H = 600;
 const SHIP_SIZE = 15;
-const SHIP_ACCEL = 0.15;
-const SHIP_FRICTION = 0.99;
+const SHIP_ACCEL = 0.12;
+const SHIP_FRICTION = 0.985;
 const SHIP_TURN_SPEED = 0.065;
 const BULLET_SPEED = 7;
 const BULLET_LIFE = 800; // ms
 const MAX_BULLETS = 5;
 const INVULN_TIME = 2500; // ms
 const STAR_COUNT = 120;
-const POWERUP_SPAWN_CHANCE = 0.25; // 25% from large asteroids
+const POWERUP_SPAWN_CHANCE = 0.15; // 15% from large asteroids
 const POWERUP_MEDIUM_CHANCE = 0.10; // 10% from medium asteroids
+const POWERUP_SMALL_CHANCE = 0.04; // 4% from small asteroids
 const POWERUP_LIFETIME = 8000; // ms before despawn
 const POWERUP_ACTIVE_DURATION = 10000; // ms active
 const POWERUP_RADIUS = 14;
@@ -625,10 +626,12 @@ export function AsteroidsGame() {
           if (si === 0) sfx.bigExplosionSound();
           else sfx.explosionSound();
 
-          // Power-up spawn (25% from large, 10% from medium asteroids)
+          // Power-up spawn (15% from large, 10% from medium, 4% from small asteroids)
           if (si === 0 && Math.random() < POWERUP_SPAWN_CHANCE) {
             game.powerUps.push(spawnPowerUp(a.pos));
           } else if (si === 1 && Math.random() < POWERUP_MEDIUM_CHANCE) {
+            game.powerUps.push(spawnPowerUp(a.pos));
+          } else if (si === 2 && Math.random() < POWERUP_SMALL_CHANCE) {
             game.powerUps.push(spawnPowerUp(a.pos));
           }
 
