@@ -1367,20 +1367,6 @@ export function WhackAMoleGame() {
           ctx.globalAlpha = 1;
         }
 
-        if (mole && mole.progress > 0) {
-          const moleY = y - MOLE_RADIUS * mole.progress;
-          const clipBottom = y;
-
-          ctx.save();
-          ctx.beginPath();
-          ctx.rect(x - HOLE_RX - 5, 0, (HOLE_RX + 5) * 2, clipBottom);
-          ctx.clip();
-
-          drawMole(ctx, x, moleY, mole, timestamp);
-
-          ctx.restore();
-        }
-
         // Hole front half (3D)
         ctx.fillStyle = holeGrad;
         ctx.beginPath();
@@ -1403,6 +1389,21 @@ export function WhackAMoleGame() {
         ctx.beginPath();
         ctx.ellipse(x, y - 1, HOLE_RX - 2, HOLE_RY - 1, 0, Math.PI, 0);
         ctx.stroke();
+
+        // Mole — drawn after hole rim but before front dirt so it appears in front of the hole
+        if (mole && mole.progress > 0) {
+          const moleY = y - MOLE_RADIUS * mole.progress;
+          const clipBottom = y + HOLE_RY;
+
+          ctx.save();
+          ctx.beginPath();
+          ctx.rect(x - HOLE_RX - 5, 0, (HOLE_RX + 5) * 2, clipBottom);
+          ctx.clip();
+
+          drawMole(ctx, x, moleY, mole, timestamp);
+
+          ctx.restore();
+        }
 
         // Front dirt mound (layered for depth)
         const frontDirtGrad = ctx.createLinearGradient(x, y + 6, x, y + 28);

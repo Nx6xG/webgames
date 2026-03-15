@@ -658,8 +658,10 @@ export function GeometryDashGame() {
     ctx.globalAlpha = 1;
 
     // ── Cube (player) ───────────────────────────────────────────────
+    ctx.globalAlpha = 1; // ensure full opacity after trail particles
     if (deathAnimRef.current <= 0) {
       ctx.save();
+      ctx.globalAlpha = 1;
       const cx = CUBE_X + CUBE_SIZE / 2;
       const cy = cubeY + CUBE_SIZE / 2;
       ctx.translate(cx, cy);

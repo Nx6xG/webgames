@@ -277,18 +277,19 @@ function ActiveColorIndicator({ color, compact }: { color: UnoColor; compact: bo
 function ColorPicker({ onPick, pt }: { onPick: (color: UnoColor) => void; pt: (k: string) => string }) {
   const colors: UnoColor[] = ['red', 'yellow', 'green', 'blue'];
   return (
-    <div className="fixed inset-0 z-50 flex items-end justify-center pb-48 sm:pb-56" style={{ backgroundColor: 'rgba(0,0,0,0.50)', backdropFilter: 'blur(4px)', pointerEvents: 'auto' }}>
+    <div className="fixed inset-0 z-50 flex items-center justify-center" style={{ backgroundColor: 'rgba(0,0,0,0.35)', pointerEvents: 'auto' }}>
       <div
-        className="flex flex-col items-center gap-4 p-8 rounded-3xl"
+        className="flex flex-col items-center gap-3 p-6 rounded-2xl"
         style={{
           background: 'linear-gradient(145deg, rgba(39,39,42,0.97) 0%, rgba(24,24,27,0.98) 100%)',
           border: '1px solid rgba(63,63,70,0.5)',
           boxShadow: '0 25px 60px rgba(0,0,0,0.6), 0 0 1px rgba(255,255,255,0.05)',
           animation: 'uno-pop 0.25s cubic-bezier(0.34, 1.56, 0.64, 1)',
+          marginBottom: '20vh',
         }}
       >
-        <p className="text-lg font-black text-zinc-100 tracking-tight">{pt('uno.chooseColor')}</p>
-        <div className="grid grid-cols-4 gap-3">
+        <p className="text-base font-black text-zinc-100 tracking-tight">{pt('uno.chooseColor')}</p>
+        <div className="grid grid-cols-4 gap-2">
           {colors.map((clr) => {
             const c = CARD_COLORS[clr];
             return (
@@ -297,14 +298,14 @@ function ColorPicker({ onPick, pt }: { onPick: (color: UnoColor) => void; pt: (k
                 onClick={() => onPick(clr)}
                 className="cursor-pointer transition-all duration-200 hover:scale-110 active:scale-100"
                 style={{
-                  width: 72,
-                  height: 72,
-                  borderRadius: 16,
+                  width: 56,
+                  height: 56,
+                  borderRadius: 14,
                   background: `linear-gradient(145deg, ${c.bg}, ${c.darkBg})`,
                   border: `2px solid ${c.accent}`,
                   boxShadow: `0 8px 24px ${c.shadow}, inset 0 1px 0 rgba(255,255,255,0.15)`,
                   color: c.text,
-                  fontSize: 18,
+                  fontSize: 16,
                   fontWeight: 900,
                 }}
               >
