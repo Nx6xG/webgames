@@ -19,6 +19,15 @@ export const MULTIPLAYER_GAME_IDS = new Set([
   'liarsbar',
 ]);
 
+/** Get bonus XP for daily play streak (consecutive days completing all dailies). */
+export function getPlayStreakBonus(streakDays: number): number {
+  if (streakDays >= 30) return 50;   // +50 XP
+  if (streakDays >= 14) return 30;   // +30 XP
+  if (streakDays >= 7) return 20;    // +20 XP
+  if (streakDays >= 3) return 10;    // +10 XP
+  return 0;
+}
+
 /** Get base match XP reward for a game event. */
 export function getMatchXpReward(gameId: string, won: boolean): number {
   if (MULTIPLAYER_GAME_IDS.has(gameId)) {

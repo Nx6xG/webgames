@@ -346,16 +346,16 @@ export const messages: Record<Lang, Record<string, string>> = {
     'lobby.games.chess.title':     'Schach',
 
     // ── Game descriptions ──────────────────────────────────────────────────
-    'lobby.games.tictactoe.desc':  'Klassisches 3×3 Strategiespiel. Drei in einer Reihe gewinnen!',
-    'lobby.games.connect4.desc':   'Steine in das 7×6 Raster fallen lassen. Vier in einer Reihe gewinnen!',
-    'lobby.games.rps.desc':        'Wähle deine Waffe im gleichzeitigen Best-of-3-Duell!',
-    'lobby.games.chess.desc':      'Klassisches Strategiespiel. Überliste deinen Gegner und setze Schachmatt.',
+    'lobby.games.tictactoe.desc':  'Klassisches 3×3 Strategiespiel. Setze drei Symbole in eine Reihe – horizontal, vertikal oder diagonal. Einfach zu lernen, schwer zu meistern!',
+    'lobby.games.connect4.desc':   'Lass Steine in das 7×6 Raster fallen und bilde als Erster eine Viererreihe. Blockiere deinen Gegner und plane mehrere Züge voraus!',
+    'lobby.games.rps.desc':        'Schere, Stein, Papier – wähle gleichzeitig deine Waffe! Best-of-Serie oder Showdown-Modus mit Sudden Death. Wer durchschaut den Gegner?',
+    'lobby.games.chess.desc':      'Vollständiges Schach mit allen Regeln: Rochade, En Passant, Bauernumwandlung, 50-Züge-Regel. Exportiere deine Partien als PGN und spiele sie im Replay nach!',
     'lobby.games.liarsbar.title':  "Liar's Deck",
-    'lobby.games.liarsbar.desc':   'Bluffe mit verdeckten Karten. Wirst du erwischt, verlierst du ein Leben!',
+    'lobby.games.liarsbar.desc':   'Bluffe mit verdeckten Karten – lege angeblich passende Karten, aber schummle wenn nötig! Wirst du beim Lügen erwischt, verlierst du ein Leben. 2-6 Spieler!',
     'lobby.games.curvefever.title': 'Curve Fever',
-    'lobby.games.curvefever.desc':  'Überlebe als Letzter! Steuere deine Schlange und weiche den Spuren aus.',
+    'lobby.games.curvefever.desc':  'Steuere deine Schlange in der Arena und überlebe als Letzter! Sammle Power-Ups wie Geist, Schild, Speed und den neuen Wandportal. Bis zu 6 Spieler mit Bots!',
     'lobby.games.uno.title':        'UNO',
-    'lobby.games.uno.desc':         'Klassisches Kartenspiel! Farben und Zahlen zuordnen, Aktionskarten spielen und als Erster alle Karten ablegen.',
+    'lobby.games.uno.desc':         'Das beliebte Kartenspiel mit Farben, Zahlen und Aktionskarten! Ziehe 2, Richtungswechsel, Aussetzen und Wilde Karten. Hausregeln wie Karten stapeln einstellbar. 2-4 Spieler!',
 
     // ── Category tags ──────────────────────────────────────────────────────
     'lobby.tags.classic':          'Klassiker',
@@ -372,27 +372,27 @@ export const messages: Record<Lang, Record<string, string>> = {
 
     // ── 2048 ───────────────────────────────────────────────────────────────
     'lobby.games.2048.title':      '2048',
-    'lobby.games.2048.desc':       'Schiebe Kacheln zusammen und erreiche 2048.',
+    'lobby.games.2048.desc':       'Schiebe Zahlenkacheln zusammen um sie zu verdoppeln. Plane strategisch und erreiche die 2048-Kachel – oder noch höher!',
 
     // ── Snake ──────────────────────────────────────────────────────────────
     'lobby.games.snake.title':     'Snake',
-    'lobby.games.snake.desc':      'Futtere dich satt, werde länger und weiche Hindernissen aus.',
+    'lobby.games.snake.desc':      'Steuere die Schlange, futtere Äpfel und werde immer länger. Weiche Wänden und deinem eigenen Schwanz aus! Klassiker mit Swipe-Steuerung.',
 
     // ── TicTacToe Solo ─────────────────────────────────────────────────────
     'lobby.games.tictactoe-solo.title': 'TicTacToe',
-    'lobby.games.tictactoe-solo.desc':  'Lokal PvP oder gegen KI. Drei in einer Reihe gewinnt!',
+    'lobby.games.tictactoe-solo.desc':  'Spiele lokal zu zweit oder gegen die KI. Drei Schwierigkeitsstufen – schaffst du es die harte KI zu schlagen?',
 
     // ── Sudoku ─────────────────────────────────────────────────────────────
     'lobby.games.sudoku.title':    'Sudoku',
-    'lobby.games.sudoku.desc':     'Fülle das Raster, sodass jede Zeile, Spalte und jedes Kästchen die Zahlen 1–9 enthält.',
+    'lobby.games.sudoku.desc':     'Fülle das 9×9 Raster so, dass jede Zeile, Spalte und jedes 3×3 Feld die Zahlen 1-9 enthält. Vier Schwierigkeitsstufen von Leicht bis Experte!',
 
     // ── Tetris ───────────────────────────────────────────────────────────
     'lobby.games.tetris.title':    'Tetris',
-    'lobby.games.tetris.desc':     'Stapele fallende Blöcke und räume Reihen ab – Arcade-Klassiker!',
+    'lobby.games.tetris.desc':     'Stapele fallende Blöcke und räume komplette Reihen ab. Je mehr Reihen gleichzeitig, desto mehr Punkte! Mit Hold-Funktion und Vorschau.',
     'lobby.games.flappy.title':    'Flappy Bird',
-    'lobby.games.flappy.desc':     'Fliege durch die Röhren – ein Tap reicht!',
+    'lobby.games.flappy.desc':     'Tippe zum Fliegen und navigiere durch die Röhren. Einfaches Prinzip, aber süchtig machende Herausforderung! Wie weit kommst du?',
     'lobby.games.pong.title':      'Pong',
-    'lobby.games.pong.desc':       'Klassisches Tischtennis gegen den Computer – wer hat die besseren Reflexe?',
+    'lobby.games.pong.desc':       'Das Ur-Videospiel! Steuere dein Paddle und schlage den Ball am Gegner vorbei. Touch-Steuerung auf Mobilgeräten verfügbar.',
     'pong.start':                  'Starten',
     'pong.you':                    'Du',
     'pong.bot':                    'Bot',
@@ -414,7 +414,7 @@ export const messages: Record<Lang, Record<string, string>> = {
     'pong.pauseHint':              'Drücke P zum Fortsetzen',
     'modal.controls.pong':         'W/S oder Pfeiltasten zum Bewegen',
     'lobby.games.breakout.title':  'Breakout',
-    'lobby.games.breakout.desc':   'Zerstöre alle Blöcke mit dem Ball – Arcade-Klassiker!',
+    'lobby.games.breakout.desc':   'Zerstöre alle farbigen Blöcke mit dem Ball und Paddle. Verschiedene Blocktypen und Power-Ups für extra Spaß!',
     'breakout.start':              'Starten',
     'breakout.subtitle':           'Zerstöre alle Blöcke!',
     'breakout.win':                'Gewonnen!',
@@ -458,7 +458,7 @@ export const messages: Record<Lang, Record<string, string>> = {
     'breakout.obj.hardWin':        'Auf Schwer gewinnen',
     'modal.controls.breakout':     'Maus oder Pfeiltasten zum Bewegen',
     'lobby.games.minesweeper.title': 'Minesweeper',
-    'lobby.games.minesweeper.desc':  'Finde alle Minen!',
+    'lobby.games.minesweeper.desc':  'Decke Felder auf und finde alle versteckten Minen anhand der Zahlhinweise. Markiere verdächtige Felder mit Flaggen. Drei Feldgrößen!',
     'minesweeper.subtitle':        'Decke alle sicheren Felder auf!',
     'minesweeper.mines':           'Minen',
     'minesweeper.diff.easy':       'Leicht',
@@ -480,7 +480,7 @@ export const messages: Record<Lang, Record<string, string>> = {
     'modal.controls.minesweeper':  'Linksklick aufdecken, Rechtsklick flaggen',
     // ── Doodle Jump ──────────────────────────────────────────────────────
     'lobby.games.doodlejump.title': 'Doodle Jump',
-    'lobby.games.doodlejump.desc':  'Spring so hoch wie möglich!',
+    'lobby.games.doodlejump.desc':  'Spring von Plattform zu Plattform so hoch wie möglich! Bewegende und zerbrechliche Plattformen machen es immer schwerer.',
     'modal.controls.doodlejump':    'Pfeiltasten oder A/D zum Bewegen',
     'doodlejump.start':             'Start',
     'doodlejump.retry':             'Nochmal',
@@ -488,9 +488,10 @@ export const messages: Record<Lang, Record<string, string>> = {
     'doodlejump.best':              'Rekord',
     'doodlejump.gameOver':          'Spiel vorbei',
     'doodlejump.tapToStart':        'Drücke zum Starten',
+    'doodlejump.boost.name':        'Start bei 100',
     // ── Crossy Road ─────────────────────────────────────────────────────
     'lobby.games.crossyroad.title': 'Crossy Road',
-    'lobby.games.crossyroad.desc':  'Überquere Straßen, Flüsse & Gleise!',
+    'lobby.games.crossyroad.desc':  'Überquere endlose Straßen, Flüsse und Gleise. Timing ist alles – ein falscher Schritt und es ist vorbei!',
     'modal.controls.crossyroad':    'Pfeiltasten oder WASD zum Hüpfen',
     'modal.controls.typingtest':    'Einfach lostippen. Kein Zurück — Fehler werden rot markiert.',
     'crossyroad.start':             'Start',
@@ -516,7 +517,7 @@ export const messages: Record<Lang, Record<string, string>> = {
     'crossyroad.skin.golden':       'Gold',
     // ── Mahjong ─────────────────────────────────────────────────────────
     'lobby.games.mahjong.title':    'Mahjong',
-    'lobby.games.mahjong.desc':     'Finde passende Paare im Stapel!',
+    'lobby.games.mahjong.desc':     'Finde passende Paare freier Steine im Stapel. Nur Steine ohne Nachbarn links/rechts und ohne Stein darüber sind spielbar!',
     'game.name.mahjong':            'Mahjong Solitaire',
     'mahjong.desc':                 'Entferne alle Steine, indem du passende freie Paare findest.',
     'mahjong.chooseLayout':         'Layout wählen',
@@ -617,7 +618,7 @@ export const messages: Record<Lang, Record<string, string>> = {
 
     // ── Pac-Man ─────────────────────────────────────────────────────────────
     'lobby.games.pacman.title':     'Pac-Man',
-    'lobby.games.pacman.desc':      'Friss alle Punkte, weiche Geistern aus und sammle Power-Pellets!',
+    'lobby.games.pacman.desc':      'Friss alle Punkte im Labyrinth und weiche den Geistern aus! Power-Pellets machen die Geister verletzlich. Level werden immer schwerer!',
     'pacman.difficulty':            'Schwierigkeit',
     'pacman.easy':                  'Leicht',
     'pacman.medium':                'Mittel',
@@ -630,7 +631,7 @@ export const messages: Record<Lang, Record<string, string>> = {
 
     // ── Penalties ────────────────────────────────────────────────────────────
     'lobby.games.penalties.title':  'Elfmeterschießen',
-    'lobby.games.penalties.desc':   'Schieß Elfmeter und halte als Torwart!',
+    'lobby.games.penalties.desc':   'Abwechselnd Elfmeter schießen und halten! Wähle Ecke und Timing – reagiere blitzschnell als Torwart.',
     'penalties.title':              'Elfmeterschießen',
     'penalties.difficulty':         'Schwierigkeit',
     'penalties.easy':               'Leicht',
@@ -657,7 +658,7 @@ export const messages: Record<Lang, Record<string, string>> = {
 
     // ── Geometry Dash ───────────────────────────────────────────────────────
     'lobby.games.geometrydash.title': 'Geometry Dash',
-    'lobby.games.geometrydash.desc':  'Springe, weiche aus und überlebe den Rhythmus!',
+    'lobby.games.geometrydash.desc':  'Springe durch 10 handdesignte Level mit steigender Schwierigkeit! Weiche Stacheln, Blöcken und Abgründen aus. Schalte neue Level frei!',
     'geometrydash.difficulty':        'Schwierigkeit',
     'geometrydash.easy':              'Leicht',
     'geometrydash.medium':            'Mittel',
@@ -666,10 +667,29 @@ export const messages: Record<Lang, Record<string, string>> = {
     'geometrydash.progress':          'Fortschritt',
     'geometrydash.attempts':          'Versuche',
     'geometrydash.jump':              'Springen',
+    'geometrydash.selectLevel':       'Level wählen',
+    'geometrydash.level.1':           'Stereo Madness',
+    'geometrydash.level.2':           'Back on Track',
+    'geometrydash.level.3':           'Polargeist',
+    'geometrydash.level.4':           'Dry Out',
+    'geometrydash.level.5':           'Base After Base',
+    'geometrydash.level.6':           'Can\'t Let Go',
+    'geometrydash.level.7':           'Jumper',
+    'geometrydash.level.8':           'Time Machine',
+    'geometrydash.level.9':           'Cycles',
+    'geometrydash.level.10':          'xStep',
+    'geometrydash.locked':            'Gesperrt',
+    'geometrydash.levelComplete':     'Level geschafft!',
+    'geometrydash.nextLevel':         'Nächstes Level',
+    'geometrydash.endless':           'Endlos-Modus',
+    'geometrydash.best':              'Bestleistung',
+    'geometrydash.stars':             'Sterne',
+    'geometrydash.backToLevels':      'Zurück',
+    'geometrydash.levelPrefix':       'Level',
 
     // ── Typing Test ────────────────────────────────────────────────────────
     'lobby.games.typingtest.title': 'Tipptest',
-    'lobby.games.typingtest.desc':  'Teste deine Tippgeschwindigkeit und Genauigkeit!',
+    'lobby.games.typingtest.desc':  'Teste deine Tippgeschwindigkeit in WPM und Genauigkeit. Verschiedene Textlängen und Schwierigkeiten – verbessere dich mit jedem Versuch!',
     'typingtest.duration':          'Dauer',
     'typingtest.15s':               '15s',
     'typingtest.30s':               '30s',
@@ -688,7 +708,7 @@ export const messages: Record<Lang, Record<string, string>> = {
 
     // ── Fruit Ninja ────────────────────────────────────────────────────────
     'lobby.games.fruitninja.title': 'Fruit Ninja',
-    'lobby.games.fruitninja.desc':  'Zerschneide Früchte, weiche Bomben aus!',
+    'lobby.games.fruitninja.desc':  'Zerschneide fliegende Früchte mit Wischbewegungen! Baue Combos auf für Bonuspunkte, aber Vorsicht vor Bomben – die bedeuten Game Over!',
     'fruitninja.subtitle':          'Zerschneide alle Früchte!',
     'fruitninja.difficulty':        'Schwierigkeit',
     'fruitninja.easy':              'Leicht',
@@ -717,7 +737,7 @@ export const messages: Record<Lang, Record<string, string>> = {
 
     // ── Asteroids ───────────────────────────────────────────────────────────
     'lobby.games.asteroids.title':  'Asteroids',
-    'lobby.games.asteroids.desc':   'Zerstöre Asteroiden im Weltraum!',
+    'lobby.games.asteroids.desc':   'Zerstöre Asteroiden und sammle Power-Ups wie Schild, Homing-Raketen und Zeitlupe! Alle 5 Wellen erscheint ein Boss-Kampf. Wie viele Wellen schaffst du?',
     'asteroids.difficulty':         'Schwierigkeit',
     'asteroids.easy':               'Leicht',
     'asteroids.medium':             'Mittel',
@@ -728,6 +748,9 @@ export const messages: Record<Lang, Record<string, string>> = {
     'asteroids.totalDestroyed':     'Asteroiden zerstört',
     'asteroids.fire':               'Feuer',
     'asteroids.move':               'Bewegen',
+    'asteroids.boss':               'BOSS',
+    'asteroids.bossDefeated':       'Boss besiegt!',
+    'asteroids.bossWave':           'Boss-Welle',
 
     // ── Liar's Deck ──────────────────────────────────────────────────────────
     'liarsbar.play':               'Spielen',
@@ -807,7 +830,7 @@ export const messages: Record<Lang, Record<string, string>> = {
     'curvefever.powerup.shield':     'Schild',
     'curvefever.powerup.shield.desc':'Schützt dich einmalig vor einer Kollision',
     'curvefever.powerup.phase':      'Geist',
-    'curvefever.powerup.phase.desc': 'Du durchquerst Spuren für 1 Sekunde',
+    'curvefever.powerup.phase.desc': 'Du durchquerst Spuren für 2 Sekunden',
     'curvefever.powerup.slow':       'Verlangsamung',
     'curvefever.powerup.slow.desc':  'Verlangsamt alle Gegner für 3 Sekunden',
     'curvefever.powerup.thin':       'Dünn',
@@ -816,6 +839,8 @@ export const messages: Record<Lang, Record<string, string>> = {
     'curvefever.powerup.reverse.desc':'Kehrt die Steuerung aller Gegner für 3s um',
     'curvefever.powerup.big':        'Verdicken',
     'curvefever.powerup.big.desc':   'Verdickt die Trails aller Gegner für 3s',
+    'curvefever.powerup.warp':       'Wandportal',
+    'curvefever.powerup.warp.desc':  'Durchquere Wände und erscheine auf der Gegenseite für 3s',
     'curvefever.disabled':           'Deaktiviert',
     'curvefever.obstacles':          'Hindernisse',
     'curvefever.teamMode':           'Team-Modus',
@@ -895,6 +920,8 @@ export const messages: Record<Lang, Record<string, string>> = {
     'uno.rules.playDrawnCard': 'Gezogene Karte direkt legen',
     'uno.rules.drawUntilPlayable': 'Ziehen bis es passt',
     'uno.rules.forcedPlay': 'Spielpflicht',
+    'uno.rules.stackSameCards': 'Gleiche Karten stapeln',
+    'uno.stackPlayed': 'Alle spielen',
 
     // ── Rooms page ─────────────────────────────────────────────────────────
     'rooms.title':               'Offene Räume',
@@ -1049,6 +1076,7 @@ export const messages: Record<Lang, Record<string, string>> = {
     'game.reached2048':              'Du hast 2048 erreicht!',
     'game.sound.mute':               'Ton aus',
     'game.sound.unmute':             'Ton an',
+    'game.sound.volume':             'Lautst\u00e4rke',
 
     // ── Snake ─────────────────────────────────────────────────────────────
     'snake.controls':                'Pfeiltasten oder WASD zum Bewegen · Friss Futter um zu wachsen · Vermeide Wände und dich selbst',
@@ -1140,7 +1168,7 @@ export const messages: Record<Lang, Record<string, string>> = {
 
     // ── Battleship ─────────────────────────────────────────────────────────
     'lobby.games.battleship.title':    'Schiffe versenken',
-    'lobby.games.battleship.desc':     'Verstecke deine Flotte und versenke den Gegner!',
+    'lobby.games.battleship.desc':     'Platziere deine Flotte verdeckt und feuere auf das gegnerische Feld. Versenke alle Schiffe bevor der Gegner dich findet! Fog-of-War schützt Positionen.',
 
     'battleship.setup.title':          'Schiffe platzieren',
     'battleship.setup.placing':        'Platziere:',
@@ -1218,6 +1246,7 @@ export const messages: Record<Lang, Record<string, string>> = {
     'chat.room':            'Raum',
     'chat.send':            'Senden',
     'chat.placeholder':     'Nachricht…',
+    'chat.spectator':       'Zuschauer',
 
     // ── Online presence ────────────────────────────────────────────────────
     'online.title':         'Online',
@@ -1611,6 +1640,9 @@ export const messages: Record<Lang, Record<string, string>> = {
     'daily.bonus':                        'Bonus',
     'daily.bonusHint':                    'Schließe alle ab für +50 XP Bonus & Streak',
     'daily.streak':                       'Tage-Streak',
+    'daily.streakBonus':                  'Streak-Bonus',
+    'game.favorite':                      'Favorit',
+    'game.favorites':                     'Favoriten',
     'daily.puzzle':                       'Tages-Rätsel',
     'daily.puzzleHint':                   'Medium',
     'daily.gameOfTheDay':                 'Spiel des Tages',
@@ -1897,7 +1929,7 @@ export const messages: Record<Lang, Record<string, string>> = {
 
     // ── Whack-a-Mole ──────────────────────────────────────────────────────────
     'lobby.games.whackamole.title': 'Whack-a-Mole',
-    'lobby.games.whackamole.desc':  'Triff die Maulwürfe bevor sie verschwinden!',
+    'lobby.games.whackamole.desc':  'Triff die auftauchenden Maulwürfe in 6 verschiedenen Wellen! Von Normal über Goldrausch bis Chaos – jede Welle bringt neue Herausforderungen.',
     'whackamole.difficulty':        'Schwierigkeit',
     'whackamole.easy':              'Leicht',
     'whackamole.medium':            'Mittel',
@@ -1914,6 +1946,48 @@ export const messages: Record<Lang, Record<string, string>> = {
     'whackamole.stats.best':        'Bestpunktzahl',
     'whackamole.stats.whacked':     'Getroffen',
     'whackamole.stats.accuracy':    'Beste Genauigkeit',
+    'whackamole.wave':              'Welle',
+    'whackamole.wave1':             'Welle 1',
+    'whackamole.wave2':             'Schneller!',
+    'whackamole.wave3':             'Goldrausch!',
+    'whackamole.wave4':             'Bombenalarm!',
+    'whackamole.wave5':             'Speed-Runde!',
+    'whackamole.wave6':             'CHAOS!',
+
+    // ── Tournaments ──────────────────────────────────────────────────────────
+    'tournament.title':             'Turniere',
+    'tournament.create':            'Turnier erstellen',
+    'tournament.createNew':         'Neues Turnier',
+    'tournament.createTournament':  'Turnier starten',
+    'tournament.cancel':            'Abbrechen',
+    'tournament.name':              'Name',
+    'tournament.namePlaceholder':   'Turniername eingeben...',
+    'tournament.game':              'Spiel',
+    'tournament.bracketSize':       'Turniergr\u00f6\u00dfe',
+    'tournament.players':           'Spieler',
+    'tournament.join':              'Beitreten',
+    'tournament.leave':             'Verlassen',
+    'tournament.watch':             'Zuschauen',
+    'tournament.back':              'Zur\u00fcck',
+    'tournament.home':              'Startseite',
+    'tournament.startTournament':   'Turnier starten',
+    'tournament.noTournaments':     'Keine Turniere verf\u00fcgbar',
+    'tournament.status.lobby':      'Lobby',
+    'tournament.status.in_progress':'L\u00e4uft',
+    'tournament.status.finished':   'Beendet',
+    'tournament.round':             'Runde',
+    'tournament.semiFinal':         'Halbfinale',
+    'tournament.final':             'Finale',
+    'tournament.champion':          'Gewinner',
+    'tournament.tbd':               'TBD',
+    'tournament.anonymous':         'Anonym',
+    'tournament.host':              'Host',
+    'tournament.emptySlot':         'Leer...',
+    'tournament.matchReady':        'Dein Match beginnt!',
+    'tournament.vs':                'Gegen',
+    'tournament.joinMatch':         'Zum Match',
+    'tournament.live':              'LIVE',
+    'nav.tournaments':              'Turniere',
   },
 
   en: {
@@ -2260,16 +2334,16 @@ export const messages: Record<Lang, Record<string, string>> = {
     'lobby.games.chess.title':     'Chess',
 
     // ── Game descriptions ──────────────────────────────────────────────────
-    'lobby.games.tictactoe.desc':  'Classic 3×3 strategy game. Get three in a row to win!',
-    'lobby.games.connect4.desc':   'Drop pieces into a 7×6 grid. First to connect four in a row wins!',
-    'lobby.games.rps.desc':        'Choose your weapon in this simultaneous best-of-3 showdown!',
-    'lobby.games.chess.desc':      'Classic strategy game. Outthink your opponent and deliver checkmate.',
+    'lobby.games.tictactoe.desc':  'Classic 3×3 strategy game. Place three symbols in a row — horizontal, vertical, or diagonal. Easy to learn, hard to master!',
+    'lobby.games.connect4.desc':   'Drop pieces into the 7×6 grid and be the first to connect four in a row. Block your opponent and plan ahead!',
+    'lobby.games.rps.desc':        'Rock Paper Scissors — choose your weapon simultaneously! Best-of series or Showdown mode with sudden death. Who can read their opponent?',
+    'lobby.games.chess.desc':      'Full chess with all rules: castling, en passant, promotion, 50-move rule. Export games as PGN and replay them move by move!',
     'lobby.games.liarsbar.title':  "Liar's Deck",
-    'lobby.games.liarsbar.desc':   'Bluff your way through with face-down cards. Get called out and lose a life!',
+    'lobby.games.liarsbar.desc':   'Bluff with face-down cards — claim to play matching cards, but cheat if you must! Get caught lying and lose a life. 2-6 players!',
     'lobby.games.curvefever.title': 'Curve Fever',
-    'lobby.games.curvefever.desc':  'Be the last one standing! Steer your snake and dodge the trails.',
+    'lobby.games.curvefever.desc':  'Steer your snake in the arena and be the last one standing! Collect power-ups like Ghost, Shield, Speed and the new Wall Warp. Up to 6 players with bots!',
     'lobby.games.uno.title':        'UNO',
-    'lobby.games.uno.desc':         'Classic card game! Match colors and numbers, play action cards, and empty your hand first.',
+    'lobby.games.uno.desc':         'The classic card game with colors, numbers and action cards! Draw 2, Reverse, Skip and Wild cards. House rules like card stacking configurable. 2-4 players!',
 
     // ── Category tags ──────────────────────────────────────────────────────
     'lobby.tags.classic':          'Classic',
@@ -2286,27 +2360,27 @@ export const messages: Record<Lang, Record<string, string>> = {
 
     // ── 2048 ───────────────────────────────────────────────────────────────
     'lobby.games.2048.title':      '2048',
-    'lobby.games.2048.desc':       'Slide tiles together and reach 2048.',
+    'lobby.games.2048.desc':       'Slide number tiles to merge them and double their value. Plan strategically and reach the 2048 tile — or go even higher!',
 
     // ── Snake ──────────────────────────────────────────────────────────────
     'lobby.games.snake.title':     'Snake',
-    'lobby.games.snake.desc':      'Eat food, grow longer and avoid crashing.',
+    'lobby.games.snake.desc':      'Guide the snake, eat apples and grow longer. Avoid walls and your own tail! Classic gameplay with swipe controls.',
 
     // ── TicTacToe Solo ─────────────────────────────────────────────────────
     'lobby.games.tictactoe-solo.title': 'TicTacToe',
-    'lobby.games.tictactoe-solo.desc':  'Local PvP or vs AI. Get three in a row to win!',
+    'lobby.games.tictactoe-solo.desc':  'Play locally with a friend or against the AI. Three difficulty levels — can you beat the hard AI?',
 
     // ── Sudoku ─────────────────────────────────────────────────────────────
     'lobby.games.sudoku.title':    'Sudoku',
-    'lobby.games.sudoku.desc':     'Fill the grid so each row, column and box contains numbers 1–9.',
+    'lobby.games.sudoku.desc':     'Fill the 9×9 grid so each row, column and 3×3 box contains numbers 1-9. Four difficulty levels from Easy to Expert!',
 
     // ── Tetris ───────────────────────────────────────────────────────────
     'lobby.games.tetris.title':    'Tetris',
-    'lobby.games.tetris.desc':     'Stack falling blocks and clear rows — arcade classic!',
+    'lobby.games.tetris.desc':     'Stack falling blocks and clear complete rows. More rows at once means more points! Features hold function and next piece preview.',
     'lobby.games.flappy.title':    'Flappy Bird',
-    'lobby.games.flappy.desc':     'Fly through the pipes — one tap is all it takes!',
+    'lobby.games.flappy.desc':     'Tap to fly and navigate through the pipes. Simple concept but addictively challenging! How far can you go?',
     'lobby.games.pong.title':      'Pong',
-    'lobby.games.pong.desc':       'Classic table tennis vs the computer — who has the better reflexes?',
+    'lobby.games.pong.desc':       'The original video game! Control your paddle and hit the ball past your opponent. Touch controls available on mobile.',
     'pong.start':                  'Start',
     'pong.you':                    'You',
     'pong.bot':                    'Bot',
@@ -2328,7 +2402,7 @@ export const messages: Record<Lang, Record<string, string>> = {
     'pong.pauseHint':              'Press P to resume',
     'modal.controls.pong':         'W/S or arrow keys to move',
     'lobby.games.breakout.title':  'Breakout',
-    'lobby.games.breakout.desc':   'Destroy all the bricks with the ball — arcade classic!',
+    'lobby.games.breakout.desc':   'Destroy all colored bricks with ball and paddle. Different brick types and power-ups for extra fun!',
     'breakout.start':              'Start',
     'breakout.subtitle':           'Destroy all the bricks!',
     'breakout.win':                'You Win!',
@@ -2372,7 +2446,7 @@ export const messages: Record<Lang, Record<string, string>> = {
     'breakout.obj.hardWin':        'Win on Hard difficulty',
     'modal.controls.breakout':     'Mouse or arrow keys to move',
     'lobby.games.minesweeper.title': 'Minesweeper',
-    'lobby.games.minesweeper.desc':  'Find all the mines!',
+    'lobby.games.minesweeper.desc':  'Uncover tiles and find all hidden mines using number clues. Flag suspicious tiles. Three grid sizes!',
     'minesweeper.subtitle':        'Reveal all safe tiles!',
     'minesweeper.mines':           'mines',
     'minesweeper.diff.easy':       'Easy',
@@ -2394,7 +2468,7 @@ export const messages: Record<Lang, Record<string, string>> = {
     'modal.controls.minesweeper':  'Left click to reveal, right click to flag',
     // ── Doodle Jump ──────────────────────────────────────────────────────
     'lobby.games.doodlejump.title': 'Doodle Jump',
-    'lobby.games.doodlejump.desc':  'Jump as high as you can!',
+    'lobby.games.doodlejump.desc':  'Jump from platform to platform as high as you can! Moving and breakable platforms make it increasingly harder.',
     'modal.controls.doodlejump':    'Arrow keys or A/D to move',
     'doodlejump.start':             'Start',
     'doodlejump.retry':             'Retry',
@@ -2402,9 +2476,10 @@ export const messages: Record<Lang, Record<string, string>> = {
     'doodlejump.best':              'Best',
     'doodlejump.gameOver':          'Game Over',
     'doodlejump.tapToStart':        'Press to Start',
+    'doodlejump.boost.name':        'Start at 100',
     // ── Crossy Road ─────────────────────────────────────────────────────
     'lobby.games.crossyroad.title': 'Crossy Road',
-    'lobby.games.crossyroad.desc':  'Cross roads, rivers & railroads!',
+    'lobby.games.crossyroad.desc':  'Cross endless roads, rivers and railroads. Timing is everything — one wrong step and it is over!',
     'modal.controls.crossyroad':    'Arrow keys or WASD to hop',
     'modal.controls.typingtest':    'Just start typing. No backspace — mistakes are marked red.',
     'crossyroad.start':             'Start',
@@ -2430,7 +2505,7 @@ export const messages: Record<Lang, Record<string, string>> = {
     'crossyroad.skin.golden':       'Golden',
     // ── Mahjong ─────────────────────────────────────────────────────────
     'lobby.games.mahjong.title':    'Mahjong',
-    'lobby.games.mahjong.desc':     'Find matching pairs in the stack!',
+    'lobby.games.mahjong.desc':     'Find matching pairs of free tiles in the stack. Only tiles without left/right neighbors and no tile on top are playable!',
     'game.name.mahjong':            'Mahjong Solitaire',
     'mahjong.desc':                 'Remove all tiles by finding matching free pairs.',
     'mahjong.chooseLayout':         'Choose layout',
@@ -2531,7 +2606,7 @@ export const messages: Record<Lang, Record<string, string>> = {
 
     // ── Pac-Man ─────────────────────────────────────────────────────────────
     'lobby.games.pacman.title':     'Pac-Man',
-    'lobby.games.pacman.desc':      'Eat all dots, dodge ghosts, and grab power pellets!',
+    'lobby.games.pacman.desc':      'Eat all dots in the maze and dodge the ghosts! Power pellets make ghosts vulnerable. Levels get progressively harder!',
     'pacman.difficulty':            'Difficulty',
     'pacman.easy':                  'Easy',
     'pacman.medium':                'Medium',
@@ -2544,7 +2619,7 @@ export const messages: Record<Lang, Record<string, string>> = {
 
     // ── Penalties ────────────────────────────────────────────────────────────
     'lobby.games.penalties.title':  'Penalty Shootout',
-    'lobby.games.penalties.desc':   'Shoot penalties and save as goalkeeper!',
+    'lobby.games.penalties.desc':   'Take turns shooting and saving penalties! Choose your corner and timing — react lightning-fast as goalkeeper.',
     'penalties.title':              'Penalty Shootout',
     'penalties.difficulty':         'Difficulty',
     'penalties.easy':               'Easy',
@@ -2571,7 +2646,7 @@ export const messages: Record<Lang, Record<string, string>> = {
 
     // ── Geometry Dash ───────────────────────────────────────────────────────
     'lobby.games.geometrydash.title': 'Geometry Dash',
-    'lobby.games.geometrydash.desc':  'Jump, dodge and survive the rhythm!',
+    'lobby.games.geometrydash.desc':  'Jump through 10 hand-designed levels of increasing difficulty! Dodge spikes, blocks and chasms. Unlock new levels as you progress!',
     'geometrydash.difficulty':        'Difficulty',
     'geometrydash.easy':              'Easy',
     'geometrydash.medium':            'Medium',
@@ -2580,10 +2655,29 @@ export const messages: Record<Lang, Record<string, string>> = {
     'geometrydash.progress':          'Progress',
     'geometrydash.attempts':          'Attempts',
     'geometrydash.jump':              'Jump',
+    'geometrydash.selectLevel':       'Select Level',
+    'geometrydash.level.1':           'Stereo Madness',
+    'geometrydash.level.2':           'Back on Track',
+    'geometrydash.level.3':           'Polargeist',
+    'geometrydash.level.4':           'Dry Out',
+    'geometrydash.level.5':           'Base After Base',
+    'geometrydash.level.6':           'Can\'t Let Go',
+    'geometrydash.level.7':           'Jumper',
+    'geometrydash.level.8':           'Time Machine',
+    'geometrydash.level.9':           'Cycles',
+    'geometrydash.level.10':          'xStep',
+    'geometrydash.locked':            'Locked',
+    'geometrydash.levelComplete':     'Level Complete!',
+    'geometrydash.nextLevel':         'Next Level',
+    'geometrydash.endless':           'Endless Mode',
+    'geometrydash.best':              'Best',
+    'geometrydash.stars':             'Stars',
+    'geometrydash.backToLevels':      'Back',
+    'geometrydash.levelPrefix':       'Level',
 
     // ── Typing Test ────────────────────────────────────────────────────────
     'lobby.games.typingtest.title': 'Typing Test',
-    'lobby.games.typingtest.desc':  'Test your typing speed and accuracy!',
+    'lobby.games.typingtest.desc':  'Test your typing speed in WPM and accuracy. Various text lengths and difficulties — improve with every attempt!',
     'typingtest.duration':          'Duration',
     'typingtest.15s':               '15s',
     'typingtest.30s':               '30s',
@@ -2602,7 +2696,7 @@ export const messages: Record<Lang, Record<string, string>> = {
 
     // ── Fruit Ninja ────────────────────────────────────────────────────────
     'lobby.games.fruitninja.title': 'Fruit Ninja',
-    'lobby.games.fruitninja.desc':  'Slice fruits, dodge bombs!',
+    'lobby.games.fruitninja.desc':  'Slice flying fruits with swipe gestures! Build combos for bonus points, but watch out for bombs — they mean game over!',
     'fruitninja.subtitle':          'Slice all the fruits!',
     'fruitninja.difficulty':        'Difficulty',
     'fruitninja.easy':              'Easy',
@@ -2631,7 +2725,7 @@ export const messages: Record<Lang, Record<string, string>> = {
 
     // ── Asteroids ───────────────────────────────────────────────────────────
     'lobby.games.asteroids.title':  'Asteroids',
-    'lobby.games.asteroids.desc':   'Destroy asteroids in space!',
+    'lobby.games.asteroids.desc':   'Destroy asteroids and collect power-ups like Shield, Homing Missiles and Time Slow! Every 5 waves a boss fight appears. How many waves can you survive?',
     'asteroids.difficulty':         'Difficulty',
     'asteroids.easy':               'Easy',
     'asteroids.medium':             'Medium',
@@ -2642,6 +2736,9 @@ export const messages: Record<Lang, Record<string, string>> = {
     'asteroids.totalDestroyed':     'asteroids destroyed',
     'asteroids.fire':               'Fire',
     'asteroids.move':               'Move',
+    'asteroids.boss':               'BOSS',
+    'asteroids.bossDefeated':       'Boss defeated!',
+    'asteroids.bossWave':           'Boss Wave',
 
     // ── Liar's Deck ──────────────────────────────────────────────────────────
     'liarsbar.play':               'Play',
@@ -2721,7 +2818,7 @@ export const messages: Record<Lang, Record<string, string>> = {
     'curvefever.powerup.shield':     'Shield',
     'curvefever.powerup.shield.desc':'Protects you from one collision',
     'curvefever.powerup.phase':      'Ghost',
-    'curvefever.powerup.phase.desc': 'Phase through trails for 1 second',
+    'curvefever.powerup.phase.desc': 'Phase through trails for 2 seconds',
     'curvefever.powerup.slow':       'Slow',
     'curvefever.powerup.slow.desc':  'Slows all opponents for 3 seconds',
     'curvefever.powerup.thin':       'Thin',
@@ -2730,6 +2827,8 @@ export const messages: Record<Lang, Record<string, string>> = {
     'curvefever.powerup.reverse.desc':'Inverts all opponents\' steering for 3s',
     'curvefever.powerup.big':        'Thicken',
     'curvefever.powerup.big.desc':   'Thickens all opponents\' trails for 3s',
+    'curvefever.powerup.warp':       'Wall Warp',
+    'curvefever.powerup.warp.desc':  'Pass through walls and appear on the other side for 3s',
     'curvefever.disabled':           'Disabled',
     'curvefever.obstacles':          'Obstacles',
     'curvefever.teamMode':           'Team Mode',
@@ -2809,6 +2908,8 @@ export const messages: Record<Lang, Record<string, string>> = {
     'uno.rules.playDrawnCard': 'Play drawn card immediately',
     'uno.rules.drawUntilPlayable': 'Draw until playable',
     'uno.rules.forcedPlay': 'Forced play',
+    'uno.rules.stackSameCards': 'Stack Same Cards',
+    'uno.stackPlayed': 'Play All',
 
     // ── Rooms page ─────────────────────────────────────────────────────────
     'rooms.title':               'Open Rooms',
@@ -2963,6 +3064,7 @@ export const messages: Record<Lang, Record<string, string>> = {
     'game.reached2048':              'You reached 2048!',
     'game.sound.mute':               'Mute',
     'game.sound.unmute':             'Unmute',
+    'game.sound.volume':             'Volume',
 
     // ── Snake ─────────────────────────────────────────────────────────────
     'snake.controls':                'Arrow keys or WASD to move · Eat food to grow · Avoid walls and yourself',
@@ -3054,7 +3156,7 @@ export const messages: Record<Lang, Record<string, string>> = {
 
     // ── Battleship ─────────────────────────────────────────────────────────
     'lobby.games.battleship.title':    'Battleship',
-    'lobby.games.battleship.desc':     'Hide your fleet and sink the enemy before they sink you!',
+    'lobby.games.battleship.desc':     'Place your fleet secretly and fire on the enemy grid. Sink all ships before the enemy finds you! Fog-of-war protects positions.',
 
     'battleship.setup.title':          'Place your ships',
     'battleship.setup.placing':        'Placing:',
@@ -3132,6 +3234,7 @@ export const messages: Record<Lang, Record<string, string>> = {
     'chat.room':            'Room',
     'chat.send':            'Send',
     'chat.placeholder':     'Message…',
+    'chat.spectator':       'Spectator',
 
     // ── Online presence ────────────────────────────────────────────────────
     'online.title':         'Online',
@@ -3525,6 +3628,9 @@ export const messages: Record<Lang, Record<string, string>> = {
     'daily.bonus':                        'Bonus',
     'daily.bonusHint':                    'Complete all for +50 XP bonus & streak',
     'daily.streak':                       'day streak',
+    'daily.streakBonus':                  'Streak Bonus',
+    'game.favorite':                      'Favorite',
+    'game.favorites':                     'Favorites',
     'daily.puzzle':                       'Daily Puzzle',
     'daily.puzzleHint':                   'Medium',
     'daily.gameOfTheDay':                 'Game of the Day',
@@ -3811,7 +3917,7 @@ export const messages: Record<Lang, Record<string, string>> = {
 
     // ── Whack-a-Mole ──────────────────────────────────────────────────────────
     'lobby.games.whackamole.title': 'Whack-a-Mole',
-    'lobby.games.whackamole.desc':  'Whack the moles before they disappear!',
+    'lobby.games.whackamole.desc':  'Whack the moles across 6 themed waves! From Normal to Golden Rush to Chaos — each wave brings new challenges.',
     'whackamole.difficulty':        'Difficulty',
     'whackamole.easy':              'Easy',
     'whackamole.medium':            'Medium',
@@ -3828,5 +3934,47 @@ export const messages: Record<Lang, Record<string, string>> = {
     'whackamole.stats.best':        'Best Score',
     'whackamole.stats.whacked':     'Whacked',
     'whackamole.stats.accuracy':    'Best Accuracy',
+    'whackamole.wave':              'Wave',
+    'whackamole.wave1':             'Wave 1',
+    'whackamole.wave2':             'Faster!',
+    'whackamole.wave3':             'Golden Rush!',
+    'whackamole.wave4':             'Bomb Alert!',
+    'whackamole.wave5':             'Speed Round!',
+    'whackamole.wave6':             'CHAOS!',
+
+    // ── Tournaments ──────────────────────────────────────────────────────────
+    'tournament.title':             'Tournaments',
+    'tournament.create':            'Create Tournament',
+    'tournament.createNew':         'New Tournament',
+    'tournament.createTournament':  'Create Tournament',
+    'tournament.cancel':            'Cancel',
+    'tournament.name':              'Name',
+    'tournament.namePlaceholder':   'Enter tournament name...',
+    'tournament.game':              'Game',
+    'tournament.bracketSize':       'Bracket Size',
+    'tournament.players':           'Players',
+    'tournament.join':              'Join',
+    'tournament.leave':             'Leave',
+    'tournament.watch':             'Watch',
+    'tournament.back':              'Back',
+    'tournament.home':              'Home',
+    'tournament.startTournament':   'Start Tournament',
+    'tournament.noTournaments':     'No tournaments available',
+    'tournament.status.lobby':      'Lobby',
+    'tournament.status.in_progress':'In Progress',
+    'tournament.status.finished':   'Finished',
+    'tournament.round':             'Round',
+    'tournament.semiFinal':         'Semifinal',
+    'tournament.final':             'Final',
+    'tournament.champion':          'Champion',
+    'tournament.tbd':               'TBD',
+    'tournament.anonymous':         'Anonymous',
+    'tournament.host':              'Host',
+    'tournament.emptySlot':         'Empty...',
+    'tournament.matchReady':        'Your Match is Ready!',
+    'tournament.vs':                'vs',
+    'tournament.joinMatch':         'Join Match',
+    'tournament.live':              'LIVE',
+    'nav.tournaments':              'Tournaments',
   },
 };

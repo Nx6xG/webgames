@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState, useRef, useSyncExternalStore } from 'react';
+import { useEffect, useState, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import type { LiarsBarState, Card, LdMode } from 'shared';
@@ -19,22 +19,9 @@ import { useAchievements } from '@/hooks/useAchievements';
 import { SpectatorBanner } from '@/components/ui/SpectatorBanner';
 import { ReconnectBanner } from '@/components/ui/ReconnectBanner';
 import { saveLastConfig, loadLastConfig, hasLastConfig } from '@/lib/lobbyPresets';
-
-// ── Compact viewport hook ────────────────────────────────────────────────────
-// Fires when viewport height ≤ 800px (covers 1366×768 and similar).
-
-const MQ = '(max-height: 800px)';
-function subscribeCompact(cb: () => void) {
-  const mql = window.matchMedia(MQ);
-  mql.addEventListener('change', cb);
-  return () => mql.removeEventListener('change', cb);
-}
-function getCompactSnapshot() { return window.matchMedia(MQ).matches; }
-function getCompactServerSnapshot() { return false; }
-
-function useCompact() {
-  return useSyncExternalStore(subscribeCompact, getCompactSnapshot, getCompactServerSnapshot);
-}
+import { useCompact } from '@/hooks/useCompact';
+import { ReplayControls } from '@/components/ui/ReplayControls';
+import { useAutoJoin } from '@/hooks/useAutoJoin';
 
 // ── SVG icons (inline, no deps) ──────────────────────────────────────────────
 
@@ -190,30 +177,17 @@ export function LiarsBarGame({ wsUrl, gameId, initialRoomCode, quickPlay: isQuic
   const [chatOpen, setChatOpen] = useState(false);
   const [unread, setUnread] = useState(0);
   const prevTotalRef = useRef<number | null>(null);
-  const autoJoined = useRef(false);
   const [selectedCards, setSelectedCards] = useState<Set<number>>(new Set());
   const [maxPlayers, setMaxPlayers] = useState(4);
   const [ldMode, setLdMode] = useState<LdMode>('classic');
+  const [replayState, setReplayState] = useState<LiarsBarState | null>(null);
+  const [replayMode, setReplayMode] = useState(false);
 
   // End-overlay latch — set once per finished match, cleared on rematch
   const lastFinishKeyRef = useRef<string>('');
   const [endOverlay, setEndOverlay] = useState<{ iWon: boolean; winnerNick: string | null } | null>(null);
 
-  // Auto-join from invite link
-  useEffect(() => {
-    if (mp.connection === 'connected' && initialRoomCode && !autoJoined.current && mp.phase === 'lobby') {
-      autoJoined.current = true;
-      mp.joinRoom(initialRoomCode);
-    }
-  }, [mp.connection, initialRoomCode, mp.phase]); // eslint-disable-line
-
-  // Auto quick-play
-  useEffect(() => {
-    if (mp.connection === 'connected' && isQuickPlay && !autoJoined.current && mp.phase === 'lobby') {
-      autoJoined.current = true;
-      mp.quickPlay();
-    }
-  }, [mp.connection, isQuickPlay, mp.phase]); // eslint-disable-line
+  useAutoJoin(mp, initialRoomCode, isQuickPlay, 'liarsbar');
 
   // Replace URL with ?room=CODE once matched
   useEffect(() => {
@@ -268,7 +242,8 @@ export function LiarsBarGame({ wsUrl, gameId, initialRoomCode, quickPlay: isQuic
     setSelectedCards(new Set());
   }, [mp.gameState?.phase, mp.gameState?.turnIndex]);
 
-  const gs = mp.gameState;
+  const liveGs = mp.gameState;
+  const gs = replayMode && replayState ? replayState : liveGs;
   const myIdx = mp.playerIndex;
 
   const getNickname = (playerToken: string) => {
@@ -300,6 +275,7 @@ export function LiarsBarGame({ wsUrl, gameId, initialRoomCode, quickPlay: isQuic
 
   const isMyTurn =
     !mp.isSpectator &&
+    !replayMode &&
     gs !== null &&
     myIdx !== null &&
     gs.phase === 'turn' &&
@@ -905,6 +881,14 @@ export function LiarsBarGame({ wsUrl, gameId, initialRoomCode, quickPlay: isQuic
 
         {/* Spectator badge */}
         {mp.isSpectator && <SpectatorBanner spectatorCount={mp.spectatorCount} />}
+
+        {/* Replay */}
+        <ReplayControls<LiarsBarState>
+          history={mp.stateHistory as LiarsBarState[]}
+          gameEnded={mp.phase === 'ended'}
+          onStep={(state) => setReplayState(state)}
+          onToggle={(active) => { setReplayMode(active); if (!active) setReplayState(null); }}
+        />
 
         {(mp.phase === 'playing' || mp.phase === 'waiting') && (
           <button

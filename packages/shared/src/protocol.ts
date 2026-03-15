@@ -7,6 +7,7 @@ import type { LiarsBarState, LiarsBarAction } from './games/liarsbar';
 import type { CurveFeverState, CurveFeverAction } from './games/curvefever';
 import type { UnoState, UnoAction } from './games/uno';
 import type { GameId } from './registry';
+import type { TournamentState, TournamentListItem, BracketSize } from './tournament';
 
 // ─── Game-state / action unions ───────────────────────────────────────────────
 // Extend these when adding a new game. Protocol events use these aliases so
@@ -164,6 +165,8 @@ export interface ChatMessage {
   ts: number;
   /** True for server-generated announcements (e.g. win broadcasts) */
   system?: boolean;
+  /** True when the message was sent by a spectator */
+  isSpectator?: boolean;
   avatarId?: string;
   nameColor?: string;
   avatarFrame?: string;
@@ -240,7 +243,8 @@ export type RoomErrorCode =
   | 'ROOM_FULL'
   | 'ALREADY_IN_ROOM'
   | 'RATE_LIMITED'
-  | 'ROOM_CLOSED';
+  | 'ROOM_CLOSED'
+  | 'INVALID_GAME';
 
 export type ActionErrorCode =
   | 'ROOM_NOT_FOUND'
@@ -427,6 +431,19 @@ export interface ServerToClientEvents {
    * The countdown will only start (and gameplay will only be enabled) when ready === true.
    */
   room_ready: (payload: { roomCode: string; ready: boolean; players: { p0: boolean; p1: boolean } }) => void;
+
+  // ── Tournament events ────────────────────────────────────────────────
+  tournament_created: (data: { tournamentId: string }) => void;
+  tournament_joined: (data: { tournamentId: string }) => void;
+  tournament_state: (data: { tournament: TournamentState }) => void;
+  tournament_list: (data: { tournaments: TournamentListItem[] }) => void;
+  tournament_match_ready: (data: {
+    tournamentId: string;
+    matchId: string;
+    roomCode: string;
+    opponent: { token: string; nickname: string };
+  }) => void;
+  tournament_error: (data: { code: string; message: string }) => void;
 }
 
 // ─── Client → Server ─────────────────────────────────────────────────────────
@@ -439,7 +456,7 @@ export interface ClientToServerEvents {
   identify: (data: { playerToken: string; nickname: string; avatarId?: string; nameColor?: string; avatarFrame?: string; cosmetics?: CosmeticsSelection; userId?: string; level?: number; showcase?: ProfileShowcase }) => void;
 
   /** playerToken is stored server-side so the seat can survive a refresh */
-  create_room: (data: { playerToken: string; gameId?: GameId; nickname: string; visibility?: RoomVisibility; roomName?: string; rpsConfig?: { mode: string; bestOf?: number }; ldConfig?: { mode: string }; battleshipConfig?: { fleetPreset: string; boardSize?: number; salvoMode?: boolean; shotTimerSec?: number }; cfConfig?: { bestOf?: number; speed?: string; powerUpDensity?: string; thickness?: string; noGaps?: boolean; shrinkingArena?: boolean; suddenDeath?: boolean; disabledPowerUps?: string[]; obstacles?: boolean; teamMode?: boolean; arenaShape?: string; mapSize?: string; bots?: Array<{ token: string; difficulty: string; nickname: string }> }; unoConfig?: { targetScore?: number; stackDraw2?: boolean; stackDraw4?: boolean; allowDraw2OnDraw4?: boolean; allowDraw4OnDraw2?: boolean; playDrawnCardImmediately?: boolean; drawUntilPlayable?: boolean; forcedPlay?: boolean }; chessConfig?: { timeSeconds: number; incrementSeconds: number }; maxPlayers?: number }) => void;
+  create_room: (data: { playerToken: string; gameId?: GameId; nickname: string; visibility?: RoomVisibility; roomName?: string; rpsConfig?: { mode: string; bestOf?: number }; ldConfig?: { mode: string }; battleshipConfig?: { fleetPreset: string; boardSize?: number; salvoMode?: boolean; shotTimerSec?: number }; cfConfig?: { bestOf?: number; speed?: string; powerUpDensity?: string; thickness?: string; noGaps?: boolean; shrinkingArena?: boolean; suddenDeath?: boolean; disabledPowerUps?: string[]; obstacles?: boolean; teamMode?: boolean; arenaShape?: string; mapSize?: string; bots?: Array<{ token: string; difficulty: string; nickname: string }> }; unoConfig?: { targetScore?: number; stackDraw2?: boolean; stackDraw4?: boolean; allowDraw2OnDraw4?: boolean; allowDraw4OnDraw2?: boolean; playDrawnCardImmediately?: boolean; drawUntilPlayable?: boolean; forcedPlay?: boolean; stackSameCards?: boolean }; chessConfig?: { timeSeconds: number; incrementSeconds: number }; maxPlayers?: number }) => void;
 
   /** If the room is full the socket joins as spectator instead */
   join_room: (data: { roomCode: string; playerToken: string; nickname: string }) => void;
@@ -505,4 +522,29 @@ export interface ClientToServerEvents {
   party_kick: (data: { token: string }) => void;
   /** Host launches a game for the whole party. Creates room + notifies all. */
   party_launch: (data: { gameId: GameId }) => void;
+
+  // ── Tournament events ────────────────────────────────────────────────
+  tournament_create: (data: {
+    playerToken: string;
+    nickname: string;
+    gameId: GameId;
+    bracketSize: BracketSize;
+    name: string;
+    gameConfig?: Record<string, unknown>;
+  }) => void;
+  tournament_join: (data: {
+    playerToken: string;
+    nickname: string;
+    tournamentId: string;
+  }) => void;
+  tournament_leave: (data: {
+    playerToken: string;
+    tournamentId: string;
+  }) => void;
+  tournament_start: (data: {
+    playerToken: string;
+    tournamentId: string;
+  }) => void;
+  tournament_list: () => void;
+  tournament_get: (data: { tournamentId: string }) => void;
 }

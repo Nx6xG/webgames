@@ -20,6 +20,7 @@ import { useAchievements } from '@/hooks/useAchievements';
 import { SpectatorBanner } from '@/components/ui/SpectatorBanner';
 import { ReconnectBanner } from '@/components/ui/ReconnectBanner';
 import { ReplayControls } from '@/components/ui/ReplayControls';
+import { useAutoJoin } from '@/hooks/useAutoJoin';
 
 export function TicTacToeGame({ wsUrl, gameId, initialRoomCode, quickPlay: isQuickPlay }: GameComponentProps) {
   const router = useRouter();
@@ -36,23 +37,8 @@ export function TicTacToeGame({ wsUrl, gameId, initialRoomCode, quickPlay: isQui
   const [replayState, setReplayState] = useState<TicTacToeState | null>(null);
   const [replayMode, setReplayMode] = useState(false);
   const prevTotalRef = useRef<number | null>(null);
-  const autoJoined = useRef(false);
 
-  // Auto-join when arriving from invite link
-  useEffect(() => {
-    if (mp.connection === 'connected' && initialRoomCode && !autoJoined.current && mp.phase === 'lobby') {
-      autoJoined.current = true;
-      mp.joinRoom(initialRoomCode);
-    }
-  }, [mp.connection, initialRoomCode, mp.phase]); // eslint-disable-line
-
-  // Auto quick-play when ?quickplay=true
-  useEffect(() => {
-    if (mp.connection === 'connected' && isQuickPlay && !autoJoined.current && mp.phase === 'lobby') {
-      autoJoined.current = true;
-      mp.quickPlay();
-    }
-  }, [mp.connection, isQuickPlay, mp.phase]); // eslint-disable-line
+  useAutoJoin(mp, initialRoomCode, isQuickPlay, 'tictactoe');
 
   // Replace URL with ?room=CODE once matched (for shareability + refresh)
   useEffect(() => {

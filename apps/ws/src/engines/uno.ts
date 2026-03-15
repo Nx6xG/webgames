@@ -484,6 +484,15 @@ export const unoEngine: GameEngine<UnoState, UnoAction> = {
 
       // Check win — round over
       if (s.hands[pIdx].length === 0) {
+        // If winning card is a draw card, force next player to draw before scoring
+        if (card.type === 'draw2' || card.type === 'wild4') {
+          const drawCount = card.type === 'draw2' ? 2 + s.pendingDraw : 4 + s.pendingDraw;
+          const nextIdx = ((s.turnIndex + s.direction) % s.playerIds.length + s.playerIds.length) % s.playerIds.length;
+          drawCards(s, nextIdx, drawCount);
+          s.pendingDraw = 0;
+          s.pendingDrawSource = null;
+        }
+
         const points = scoreHands(s.hands, pIdx);
         s.players[pIdx].matchScore += points;
         s.roundWinner = myToken;
@@ -540,6 +549,92 @@ export const unoEngine: GameEngine<UnoState, UnoAction> = {
         s.lastAction = null;
         advanceTurn(s);
       }
+
+      if (s.pendingDraw > 0 && s.pendingDrawSource) {
+        s.mustDraw = !hasStackableCard(s.hands[s.turnIndex], s.pendingDrawSource, s.rules);
+      } else {
+        s.mustDraw = !hasPlayableCard(s.hands[s.turnIndex], s.topCard, s.chosenColor);
+      }
+      return s;
+    }
+
+    if (action.type === 'UNO_PLAY_STACK') {
+      if (!s.rules.stackSameCards) throw new Error('INVALID_ACTION: Stack same cards rule is not enabled');
+      if (s.drawnCardId !== null) throw new Error('INVALID_ACTION: Cannot stack during drawn card window');
+      if (!action.cardIds || action.cardIds.length < 2) throw new Error('INVALID_ACTION: Must play at least 2 cards');
+
+      // Validate all cards are in hand
+      const cards: UnoCard[] = [];
+      for (const cid of action.cardIds) {
+        const c = s.hands[pIdx].find(h => h.id === cid);
+        if (!c) throw new Error('INVALID_ACTION: Card not in hand');
+        cards.push(c);
+      }
+
+      // Validate all cards are same color AND same value (number cards only)
+      const first = cards[0];
+      if (first.type !== 'number') throw new Error('INVALID_ACTION: Only number cards can be stacked');
+      for (let i = 1; i < cards.length; i++) {
+        if (cards[i].type !== first.type || cards[i].color !== first.color || cards[i].value !== first.value) {
+          throw new Error('INVALID_ACTION: All stacked cards must have the same color and value');
+        }
+      }
+
+      // Validate first card is playable (or stackable if pending draw)
+      if (s.pendingDraw > 0) {
+        throw new Error('INVALID_ACTION: Cannot stack same cards while there are pending draws');
+      }
+      if (!canPlayCard(first, s.topCard, s.chosenColor)) {
+        throw new Error('INVALID_ACTION: Card cannot be played');
+      }
+
+      // Remove all cards from hand (iterate in reverse to keep indices stable)
+      const idsToRemove = new Set(action.cardIds);
+      s.hands[pIdx] = s.hands[pIdx].filter(c => !idsToRemove.has(c.id));
+      s.players[pIdx].handCount = s.hands[pIdx].length;
+
+      // Place last card on discard (all go to discard, last is topCard)
+      const lastCard = cards[cards.length - 1];
+      for (const c of cards) s.discardPile.push(c);
+      s.topCard = lastCard;
+      s.chosenColor = null;
+
+      // UNO penalty check
+      for (let i = 0; i < s.players.length; i++) {
+        if (i !== pIdx && s.hands[i].length === 1 && !s.players[i].calledUno) {
+          drawCards(s, i, UNO_PENALTY_CARDS);
+          s.lastAction = `${s.players[i].nickname || 'Player'} forgot UNO! +${UNO_PENALTY_CARDS}`;
+          s.players[i].calledUno = false;
+        }
+      }
+
+      if (s.hands[pIdx].length !== 1) {
+        s.players[pIdx].calledUno = false;
+      }
+
+      // Check win
+      if (s.hands[pIdx].length === 0) {
+        const points = scoreHands(s.hands, pIdx);
+        s.players[pIdx].matchScore += points;
+        s.roundWinner = myToken;
+        s.roundPoints = points;
+        s.lastAction = `${s.players[pIdx].nickname || 'Player'} wins the round! (+${points})`;
+
+        if (s.players[pIdx].matchScore >= s.matchTargetScore) {
+          s.phase = 'match_end';
+          s.status = 'win';
+          s.winner = myToken;
+        } else {
+          s.phase = 'round_end';
+          s.status = 'ongoing';
+          s.winner = null;
+        }
+        return s;
+      }
+
+      s.lastAction = `${s.players[pIdx].nickname || 'Player'} played ${cards.length}x ${first.color} ${first.value}!`;
+      s.pendingDrawSource = null;
+      advanceTurn(s);
 
       if (s.pendingDraw > 0 && s.pendingDrawSource) {
         s.mustDraw = !hasStackableCard(s.hands[s.turnIndex], s.pendingDrawSource, s.rules);

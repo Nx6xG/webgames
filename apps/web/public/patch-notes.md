@@ -1,5 +1,52 @@
 # Patch Notes
 
+## 2026-03-15
+
+### Neue Features
+- **Turnier-System** — Erstelle Single-Elimination-Turniere (4/8/16 Spieler) für alle Multiplayer-Spiele! Bracket-Visualisierung, automatisches Matchmaking und Champion-Krönung
+- **Spiele-Favoriten** — Markiere Spiele mit einem Stern als Favorit, sie erscheinen dann ganz oben auf der Startseite
+- **Sound-Lautstärke** — Neuer Lautstärke-Regler (0-100%) statt nur Stumm-Schalten, erreichbar über das Lautsprecher-Symbol
+- **Replay für alle Multiplayer-Spiele** — Jedes Multiplayer-Spiel hat jetzt einen Replay-Modus nach Spielende (RPS, Battleship, Liar's Deck, Curve Fever, UNO)
+- **Spectator-Chat** — Zuschauer können jetzt chatten, mit einem "Zuschauer"-Badge neben ihrem Namen
+
+### Curve Fever
+- **Neues Item: Wandportal 🌀** — Durchdringe Wände und erscheine auf der gegenüberliegenden Seite (3 Sekunden)
+- **Geist-Buff** — Geist-Dauer von 1 auf 2 Sekunden verdoppelt
+- **Bessere Bots** — Bots erkennen jetzt Wände zuverlässig und weichen rechtzeitig aus
+- **Durchsichtiges Scoreboard** — Das Scoreboard wird transparent, wenn dein Spieler dahinter ist
+
+### Asteroids
+- **Boss-Kämpfe** — Alle 5 Wellen erscheint ein Boss-Schiff (10 HP, schießt zurück, 500 Punkte)
+- **3 neue Power-Ups** — Homing-Raketen (lila), Multishot 5-fach (pink) und Zeitlupe (weiß)
+- **Mehr Items** — 25% Drop-Chance bei großen und 10% bei mittleren Asteroiden
+
+### Whack-a-Mole
+- **Wellen-System** — 6 thematische Wellen in 60 Sekunden: Normal → Schneller → Goldrausch → Bombenalarm → Speed-Runde → CHAOS
+
+### Geometry Dash
+- **10 handdesignte Level** — Von "Stereo Madness" bis "xStep" mit steigender Schwierigkeit
+- **Level-Auswahl** — Wähle dein Level, schalte neue frei (80%+ zum Freischalten), sammle Sterne
+- **Endlos-Modus** — Klassischer prozeduraler Modus weiterhin verfügbar
+
+### UNO
+- **Gleiche Karten stapeln** — Neue Hausregel: Spiele mehrere identische Karten gleichzeitig (z.B. zwei rote 7)
+- **Bessere Farbwahl** — Farbauswahl schwebt jetzt über der Hand, sodass die eigenen Karten sichtbar bleiben
+- **Scoring-Fix** — Wenn eine Runde mit einer +2/+4 Karte endet, zieht der nächste Spieler die Karten bevor die Punkte gezählt werden
+
+### Fruit Ninja
+- **Bessere Balance** — Größere Früchte (+30-40%), weniger Obst pro Welle, langsamere Schwierigkeitssteigerung
+
+### Sonstiges
+- **Streak-XP-Bonus** — Tägliche Streak gibt jetzt Bonus-XP: 3+ Tage = +10, 7+ = +20, 14+ = +30, 30+ = +50 XP (Hover für Details)
+- **Shop-Preise angepasst** — Kosmetics kosten jetzt 8-35 Tokens je nach Seltenheit (vorher 2-6)
+- **Bessere Spielbeschreibungen** — Alle 27 Spiele haben jetzt ausführliche Beschreibungen mit Mechanik-Details
+- **Pac-Man: Level-Anzeige** — Level-Nummer wird nicht mehr am Canvas-Rand abgeschnitten
+- **Typing Test** — Wörter werden nicht mehr mitten im Wort umgebrochen
+- **Lazy Loading** — Spielkomponenten werden erst bei Bedarf geladen (schnellere Startseite)
+- **Code-Cleanup** — Duplizierter Code in Hooks und Server-Logik bereinigt
+
+---
+
 ## 2026-03-14
 
 - **Curve Fever: Bots** — Spiele mit KI-Gegnern (Leicht / Mittel / Schwer), auch zusammen mit anderen Spielern

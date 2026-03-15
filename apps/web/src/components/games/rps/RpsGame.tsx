@@ -21,6 +21,8 @@ import { ReconnectBanner } from '@/components/ui/ReconnectBanner';
 import { useRpsBot } from './useRpsBot';
 import { saveLastConfig, loadLastConfig, hasLastConfig } from '@/lib/lobbyPresets';
 import type { BotDifficulty } from './botEngine';
+import { ReplayControls } from '@/components/ui/ReplayControls';
+import { useAutoJoin } from '@/hooks/useAutoJoin';
 
 const PICKS: RpsPick[] = ['rock', 'paper', 'scissors'];
 
@@ -75,26 +77,13 @@ export function RpsGame({ wsUrl, gameId, initialRoomCode, quickPlay: isQuickPlay
   const [rpsMode, setRpsMode]             = useState<RpsMode>('best_of');
   const [bestOfChoice, setBestOfChoice]   = useState(3);
   const [showInfo, setShowInfo]           = useState(false);
+  const [replayState, setReplayState]    = useState<RpsState | null>(null);
+  const [replayMode, setReplayMode]      = useState(false);
   const [chatOpen, setChatOpen]           = useState(false);
   const [unread, setUnread]               = useState(0);
   const prevTotalRef = useRef<number | null>(null);
-  const autoJoined   = useRef(false);
 
-  // Auto-join from invite link
-  useEffect(() => {
-    if (mp.connection === 'connected' && initialRoomCode && !autoJoined.current && mp.phase === 'lobby') {
-      autoJoined.current = true;
-      mp.joinRoom(initialRoomCode);
-    }
-  }, [mp.connection, initialRoomCode, mp.phase]); // eslint-disable-line
-
-  // Auto quick-play
-  useEffect(() => {
-    if (mp.connection === 'connected' && isQuickPlay && !autoJoined.current && mp.phase === 'lobby') {
-      autoJoined.current = true;
-      mp.quickPlay();
-    }
-  }, [mp.connection, isQuickPlay, mp.phase]); // eslint-disable-line
+  useAutoJoin(mp, initialRoomCode, isQuickPlay, 'rps');
 
   // Replace URL with ?room=CODE once matched
   useEffect(() => {
@@ -139,8 +128,9 @@ export function RpsGame({ wsUrl, gameId, initialRoomCode, quickPlay: isQuickPlay
     }
   }, [mp.gameState?.status]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  const gs    = mp.gameState;
-  const myIdx = mp.playerIndex; // 0 | 1 | null
+  const liveGs = mp.gameState;
+  const gs     = replayMode && replayState ? replayState : liveGs;
+  const myIdx  = mp.playerIndex; // 0 | 1 | null
 
   const p0nick  = mp.players.find((p) => p.index === 0)?.nickname ?? t('game.common.player1');
   const p1nick  = mp.players.find((p) => p.index === 1)?.nickname ?? t('game.common.player2');
@@ -159,6 +149,7 @@ export function RpsGame({ wsUrl, gameId, initialRoomCode, quickPlay: isQuickPlay
 
   const canPick =
     !mp.isSpectator &&
+    !replayMode &&
     mp.phase === 'playing' &&
     mp.roomReady &&
     gs?.status === 'ongoing' &&
@@ -545,8 +536,16 @@ export function RpsGame({ wsUrl, gameId, initialRoomCode, quickPlay: isQuickPlay
 
         {mp.isSpectator && <SpectatorBanner spectatorCount={mp.spectatorCount} />}
 
+        {/* Replay */}
+        <ReplayControls<RpsState>
+          history={mpRaw.stateHistory as RpsState[]}
+          gameEnded={mp.phase === 'ended'}
+          onStep={(state) => setReplayState(state)}
+          onToggle={(active) => { setReplayMode(active); if (!active) setReplayState(null); }}
+        />
+
         {/* Rematch */}
-        {!mp.isSpectator && gs && gs.status !== 'ongoing' && mp.playerCount === 2 && (
+        {!mp.isSpectator && gs && gs.status !== 'ongoing' && mp.playerCount === 2 && !replayMode && (
           <div className="flex flex-col items-center gap-1.5">
             <button
               onClick={mp.requestRematch}

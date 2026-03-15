@@ -9,6 +9,7 @@ import type { GameStat } from '@/lib/localStats';
 import { ACHIEVEMENTS } from '@/lib/achievements/definitions';
 import { loadUnlocked } from '@/lib/achievements/store';
 import { loadScores } from '@/lib/personal-scores/storage';
+import { getFavorites, toggleFavorite } from '@/lib/favorites';
 
 // ── Singleplayer card metadata ───────────────────────────────────────────────
 const SINGLEPLAYER_GAMES = [
@@ -405,11 +406,15 @@ function SingleplayerCard({
   overlayData,
   badge,
   onOpenModal,
+  isFav,
+  onToggleFav,
 }: {
   game: typeof SINGLEPLAYER_GAMES[number];
   overlayData: CardOverlayData | null;
   badge: BadgeInfo | null;
   onOpenModal?: () => void;
+  isFav: boolean;
+  onToggleFav: () => void;
 }) {
   const { t } = useI18n();
   const [bestScore, setBestScore] = useState<number | null>(null);
@@ -434,9 +439,16 @@ function SingleplayerCard({
 
   return (
     <div
-      className="group relative rounded-2xl border border-[var(--cardBorder)] bg-[var(--card)] p-6 hover:border-purple-500/50 hover:bg-zinc-800/50 hover:scale-[1.02] hover:shadow-xl transition-all duration-200 ease-out overflow-hidden cursor-pointer"
+      className={`group relative rounded-2xl border bg-[var(--card)] p-6 hover:border-purple-500/50 hover:bg-zinc-800/50 hover:scale-[1.02] hover:shadow-xl transition-all duration-200 ease-out overflow-hidden cursor-pointer ${isFav ? 'border-amber-500/30' : 'border-[var(--cardBorder)]'}`}
       onClick={onOpenModal}
     >
+      <button
+        onClick={(e) => { e.stopPropagation(); onToggleFav(); }}
+        className={`absolute top-3 left-3 z-[2] text-lg transition-colors ${isFav ? 'text-amber-400 hover:text-amber-300' : 'text-zinc-600 hover:text-zinc-400'}`}
+        title={t('game.favorite')}
+      >
+        {isFav ? '\u2605' : '\u2606'}
+      </button>
       <CardBadge badge={badge} t={t} />
       <div className="w-14 h-14 rounded-xl border bg-violet-950 border-violet-900 flex items-center justify-center mb-5 text-2xl select-none">
         {game.emoji}
@@ -481,11 +493,15 @@ function GameCard({
   overlayData,
   badge,
   onOpenModal,
+  isFav,
+  onToggleFav,
 }: {
   entry: WebGameEntry;
   overlayData: CardOverlayData | null;
   badge: BadgeInfo | null;
   onOpenModal?: () => void;
+  isFav: boolean;
+  onToggleFav: () => void;
 }) {
   const { manifest: game, titleKey, descKey, comingSoon } = entry;
   const { t } = useI18n();
@@ -519,9 +535,16 @@ function GameCard({
 
   return (
     <div
-      className="group relative rounded-2xl border border-[var(--cardBorder)] bg-[var(--card)] p-6 hover:border-purple-500/50 hover:bg-zinc-800/50 hover:scale-[1.02] hover:shadow-xl transition-all duration-200 ease-out overflow-hidden cursor-pointer"
+      className={`group relative rounded-2xl border bg-[var(--card)] p-6 hover:border-purple-500/50 hover:bg-zinc-800/50 hover:scale-[1.02] hover:shadow-xl transition-all duration-200 ease-out overflow-hidden cursor-pointer ${isFav ? 'border-amber-500/30' : 'border-[var(--cardBorder)]'}`}
       onClick={onOpenModal}
     >
+      <button
+        onClick={(e) => { e.stopPropagation(); onToggleFav(); }}
+        className={`absolute top-3 left-3 z-[2] text-lg transition-colors ${isFav ? 'text-amber-400 hover:text-amber-300' : 'text-zinc-600 hover:text-zinc-400'}`}
+        title={t('game.favorite')}
+      >
+        {isFav ? '\u2605' : '\u2606'}
+      </button>
       <CardBadge badge={badge} t={t} />
       <div className="w-14 h-14 rounded-xl border bg-indigo-950 border-indigo-900 flex items-center justify-center mb-5 text-2xl">⊞</div>
       <h3 className="font-bold text-lg mb-1">{t(titleKey)}</h3>
@@ -598,9 +621,10 @@ export default function HomePage() {
 
   // Load all stats once on mount (SSR-safe: runs only on client)
   const [statsMap, setStatsMap] = useState<Map<string, CardOverlayData> | null>(null);
-  const [badgeMap, setBadgeMap] = useState<Map<string, BadgeInfo>>(new Map());
+  const badgeMap = useMemo(() => statsMap ? computeBadges(statsMap) : new Map<string, BadgeInfo>(), [statsMap]);
   const [favoriteGameId, setFavoriteGameId] = useState<string | null>(null);
   const [unlockedSet, setUnlockedSet] = useState<Set<string>>(new Set());
+  const [favorites, setFavoritesState] = useState<string[]>([]);
 
   useEffect(() => {
     const profile = loadLocalProfile();
@@ -635,9 +659,16 @@ export default function HomePage() {
       });
     }
     setStatsMap(map);
-    setBadgeMap(computeBadges(map));
     setFavoriteGameId(profile.favoriteGameId);
+    setFavoritesState(getFavorites());
   }, []);
+
+  const handleToggleFavorite = (gameId: string) => {
+    const updated = toggleFavorite(gameId);
+    setFavoritesState(updated);
+  };
+
+  const favSet = useMemo(() => new Set(favorites), [favorites]);
 
   const showMultiplayer  = filter !== 'singleplayer';
   const showSingleplayer = filter !== 'multiplayer';
@@ -646,25 +677,38 @@ export default function HomePage() {
   const searchLower = search.trim().toLowerCase();
 
   const filteredMultiplayer = useMemo(() => {
-    const entries = Object.values(webRegistry);
-    if (!searchLower) return entries;
-    return entries.filter((e) => {
-      const title = t(e.titleKey).toLowerCase();
-      const desc = t(e.descKey).toLowerCase();
-      const tags = e.manifest.categories.join(' ').toLowerCase();
-      return title.includes(searchLower) || desc.includes(searchLower) || tags.includes(searchLower);
+    let entries = Object.values(webRegistry);
+    if (searchLower) {
+      entries = entries.filter((e) => {
+        const title = t(e.titleKey).toLowerCase();
+        const desc = t(e.descKey).toLowerCase();
+        const tags = e.manifest.categories.join(' ').toLowerCase();
+        return title.includes(searchLower) || desc.includes(searchLower) || tags.includes(searchLower);
+      });
+    }
+    return [...entries].sort((a, b) => {
+      const aFav = favSet.has(a.manifest.id) ? 0 : 1;
+      const bFav = favSet.has(b.manifest.id) ? 0 : 1;
+      return aFav - bFav;
     });
-  }, [searchLower, t]);
+  }, [searchLower, t, favSet]);
 
   const filteredSingleplayer = useMemo(() => {
-    if (!searchLower) return SINGLEPLAYER_GAMES;
-    return SINGLEPLAYER_GAMES.filter((g) => {
-      const title = t(g.titleKey).toLowerCase();
-      const desc = t(g.descKey).toLowerCase();
-      const tags = g.tags.join(' ').toLowerCase();
-      return title.includes(searchLower) || desc.includes(searchLower) || tags.includes(searchLower);
+    let arr = [...SINGLEPLAYER_GAMES];
+    if (searchLower) {
+      arr = arr.filter((g) => {
+        const title = t(g.titleKey).toLowerCase();
+        const desc = t(g.descKey).toLowerCase();
+        const tags = g.tags.join(' ').toLowerCase();
+        return title.includes(searchLower) || desc.includes(searchLower) || tags.includes(searchLower);
+      });
+    }
+    return arr.sort((a, b) => {
+      const aFav = favSet.has(a.id) ? 0 : 1;
+      const bFav = favSet.has(b.id) ? 0 : 1;
+      return aFav - bFav;
     });
-  }, [searchLower, t]);
+  }, [searchLower, t, favSet]);
 
   function openMultiplayerModal(entry: WebGameEntry) {
     const s = statsMap?.get(entry.manifest.id);
@@ -730,6 +774,9 @@ export default function HomePage() {
             </Link>
             <Link href="/leaderboards" className="text-sm text-zinc-400 hover:text-zinc-100 transition-colors">
               {t('nav.leaderboard')}
+            </Link>
+            <Link href="/tournaments" className="text-sm text-zinc-400 hover:text-zinc-100 transition-colors">
+              {t('nav.tournaments')}
             </Link>
             <div className="w-px h-4 bg-zinc-700/60 shrink-0" aria-hidden />
             <TokenHeaderChip />
@@ -826,6 +873,8 @@ export default function HomePage() {
                 overlayData={statsMap?.get(entry.manifest.id) ?? null}
                 badge={badgeMap.get(entry.manifest.id) ?? null}
                 onOpenModal={() => openMultiplayerModal(entry)}
+                isFav={favSet.has(entry.manifest.id)}
+                onToggleFav={() => handleToggleFavorite(entry.manifest.id)}
               />
             ))}
           </div>
@@ -846,6 +895,8 @@ export default function HomePage() {
                 overlayData={statsMap?.get(game.id) ?? null}
                 badge={badgeMap.get(game.id) ?? null}
                 onOpenModal={() => openSingleplayerModal(game)}
+                isFav={favSet.has(game.id)}
+                onToggleFav={() => handleToggleFavorite(game.id)}
               />
             ))}
           </div>

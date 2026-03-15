@@ -46,7 +46,7 @@ interface Particle {
   color: string;
 }
 
-type PowerUpType = 'double' | 'triple' | 'rapid' | 'shield' | 'bigbullet';
+type PowerUpType = 'double' | 'triple' | 'rapid' | 'shield' | 'bigbullet' | 'homing' | 'multishot' | 'timeslow';
 
 interface PowerUp {
   pos: Vec2;
@@ -62,6 +62,20 @@ interface ActivePower {
   timeLeft: number; // ms remaining
 }
 
+interface BossBullet {
+  pos: Vec2;
+  vel: Vec2;
+  life: number;
+}
+
+interface Boss {
+  x: number; y: number;
+  vx: number; vy: number;
+  hp: number; maxHp: number;
+  fireTimer: number;
+  alive: boolean;
+}
+
 interface GameState {
   ship: Ship;
   bullets: Bullet[];
@@ -74,6 +88,9 @@ interface GameState {
   lives: number;
   wave: number;
   asteroidsDestroyed: number;
+  boss: Boss | null;
+  bossBullets: BossBullet[];
+  bossDefeatedTimer: number; // ms remaining for "Boss defeated!" flash
 }
 
 // ── Constants ────────────────────────────────────────────────────────────────
@@ -89,17 +106,21 @@ const BULLET_LIFE = 800; // ms
 const MAX_BULLETS = 5;
 const INVULN_TIME = 2500; // ms
 const STAR_COUNT = 120;
-const POWERUP_SPAWN_CHANCE = 0.15; // 15% from large asteroids
+const POWERUP_SPAWN_CHANCE = 0.25; // 25% from large asteroids
+const POWERUP_MEDIUM_CHANCE = 0.10; // 10% from medium asteroids
 const POWERUP_LIFETIME = 8000; // ms before despawn
 const POWERUP_ACTIVE_DURATION = 10000; // ms active
 const POWERUP_RADIUS = 14;
-const POWERUP_TYPES: PowerUpType[] = ['double', 'triple', 'rapid', 'shield', 'bigbullet'];
+const POWERUP_TYPES: PowerUpType[] = ['double', 'triple', 'rapid', 'shield', 'bigbullet', 'homing', 'multishot', 'timeslow'];
 const POWERUP_COLORS: Record<PowerUpType, string> = {
   double: '#3b82f6',    // blue
   triple: '#22c55e',    // green
   rapid: '#eab308',     // yellow
   shield: '#06b6d4',    // cyan
   bigbullet: '#f97316', // orange
+  homing: '#a855f7',    // purple
+  multishot: '#ec4899', // pink
+  timeslow: '#f5f5f5',  // white
 };
 const POWERUP_LABELS: Record<PowerUpType, string> = {
   double: '2x',
@@ -107,7 +128,18 @@ const POWERUP_LABELS: Record<PowerUpType, string> = {
   rapid: 'RF',
   shield: 'SH',
   bigbullet: 'BG',
+  homing: 'HM',
+  multishot: 'MS',
+  timeslow: 'TS',
 };
+
+// ── Boss constants ──
+const BOSS_RADIUS = 60;
+const BOSS_HP = 10;
+const BOSS_POINTS = 500;
+const BOSS_FIRE_INTERVAL = 120; // frames (~2s at 60fps)
+const BOSS_BULLET_SPEED = 3;
+const BOSS_BULLET_LIFE = 3000; // ms
 
 const DIFF_CONFIG: Record<Difficulty, { speedMult: number; startCount: number; countIncrement: number }> = {
   easy:   { speedMult: 0.7,  startCount: 3, countIncrement: 1 },
@@ -199,6 +231,23 @@ function makeParticles(pos: Vec2, count: number, color: string): Particle[] {
   return particles;
 }
 
+function isBossWave(wave: number): boolean {
+  return wave > 0 && wave % 5 === 0;
+}
+
+function createBoss(): Boss {
+  return {
+    x: W / 2,
+    y: 60,
+    vx: randomBetween(-0.3, 0.3),
+    vy: randomBetween(0.1, 0.3),
+    hp: BOSS_HP,
+    maxHp: BOSS_HP,
+    fireTimer: BOSS_FIRE_INTERVAL,
+    alive: true,
+  };
+}
+
 function spawnPowerUp(pos: Vec2): PowerUp {
   const type = POWERUP_TYPES[Math.floor(Math.random() * POWERUP_TYPES.length)];
   const angle = Math.random() * Math.PI * 2;
@@ -287,6 +336,9 @@ export function AsteroidsGame() {
       lives: 3,
       wave: 1,
       asteroidsDestroyed: 0,
+      boss: null,
+      bossBullets: [],
+      bossDefeatedTimer: 0,
     };
   }, []);
 
@@ -415,7 +467,21 @@ export function AsteroidsGame() {
         const baseAngle = game.ship.angle;
         const shipVelFactor = 0.5;
 
-        if (activeType === 'double') {
+        if (activeType === 'multishot') {
+          // 5 bullets in a spread: -30, -15, 0, +15, +30 degrees
+          const offsets = [-0.524, -0.262, 0, 0.262, 0.524]; // radians
+          for (const off of offsets) {
+            const a = baseAngle + off;
+            game.bullets.push({
+              pos: { ...game.ship.pos },
+              vel: {
+                x: Math.cos(a) * BULLET_SPEED + game.ship.vel.x * shipVelFactor,
+                y: Math.sin(a) * BULLET_SPEED + game.ship.vel.y * shipVelFactor,
+              },
+              life: BULLET_LIFE,
+            });
+          }
+        } else if (activeType === 'double') {
           const spread = 0.08; // ~4.5 degrees
           for (const off of [-spread, spread]) {
             const a = baseAngle + off;
@@ -456,6 +522,34 @@ export function AsteroidsGame() {
 
       // ── Update bullets ──
       game.bullets = game.bullets.filter(b => {
+        // Homing: steer toward nearest asteroid (or boss)
+        if (activeType === 'homing' && (game.asteroids.length > 0 || (game.boss && game.boss.alive))) {
+          let nearestDist = Infinity;
+          let nearestPos: Vec2 | null = null;
+          for (const a of game.asteroids) {
+            const d = dist(b.pos, a.pos);
+            if (d < nearestDist) { nearestDist = d; nearestPos = a.pos; }
+          }
+          if (game.boss && game.boss.alive) {
+            const d = dist(b.pos, { x: game.boss.x, y: game.boss.y });
+            if (d < nearestDist) { nearestPos = { x: game.boss.x, y: game.boss.y }; }
+          }
+          if (nearestPos) {
+            const dx = nearestPos.x - b.pos.x;
+            const dy = nearestPos.y - b.pos.y;
+            const targetAngle = Math.atan2(dy, dx);
+            const currentAngle = Math.atan2(b.vel.y, b.vel.x);
+            let diff = targetAngle - currentAngle;
+            while (diff > Math.PI) diff -= Math.PI * 2;
+            while (diff < -Math.PI) diff += Math.PI * 2;
+            const turnRate = 0.06; // radians per frame
+            const steer = Math.max(-turnRate, Math.min(turnRate, diff));
+            const newAngle = currentAngle + steer;
+            const speed = Math.sqrt(b.vel.x * b.vel.x + b.vel.y * b.vel.y);
+            b.vel.x = Math.cos(newAngle) * speed;
+            b.vel.y = Math.sin(newAngle) * speed;
+          }
+        }
         b.pos.x += b.vel.x;
         b.pos.y += b.vel.y;
         b.pos = wrap(b.pos);
@@ -464,11 +558,12 @@ export function AsteroidsGame() {
       });
 
       // ── Update asteroids ──
+      const timeSlowMult = activeType === 'timeslow' ? 0.3 : 1;
       for (const a of game.asteroids) {
-        a.pos.x += a.vel.x;
-        a.pos.y += a.vel.y;
+        a.pos.x += a.vel.x * timeSlowMult;
+        a.pos.y += a.vel.y * timeSlowMult;
         a.pos = wrap(a.pos);
-        a.rotation += a.rotSpeed;
+        a.rotation += a.rotSpeed * timeSlowMult;
       }
 
       // ── Update particles ──
@@ -530,8 +625,10 @@ export function AsteroidsGame() {
           if (si === 0) sfx.bigExplosionSound();
           else sfx.explosionSound();
 
-          // Power-up spawn (15% chance from large asteroids)
+          // Power-up spawn (25% from large, 10% from medium asteroids)
           if (si === 0 && Math.random() < POWERUP_SPAWN_CHANCE) {
+            game.powerUps.push(spawnPowerUp(a.pos));
+          } else if (si === 1 && Math.random() < POWERUP_MEDIUM_CHANCE) {
             game.powerUps.push(spawnPowerUp(a.pos));
           }
 
@@ -596,12 +693,156 @@ export function AsteroidsGame() {
         }
       }
 
+      // ── Boss update ──
+      if (game.boss && game.boss.alive) {
+        const boss = game.boss;
+        // Movement: drift around, bounce off edges
+        boss.x += boss.vx * timeSlowMult;
+        boss.y += boss.vy * timeSlowMult;
+        if (boss.x < BOSS_RADIUS) { boss.x = BOSS_RADIUS; boss.vx = Math.abs(boss.vx); }
+        if (boss.x > W - BOSS_RADIUS) { boss.x = W - BOSS_RADIUS; boss.vx = -Math.abs(boss.vx); }
+        if (boss.y < BOSS_RADIUS) { boss.y = BOSS_RADIUS; boss.vy = Math.abs(boss.vy); }
+        if (boss.y > H - BOSS_RADIUS) { boss.y = H - BOSS_RADIUS; boss.vy = -Math.abs(boss.vy); }
+
+        // Fire at player
+        boss.fireTimer--;
+        if (boss.fireTimer <= 0) {
+          boss.fireTimer = BOSS_FIRE_INTERVAL;
+          const dx = game.ship.pos.x - boss.x;
+          const dy = game.ship.pos.y - boss.y;
+          const angle = Math.atan2(dy, dx);
+          game.bossBullets.push({
+            pos: { x: boss.x, y: boss.y },
+            vel: { x: Math.cos(angle) * BOSS_BULLET_SPEED, y: Math.sin(angle) * BOSS_BULLET_SPEED },
+            life: BOSS_BULLET_LIFE,
+          });
+        }
+
+        // Check player bullets hitting boss
+        for (let bi = game.bullets.length - 1; bi >= 0; bi--) {
+          if (dist(game.bullets[bi].pos, { x: boss.x, y: boss.y }) < BOSS_RADIUS) {
+            game.bullets.splice(bi, 1);
+            boss.hp--;
+            game.particles.push(...makeParticles({ x: boss.x, y: boss.y }, 5, '#ef4444'));
+            sfx.explosionSound();
+            if (boss.hp <= 0) {
+              boss.alive = false;
+              game.score += BOSS_POINTS;
+              game.particles.push(...makeParticles({ x: boss.x, y: boss.y }, 40, '#f97316'));
+              game.particles.push(...makeParticles({ x: boss.x, y: boss.y }, 30, '#ef4444'));
+              game.particles.push(...makeParticles({ x: boss.x, y: boss.y }, 20, '#eab308'));
+              sfx.bigExplosionSound();
+              game.boss = null;
+              game.bossBullets = [];
+              game.bossDefeatedTimer = 2000;
+              // Proceed to next wave after boss
+              game.wave++;
+              const count = config.startCount + (game.wave - 1) * config.countIncrement;
+              game.asteroids = spawnWaveAsteroids(count, game.ship.pos, config.speedMult);
+              game.ship.invulnerable = Math.max(game.ship.invulnerable, 1500);
+              break;
+            }
+          }
+        }
+      }
+
+      // ── Update boss bullets ──
+      game.bossBullets = game.bossBullets.filter(b => {
+        b.pos.x += b.vel.x;
+        b.pos.y += b.vel.y;
+        b.life -= dt;
+        return b.life > 0 && b.pos.x > -10 && b.pos.x < W + 10 && b.pos.y > -10 && b.pos.y < H + 10;
+      });
+
+      // ── Boss bullet hitting ship ──
+      if (game.ship.invulnerable <= 0) {
+        for (let bi = game.bossBullets.length - 1; bi >= 0; bi--) {
+          if (dist(game.bossBullets[bi].pos, game.ship.pos) < SHIP_SIZE * 0.8) {
+            game.bossBullets.splice(bi, 1);
+            if (game.hasShield) {
+              game.hasShield = false;
+              game.activePower = null;
+              game.particles.push(...makeParticles(game.ship.pos, 15, '#06b6d4'));
+              game.ship.invulnerable = 500;
+            } else {
+              game.lives--;
+              game.particles.push(...makeParticles(game.ship.pos, 20, '#f87171'));
+              sfx.deathSound();
+              game.activePower = null;
+              game.hasShield = false;
+              if (game.lives <= 0) {
+                sfx.gameOverSound();
+                setDisplayScore(game.score);
+                setDisplayLives(0);
+                setPhase('ended');
+                if (!savedRef.current) {
+                  savedRef.current = true;
+                  const updated = updateStats(game.score, game.wave, game.asteroidsDestroyed);
+                  setStats(updated);
+                }
+                return;
+              }
+              game.ship.pos = { x: W / 2, y: H / 2 };
+              game.ship.vel = { x: 0, y: 0 };
+              game.ship.angle = -Math.PI / 2;
+              game.ship.invulnerable = INVULN_TIME;
+            }
+            break;
+          }
+        }
+      }
+
+      // ── Boss defeated timer ──
+      if (game.bossDefeatedTimer > 0) {
+        game.bossDefeatedTimer -= dt;
+      }
+
+      // ── Ship-boss collision ──
+      if (game.boss && game.boss.alive && game.ship.invulnerable <= 0) {
+        if (dist(game.ship.pos, { x: game.boss.x, y: game.boss.y }) < BOSS_RADIUS + SHIP_SIZE * 0.6) {
+          if (game.hasShield) {
+            game.hasShield = false;
+            game.activePower = null;
+            game.particles.push(...makeParticles(game.ship.pos, 15, '#06b6d4'));
+            game.ship.invulnerable = 500;
+          } else {
+            game.lives--;
+            game.particles.push(...makeParticles(game.ship.pos, 20, '#f87171'));
+            sfx.deathSound();
+            game.activePower = null;
+            game.hasShield = false;
+            if (game.lives <= 0) {
+              sfx.gameOverSound();
+              setDisplayScore(game.score);
+              setDisplayLives(0);
+              setPhase('ended');
+              if (!savedRef.current) {
+                savedRef.current = true;
+                const updated = updateStats(game.score, game.wave, game.asteroidsDestroyed);
+                setStats(updated);
+              }
+              return;
+            }
+            game.ship.pos = { x: W / 2, y: H / 2 };
+            game.ship.vel = { x: 0, y: 0 };
+            game.ship.angle = -Math.PI / 2;
+            game.ship.invulnerable = INVULN_TIME;
+          }
+        }
+      }
+
       // ── Wave cleared ──
-      if (game.asteroids.length === 0) {
+      if (game.asteroids.length === 0 && !game.boss) {
         game.wave++;
         sfx.levelUpSound();
-        const count = config.startCount + (game.wave - 1) * config.countIncrement;
-        game.asteroids = spawnWaveAsteroids(count, game.ship.pos, config.speedMult);
+        if (isBossWave(game.wave)) {
+          // Boss wave: no asteroids, spawn boss
+          game.boss = createBoss();
+          game.bossBullets = [];
+        } else {
+          const count = config.startCount + (game.wave - 1) * config.countIncrement;
+          game.asteroids = spawnWaveAsteroids(count, game.ship.pos, config.speedMult);
+        }
         game.ship.invulnerable = Math.max(game.ship.invulnerable, 1500);
       }
 
@@ -719,8 +960,11 @@ export function AsteroidsGame() {
             <div style={{ color: 'var(--fg)' }}>
               {t('game.score')}: <span className="tabular-nums">{displayScore.toLocaleString()}</span>
             </div>
-            <div style={{ color: 'var(--fg)' }}>
-              {t('asteroids.wave')}: <span className="tabular-nums">{displayWave}</span>
+            <div style={{ color: gameRef.current?.boss ? '#ef4444' : 'var(--fg)' }}>
+              {gameRef.current?.boss
+                ? <><span className="text-red-500 font-black">{t('asteroids.boss')}</span> <span className="tabular-nums">{displayWave}</span></>
+                : <>{t('asteroids.wave')}: <span className="tabular-nums">{displayWave}</span></>
+              }
             </div>
             <div style={{ color: 'var(--fg)' }}>
               {t('asteroids.lives')}: <span className="tabular-nums">{displayLives}</span>
@@ -984,12 +1228,17 @@ function drawGame(
     }
   }
 
-  // Bullets
+  // Bullets (player)
+  const isHomingBullet = activePower?.type === 'homing';
   const isBigBullet = activePower?.type === 'bigbullet';
   const bulletRadius = isBigBullet ? 5 : 2;
   if (isBigBullet) {
     ctx.fillStyle = '#fb923c'; // orange tint
     ctx.shadowColor = '#f97316';
+    ctx.shadowBlur = 6;
+  } else if (isHomingBullet) {
+    ctx.fillStyle = '#c084fc'; // purple tint for homing
+    ctx.shadowColor = '#a855f7';
     ctx.shadowBlur = 6;
   } else {
     ctx.fillStyle = '#fafafa';
@@ -1000,6 +1249,111 @@ function drawGame(
     ctx.fill();
   }
   ctx.shadowBlur = 0;
+
+  // Boss bullets (red)
+  ctx.fillStyle = '#ef4444';
+  ctx.shadowColor = '#dc2626';
+  ctx.shadowBlur = 4;
+  for (const b of game.bossBullets) {
+    ctx.beginPath();
+    ctx.arc(b.pos.x, b.pos.y, 4, 0, Math.PI * 2);
+    ctx.fill();
+  }
+  ctx.shadowBlur = 0;
+
+  // Boss
+  if (game.boss && game.boss.alive) {
+    const boss = game.boss;
+    ctx.save();
+    ctx.translate(boss.x, boss.y);
+
+    // Boss body: large diamond/ship shape
+    ctx.strokeStyle = '#ef4444';
+    ctx.fillStyle = 'rgba(239, 68, 68, 0.15)';
+    ctx.lineWidth = 2.5;
+    ctx.shadowColor = '#ef4444';
+    ctx.shadowBlur = 12;
+    ctx.beginPath();
+    ctx.moveTo(0, -BOSS_RADIUS * 0.8); // top
+    ctx.lineTo(BOSS_RADIUS * 0.6, -BOSS_RADIUS * 0.2);
+    ctx.lineTo(BOSS_RADIUS * 0.5, BOSS_RADIUS * 0.3);
+    ctx.lineTo(BOSS_RADIUS * 0.15, BOSS_RADIUS * 0.6);
+    ctx.lineTo(-BOSS_RADIUS * 0.15, BOSS_RADIUS * 0.6);
+    ctx.lineTo(-BOSS_RADIUS * 0.5, BOSS_RADIUS * 0.3);
+    ctx.lineTo(-BOSS_RADIUS * 0.6, -BOSS_RADIUS * 0.2);
+    ctx.closePath();
+    ctx.fill();
+    ctx.stroke();
+
+    // Inner detail lines
+    ctx.strokeStyle = 'rgba(239, 68, 68, 0.5)';
+    ctx.lineWidth = 1;
+    ctx.shadowBlur = 0;
+    ctx.beginPath();
+    ctx.moveTo(-BOSS_RADIUS * 0.3, 0);
+    ctx.lineTo(BOSS_RADIUS * 0.3, 0);
+    ctx.moveTo(0, -BOSS_RADIUS * 0.4);
+    ctx.lineTo(0, BOSS_RADIUS * 0.3);
+    ctx.stroke();
+
+    // Wings
+    ctx.strokeStyle = '#ef4444';
+    ctx.lineWidth = 1.5;
+    ctx.beginPath();
+    ctx.moveTo(BOSS_RADIUS * 0.6, -BOSS_RADIUS * 0.2);
+    ctx.lineTo(BOSS_RADIUS * 0.9, -BOSS_RADIUS * 0.1);
+    ctx.lineTo(BOSS_RADIUS * 0.7, BOSS_RADIUS * 0.2);
+    ctx.stroke();
+    ctx.beginPath();
+    ctx.moveTo(-BOSS_RADIUS * 0.6, -BOSS_RADIUS * 0.2);
+    ctx.lineTo(-BOSS_RADIUS * 0.9, -BOSS_RADIUS * 0.1);
+    ctx.lineTo(-BOSS_RADIUS * 0.7, BOSS_RADIUS * 0.2);
+    ctx.stroke();
+
+    ctx.restore();
+
+    // HP bar above boss
+    const hpBarW = 80;
+    const hpBarH = 6;
+    const hpBarX = boss.x - hpBarW / 2;
+    const hpBarY = boss.y - BOSS_RADIUS - 15;
+    const hpFraction = boss.hp / boss.maxHp;
+
+    ctx.fillStyle = 'rgba(255,255,255,0.15)';
+    ctx.fillRect(hpBarX, hpBarY, hpBarW, hpBarH);
+    ctx.fillStyle = hpFraction > 0.3 ? '#ef4444' : '#f97316';
+    ctx.fillRect(hpBarX, hpBarY, hpBarW * hpFraction, hpBarH);
+    ctx.strokeStyle = 'rgba(255,255,255,0.3)';
+    ctx.lineWidth = 1;
+    ctx.strokeRect(hpBarX, hpBarY, hpBarW, hpBarH);
+
+    // BOSS label
+    ctx.fillStyle = '#ef4444';
+    ctx.font = 'bold 10px monospace';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'bottom';
+    ctx.fillText('BOSS', boss.x, hpBarY - 2);
+  }
+
+  // "Boss defeated!" flash
+  if (game.bossDefeatedTimer > 0) {
+    const alpha = Math.min(1, game.bossDefeatedTimer / 500);
+    ctx.save();
+    ctx.fillStyle = `rgba(249, 115, 22, ${alpha})`;
+    ctx.font = 'bold 28px monospace';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.shadowColor = '#f97316';
+    ctx.shadowBlur = 15;
+    ctx.fillText('BOSS DEFEATED!', W / 2, H / 2 - 40);
+    ctx.restore();
+  }
+
+  // Time slow visual effect (subtle vignette tint)
+  if (activePower?.type === 'timeslow') {
+    ctx.fillStyle = 'rgba(200, 200, 255, 0.04)';
+    ctx.fillRect(0, 0, W, H);
+  }
 
   // Active power-up HUD indicator (top center)
   if (activePower) {

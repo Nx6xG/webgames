@@ -389,7 +389,8 @@ function drawGame(ctx: CanvasRenderingContext2D, state: GameState, animFrame: nu
   // Level
   ctx.fillStyle = '#a1a1aa';
   ctx.textAlign = 'center';
-  ctx.fillText(`L${state.level}`, CANVAS_W / 2, CANVAS_H - 5);
+  ctx.textBaseline = 'bottom';
+  ctx.fillText(`L${state.level}`, CANVAS_W / 2, CANVAS_H - 12);
 }
 
 function drawGhostEyes(ctx: CanvasRenderingContext2D, gx: number, gy: number, gr: number, dir: Direction) {

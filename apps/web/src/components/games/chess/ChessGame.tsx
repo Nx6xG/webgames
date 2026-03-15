@@ -21,6 +21,7 @@ import { ReconnectBanner } from '@/components/ui/ReconnectBanner';
 import { useChessBot, type ChessBotState } from './useChessBot';
 import type { BotDifficulty } from './botEngine';
 import { saveLastConfig, loadLastConfig, hasLastConfig } from '@/lib/lobbyPresets';
+import { useAutoJoin } from '@/hooks/useAutoJoin';
 
 // ── Piece rendering ────────────────────────────────────────────────────────────
 
@@ -345,25 +346,10 @@ export function ChessGame({ wsUrl, gameId, initialRoomCode, quickPlay: isQuickPl
   } : mpRaw;
 
   const prevTotalRef    = useRef<number | null>(null);
-  const autoJoined      = useRef(false);
   const moveListRef     = useRef<HTMLDivElement>(null);
   const userScrolledRef = useRef(false);
 
-  // ── Auto-join / quick-play effects ──────────────────────────────────────────
-
-  useEffect(() => {
-    if (mp.connection === 'connected' && initialRoomCode && !autoJoined.current && mp.phase === 'lobby') {
-      autoJoined.current = true;
-      mp.joinRoom(initialRoomCode);
-    }
-  }, [mp.connection, initialRoomCode, mp.phase]); // eslint-disable-line
-
-  useEffect(() => {
-    if (mp.connection === 'connected' && isQuickPlay && !autoJoined.current && mp.phase === 'lobby') {
-      autoJoined.current = true;
-      mp.quickPlay();
-    }
-  }, [mp.connection, isQuickPlay, mp.phase]); // eslint-disable-line
+  useAutoJoin(mp, initialRoomCode, isQuickPlay, 'chess');
 
   useEffect(() => {
     if (isQuickPlay && mp.roomCode) {

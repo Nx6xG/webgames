@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react';
 import { useI18n } from '@/components/providers/LanguageProvider';
 import { GAME_EMOJI } from '@/lib/localStats';
 import { getActiveStreak } from '@/lib/playStreak';
+import { getPlayStreakBonus } from '@/lib/progression';
 import { useProgression } from '@/components/providers/ProgressionProvider';
 import { TokenIcon } from '@/components/ui/TokenIcon';
 import type { ProfileData } from './types';
@@ -83,7 +84,7 @@ export function ProfileOverviewCards({ profile }: Props) {
       {/* Streak + most played row */}
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
         {/* Streak */}
-        <div className="rounded-xl border border-zinc-700/50 bg-zinc-800/30 p-4 flex items-center gap-4">
+        <div className="rounded-xl border border-zinc-700/50 bg-zinc-800/30 p-4 flex items-center gap-4 group/streak relative">
           <span className="text-2xl">🔥</span>
           <div className="flex-1">
             <p className="text-xs text-zinc-500">{t('profilePage.streak')}</p>
@@ -92,12 +93,25 @@ export function ProfileOverviewCards({ profile }: Props) {
               <span className="text-sm font-normal text-zinc-500 ml-1">{t('profilePage.days')}</span>
             </p>
           </div>
-          {streak.bestStreak > 0 && (
-            <div className="text-right">
-              <p className="text-[10px] text-zinc-500">{t('profilePage.best')}</p>
-              <p className="text-sm font-semibold text-amber-400">{streak.bestStreak}</p>
-            </div>
-          )}
+          <div className="text-right">
+            {getPlayStreakBonus(streak.currentStreak) > 0 && (
+              <p className="text-[10px] text-emerald-400 font-medium mb-0.5">+{getPlayStreakBonus(streak.currentStreak)} XP {t('daily.bonus')}</p>
+            )}
+            {streak.bestStreak > 0 && (
+              <>
+                <p className="text-[10px] text-zinc-500">{t('profilePage.best')}</p>
+                <p className="text-sm font-semibold text-amber-400">{streak.bestStreak}</p>
+              </>
+            )}
+          </div>
+          {/* Streak bonus tooltip */}
+          <div className="absolute top-full left-1/2 -translate-x-1/2 mt-2 px-3 py-2 rounded-lg bg-zinc-800 border border-zinc-700 shadow-xl text-[11px] text-zinc-300 whitespace-nowrap opacity-0 pointer-events-none group-hover/streak:opacity-100 transition-opacity z-50">
+            <p className="font-bold text-zinc-100 mb-1">{t('daily.streakBonus')}</p>
+            <p className={streak.currentStreak >= 3 ? 'text-emerald-400' : 'text-zinc-500'}>3+ {t('profilePage.days')}: +10 XP</p>
+            <p className={streak.currentStreak >= 7 ? 'text-emerald-400' : 'text-zinc-500'}>7+ {t('profilePage.days')}: +20 XP</p>
+            <p className={streak.currentStreak >= 14 ? 'text-emerald-400' : 'text-zinc-500'}>14+ {t('profilePage.days')}: +30 XP</p>
+            <p className={streak.currentStreak >= 30 ? 'text-emerald-400' : 'text-zinc-500'}>30+ {t('profilePage.days')}: +50 XP</p>
+          </div>
         </div>
 
         {/* Most played */}

@@ -248,6 +248,11 @@ export function ChatPanel({
                             >
                               {msg.nickname}
                             </button>
+                            {msg.isSpectator && (
+                              <span className="inline-flex items-center px-1 py-px rounded text-[8px] font-semibold bg-amber-500/15 text-amber-400 border border-amber-500/20 leading-none shrink-0">
+                                {t('chat.spectator')}
+                              </span>
+                            )}
                             {msg.level != null && msg.level > 0 && (
                               <span className="inline-flex items-center px-1 py-px rounded text-[8px] font-bold bg-indigo-500/15 text-indigo-400 border border-indigo-500/20 leading-none shrink-0">
                                 {msg.level}
@@ -349,6 +354,11 @@ export function ChatPanel({
                     >
                       {msg.nickname}
                     </button>
+                    {msg.isSpectator && (
+                      <span className="inline-flex items-center px-1 py-px rounded text-[8px] font-semibold bg-amber-500/15 text-amber-400 border border-amber-500/20 leading-none shrink-0">
+                        {t('chat.spectator')}
+                      </span>
+                    )}
                     {msg.level != null && msg.level > 0 && (
                       <span className="inline-flex items-center px-1 py-px rounded text-[8px] font-bold bg-indigo-500/15 text-indigo-400 border border-indigo-500/20 leading-none shrink-0">
                         {msg.level}

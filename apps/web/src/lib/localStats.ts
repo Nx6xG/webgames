@@ -17,6 +17,7 @@ import { loadStats, loadUnlocked } from '@/lib/achievements/store';
 import { ACHIEVEMENTS } from '@/lib/achievements/definitions';
 import { loadScores } from '@/lib/personal-scores/storage';
 import { getScoreConfig } from '@/lib/personal-scores/config';
+import { isBrowser } from '@/lib/utils';
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -89,10 +90,6 @@ export const GAME_EMOJI: Record<string, string> = {
 };
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
-
-function isBrowser(): boolean {
-  return typeof window !== 'undefined';
-}
 
 function safeGet(key: string): string | null {
   if (!isBrowser()) return null;

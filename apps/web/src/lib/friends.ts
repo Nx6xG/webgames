@@ -1,10 +1,8 @@
 'use client';
 
-const STORAGE_KEY = 'webgames_friends_v1';
+import { isBrowser } from '@/lib/utils';
 
-function isBrowser(): boolean {
-  return typeof window !== 'undefined';
-}
+const STORAGE_KEY = 'webgames_friends_v1';
 
 export interface FriendEntry {
   /** Player token of the friend. */

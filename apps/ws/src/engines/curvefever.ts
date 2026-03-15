@@ -18,13 +18,14 @@ const POWERUP_PICKUP_RADIUS = 12;
 const POWERUP_SPEED_DURATION = 60;
 const POWERUP_SPEED_MULTIPLIER = 1.5;
 const POWERUP_SHIELD_DURATION = 300;
-const POWERUP_PHASE_DURATION = 30;
+const POWERUP_PHASE_DURATION = 60;
 const POWERUP_SLOW_DURATION = 90;
 const POWERUP_SLOW_MULTIPLIER = 0.5;
 const POWERUP_THIN_DURATION = 120;
 const POWERUP_REVERSE_DURATION = 90;
 const POWERUP_BIG_DURATION = 90;
 const POWERUP_BIG_MULTIPLIER = 1.8;
+const POWERUP_WARP_DURATION = 90;
 const KILL_FEED_MAX = 5;
 
 // ── Speed presets ──────────────────────────────────────────────────────────
@@ -94,7 +95,7 @@ interface BotParams {
 }
 
 const BOT_PARAMS: Record<CfBotDifficulty, BotParams> = {
-  easy:   { lookahead: 80,  rays: 5,  reactionDelay: 2, jitter: 0.08, angleSpread: 0.6,  seekPowerUps: false, dangerThreshold: 0.35 },
+  easy:   { lookahead: 80,  rays: 5,  reactionDelay: 2, jitter: 0.08, angleSpread: 0.6,  seekPowerUps: false, dangerThreshold: 0.5 },
   medium: { lookahead: 140, rays: 9,  reactionDelay: 0, jitter: 0.02, angleSpread: 1.0,  seekPowerUps: true,  dangerThreshold: 0.25 },
   hard:   { lookahead: 220, rays: 15, reactionDelay: 0, jitter: 0.005, angleSpread: 1.4, seekPowerUps: true,  dangerThreshold: 0.15 },
 };
@@ -159,9 +160,40 @@ function computeBotSteering(
   const collDistSq = collDist * collDist;
   const aW = state.arenaWidth;
   const aH = state.arenaHeight;
+  const shrinkInset = state.shrinkInset;
   // Scale lookahead with speed so bots react earlier at higher speeds
   const effectiveLookahead = Math.max(params.lookahead, params.lookahead * (speed / 1.5));
   const step = Math.max(1.5, pRadius); // finer steps for better detection
+
+  // WALL PROXIMITY: direct distance check to arena boundaries (rectangle arenas)
+  // For non-rectangle shapes, the ray-casting via isSafePosition handles walls.
+  // This pre-check gives bots an earlier, more reliable wall warning.
+  const wallMargin = effectiveLookahead * params.dangerThreshold;
+  const distToLeft = bot.x - pRadius - shrinkInset;
+  const distToRight = (aW - shrinkInset) - bot.x - pRadius;
+  const distToTop = bot.y - pRadius - shrinkInset;
+  const distToBottom = (aH - shrinkInset) - bot.y - pRadius;
+  const minWallDist = Math.min(distToLeft, distToRight, distToTop, distToBottom);
+
+  if (state.cfArenaShape === 'rectangle' && minWallDist < wallMargin && minWallDist >= 0) {
+    // Heading toward the nearest wall? Steer away from it.
+    const cos = Math.cos(bot.angle);
+    const sin = Math.sin(bot.angle);
+    const headingTowardWall =
+      (distToLeft === minWallDist && cos < -0.1) ||
+      (distToRight === minWallDist && cos > 0.1) ||
+      (distToTop === minWallDist && sin < -0.1) ||
+      (distToBottom === minWallDist && sin > 0.1);
+
+    if (headingTowardWall) {
+      // Steer away from the closest wall by turning toward arena center
+      const centerAngle = Math.atan2(aH / 2 - bot.y, aW / 2 - bot.x);
+      let diff = centerAngle - bot.angle;
+      while (diff > Math.PI) diff -= Math.PI * 2;
+      while (diff < -Math.PI) diff += Math.PI * 2;
+      return diff > 0 ? 'right' : 'left';
+    }
+  }
 
   // Cast rays across the feeler cone
   const rayDistances: number[] = [];
@@ -268,7 +300,7 @@ function newPowerUpSpawnCounter(density: CfPowerUpDensity): number {
   return randRange(preset.spawnMin, preset.spawnMax);
 }
 
-const ALL_POWERUP_TYPES: CfPowerUpType[] = ['speed', 'shield', 'phase', 'slow', 'thin', 'reverse', 'big'];
+const ALL_POWERUP_TYPES: CfPowerUpType[] = ['speed', 'shield', 'phase', 'slow', 'thin', 'reverse', 'big', 'warp'];
 
 function randomPowerUpType(disabled: CfPowerUpType[]): CfPowerUpType {
   const available = disabled.length > 0
@@ -582,6 +614,7 @@ function effectDuration(type: CfPowerUpType): number {
     case 'thin': return POWERUP_THIN_DURATION;
     case 'reverse': return POWERUP_REVERSE_DURATION;
     case 'big': return POWERUP_BIG_DURATION;
+    case 'warp': return POWERUP_WARP_DURATION;
   }
 }
 
@@ -596,7 +629,7 @@ function applyPowerUpPickup(
   const dur = effectDuration(puType);
 
   // Self-targeting power-ups
-  if (puType === 'speed' || puType === 'shield' || puType === 'phase' || puType === 'thin') {
+  if (puType === 'speed' || puType === 'shield' || puType === 'phase' || puType === 'thin' || puType === 'warp') {
     picker.effects.push({ type: puType, remainingTicks: dur });
     if (puType === 'shield') picker.hasShield = true;
     return;
@@ -1011,8 +1044,8 @@ export const curveFeverEngine: GameEngine<CurveFeverState, CurveFeverAction> & {
 
       // Movement with per-player speed (speed/slow effects)
       const pSpeed = getPlayerSpeed(p, speed);
-      const newX = p.x + Math.cos(p.angle) * pSpeed;
-      const newY = p.y + Math.sin(p.angle) * pSpeed;
+      let newX = p.x + Math.cos(p.angle) * pSpeed;
+      let newY = p.y + Math.sin(p.angle) * pSpeed;
 
       // Track distance
       const dx = newX - p.x;
@@ -1021,18 +1054,30 @@ export const curveFeverEngine: GameEngine<CurveFeverState, CurveFeverAction> & {
 
       // Wall collision (shield does NOT protect from walls)
       if (isOutOfBounds(newX, newY, pRadius, shrinkInset, state.cfArenaShape, state.arenaWidth, state.arenaHeight)) {
-        p.alive = false;
-        statsAccum[i].deathTick = ticks;
-        deaths.push({
-          token: p.token, nickname: p.nickname,
-          x: p.x, y: p.y, color: p.color,
-          cause: 'wall',
-        });
-        newKillFeed.push({
-          victim: p.nickname, victimColor: p.color,
-          cause: 'wall', tick: ticks,
-        });
-        continue;
+        if (hasEffect(p, 'warp') && state.cfArenaShape === 'rectangle') {
+          // Warp: wrap to opposite side of arena
+          const margin = pRadius + shrinkInset;
+          if (newX < margin) newX = state.arenaWidth - margin - 1;
+          else if (newX > state.arenaWidth - margin) newX = margin + 1;
+          if (newY < margin) newY = state.arenaHeight - margin - 1;
+          else if (newY > state.arenaHeight - margin) newY = margin + 1;
+        } else if (hasEffect(p, 'warp')) {
+          // Non-rectangle arenas: warp behaves like phase (pass through walls)
+          // Just skip the death — position stays out of bounds briefly
+        } else {
+          p.alive = false;
+          statsAccum[i].deathTick = ticks;
+          deaths.push({
+            token: p.token, nickname: p.nickname,
+            x: p.x, y: p.y, color: p.color,
+            cause: 'wall',
+          });
+          newKillFeed.push({
+            victim: p.nickname, victimColor: p.color,
+            cause: 'wall', tick: ticks,
+          });
+          continue;
+        }
       }
 
       // Obstacle collision

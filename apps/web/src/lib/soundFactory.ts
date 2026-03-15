@@ -3,7 +3,7 @@
  * Each game creates its own SoundEngine instance with a unique mute key.
  */
 
-import { isGloballyMuted } from '@/lib/globalMute';
+import { isGloballyMuted, getGlobalVolume } from '@/lib/globalMute';
 
 export interface SoundEngine {
   /** Check if this game's sounds are muted (per-game or global). */
@@ -48,7 +48,8 @@ export function createSoundEngine(muteKey: string): SoundEngine {
     const gain = ac.createGain();
     osc.type = type;
     osc.frequency.value = freq;
-    gain.gain.setValueAtTime(volume, ac.currentTime);
+    const masterVolume = getGlobalVolume() / 100;
+    gain.gain.setValueAtTime(volume * masterVolume, ac.currentTime);
     gain.gain.exponentialRampToValueAtTime(0.001, ac.currentTime + duration);
     osc.connect(gain);
     gain.connect(ac.destination);

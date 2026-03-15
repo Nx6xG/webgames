@@ -1,11 +1,9 @@
 'use client';
 
+import { isBrowser } from '@/lib/utils';
+
 const STORAGE_KEY = 'webgames_recently_played_v1';
 const MAX_ENTRIES = 5;
-
-function isBrowser(): boolean {
-  return typeof window !== 'undefined';
-}
 
 export interface RecentEntry {
   gameId: string;

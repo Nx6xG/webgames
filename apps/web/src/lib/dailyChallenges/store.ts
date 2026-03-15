@@ -1,12 +1,9 @@
 'use client';
 
 import type { DailyChallengeProgress } from './types';
+import { isBrowser } from '@/lib/utils';
 
 const STORAGE_KEY = 'webgames_daily_challenges_v1';
-
-function isBrowser(): boolean {
-  return typeof window !== 'undefined';
-}
 
 function defaultProgress(date: string): DailyChallengeProgress {
   return { date, progress: {}, completed: [] };

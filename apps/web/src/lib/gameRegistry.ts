@@ -1,13 +1,15 @@
 import type { ComponentType } from 'react';
+import dynamic from 'next/dynamic';
 import type { GameId, GameManifest } from 'shared';
-import { TicTacToeGame } from '@/components/games/tictactoe/TicTacToeGame';
-import { Connect4Game } from '@/components/games/connect4/Connect4Game';
-import { RpsGame } from '@/components/games/rps/RpsGame';
-import { ChessGame } from '@/components/games/chess/ChessGame';
-import { BattleshipGame } from '@/components/games/battleship/BattleshipGame';
-import { LiarsBarGame } from '@/components/games/liarsbar/LiarsBarGame';
-import { CurveFeverGame } from '@/components/games/curvefever/CurveFeverGame';
-import { UnoGame } from '@/components/games/uno/UnoGame';
+
+const TicTacToeGame = dynamic(() => import('@/components/games/tictactoe/TicTacToeGame').then(m => m.TicTacToeGame));
+const Connect4Game = dynamic(() => import('@/components/games/connect4/Connect4Game').then(m => m.Connect4Game));
+const RpsGame = dynamic(() => import('@/components/games/rps/RpsGame').then(m => m.RpsGame));
+const ChessGame = dynamic(() => import('@/components/games/chess/ChessGame').then(m => m.ChessGame));
+const BattleshipGame = dynamic(() => import('@/components/games/battleship/BattleshipGame').then(m => m.BattleshipGame));
+const LiarsBarGame = dynamic(() => import('@/components/games/liarsbar/LiarsBarGame').then(m => m.LiarsBarGame));
+const CurveFeverGame = dynamic(() => import('@/components/games/curvefever/CurveFeverGame').then(m => m.CurveFeverGame));
+const UnoGame = dynamic(() => import('@/components/games/uno/UnoGame').then(m => m.UnoGame));
 
 /**
  * Props every game component must accept.

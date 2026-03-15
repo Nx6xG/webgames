@@ -15,9 +15,11 @@ import { PartyManager } from './parties.js';
 import { getGameCapacity } from './gameCapacity.js';
 import { InMemoryStorage } from './storage/inMemory.js';
 import type { Storage } from './storage/types.js';
+import { TournamentManager } from './tournament.js';
 
 const storage: Storage = new InMemoryStorage();
 const partyManager = new PartyManager();
+const tournamentManager = new TournamentManager();
 
 // ── Cosmetics helpers ─────────────────────────────────────────────────────────
 
@@ -224,6 +226,32 @@ setInterval(() => {
   for (const [ip, entry] of publicRoomCreations) {
     if (entry.firstAt < cutoff) publicRoomCreations.delete(ip);
   }
+}, 5 * 60 * 1000);
+
+// Periodic cleanup of stale entries (every 5 minutes)
+setInterval(() => {
+  const now = Date.now();
+
+  // Clean stale chat timestamps (older than the rate window)
+  for (const [token, timestamps] of chatTimestamps) {
+    const recent = timestamps.filter(t => now - t < CHAT_RATE_WINDOW_MS);
+    if (recent.length === 0) chatTimestamps.delete(token);
+    else chatTimestamps.set(token, recent);
+  }
+
+  // Clean identified tokens for disconnected sockets
+  for (const [socketId] of identifiedTokens) {
+    if (!io.sockets.sockets.has(socketId)) {
+      identifiedTokens.delete(socketId);
+    }
+  }
+
+  // Clean rate limiter for disconnected sockets
+  const activeSocketIds = new Set(io.sockets.sockets.keys());
+  rateLimiter.cleanDisconnected(activeSocketIds);
+
+  // Clean finished tournaments older than 1 hour
+  tournamentManager.cleanup();
 }, 5 * 60 * 1000);
 
 function getClientIp(handshake: { headers: Record<string, string | string[] | undefined>; address: string }): string {
@@ -454,6 +482,27 @@ function emitRematchStarted(room: Room, state: AnyGameState) {
   }
 }
 
+function emitPlayerJoined(room: Room, joinerToken: string, joinerSocketId: string) {
+  const joiner = room.players.find(p => p.playerToken === joinerToken);
+  if (!joiner) return;
+  for (const p of room.players) {
+    if (p.playerToken === joinerToken) continue;
+    const pSock = io.sockets.sockets.get(p.socketId);
+    if (pSock) {
+      pSock.emit('player_joined', {
+        playerId: joinerSocketId,
+        playerIndex: joiner.index,
+        playerCount: room.players.length,
+        spectatorCount: room.spectators.size,
+        state: room.state
+          ? projectGameState(room.gameId, room.state, { playerIndex: p.index, isSpectator: false })
+          : null,
+        players: roomPlayers(room),
+      });
+    }
+  }
+}
+
 // ── Room-level callbacks (fired outside socket event handlers) ────────────────
 
 roomManager.onPlayerEvicted((room, playerIndex) => {
@@ -531,6 +580,80 @@ roomManager.onRoomCleaned((room) => {
   // Free presence map entry
   roomGamePresence.delete(room.code);
 });
+
+// ── Tournament helpers ────────────────────────────────────────────────────────
+
+function findSocketsByToken(token: string): string[] {
+  const sids: string[] = [];
+  for (const [sid, t] of identifiedTokens) {
+    if (t === token) sids.push(sid);
+  }
+  return sids;
+}
+
+function startTournamentMatch(tournamentId: string, match: { id: string; round: number; player1: string | null; player2: string | null }) {
+  if (!match.player1 || !match.player2) return;
+
+  const tournament = tournamentManager.get(tournamentId);
+  if (!tournament) return;
+
+  const cap = getGameCapacity(tournament.config.gameId);
+
+  // Find sockets for player1 so we can create the room under their socket
+  const p1Sockets = findSocketsByToken(match.player1);
+  const p1Sid = p1Sockets[0];
+  if (!p1Sid) {
+    console.log(`[tournament] no socket found for player1 ${match.player1.slice(0, 8)} in match ${match.id}`);
+    return;
+  }
+
+  const p1 = tournament.players.find(p => p.token === match.player1);
+  const p2 = tournament.players.find(p => p.token === match.player2);
+
+  const room = roomManager.createRoom(
+    p1Sid,
+    match.player1,
+    tournament.config.gameId,
+    p1?.nickname ?? 'Player 1',
+    'private',
+    `${tournament.config.name} R${match.round + 1}`,
+    {
+      ...tournament.config.gameConfig,
+      _tournamentId: tournamentId,
+      _matchId: match.id,
+    },
+    cap.min,
+    cap.max,
+  );
+
+  tournamentManager.startMatch(tournamentId, match.id, room.code);
+
+  // Join player1's socket to the room channel
+  const p1Sock = io.sockets.sockets.get(p1Sid);
+  if (p1Sock) {
+    p1Sock.join(room.code);
+    p1Sock.emit('tournament_match_ready', {
+      tournamentId,
+      matchId: match.id,
+      roomCode: room.code,
+      opponent: { token: p2?.token ?? '', nickname: p2?.nickname ?? 'TBD' },
+    });
+  }
+
+  // Notify player2 to join
+  const p2Sockets = findSocketsByToken(match.player2!);
+  for (const sid of p2Sockets) {
+    const sock = io.sockets.sockets.get(sid);
+    sock?.emit('tournament_match_ready', {
+      tournamentId,
+      matchId: match.id,
+      roomCode: room.code,
+      opponent: { token: p1?.token ?? '', nickname: p1?.nickname ?? 'TBD' },
+    });
+  }
+
+  console.log(`[tournament] match ${match.id.slice(0, 8)} started → room ${room.code} (${p1?.nickname} vs ${p2?.nickname})`);
+}
 
 // ── Per-connection logic ──────────────────────────────────────────────────────
 
@@ -650,6 +773,12 @@ io.on('connection', (socket) => {
     identifiedTokens.set(socket.id, playerToken);
     nicknameMap.set(socket.id, nickname);
     if (!profiles.has(playerToken)) profiles.set(playerToken, { nickname });
+
+    // Validate gameId
+    if (!(gameId in engineRegistry)) {
+      socket.emit('room_error', { code: 'INVALID_GAME', message: 'Unknown game.' });
+      return;
+    }
 
     // Spam protection: max PUBLIC_ROOM_RATE_LIMIT public rooms per IP per window
     if (visibility === 'public') {
@@ -895,22 +1024,7 @@ io.on('connection', (socket) => {
       });
       socket.emit('chat_history', { scope: 'room', messages: roomChats.get(code) ?? [] });
       // Notify all existing players about the new joiner
-      for (const p of room.players) {
-        if (p.playerToken === playerToken) continue;
-        const pSock = io.sockets.sockets.get(p.socketId);
-        if (pSock) {
-          pSock.emit('player_joined', {
-            playerId: socket.id,
-            playerIndex: joiner.index,
-            playerCount: room.players.length,
-            spectatorCount: room.spectators.size,
-            state: room.state
-              ? projectGameState(room.gameId, room.state, { playerIndex: p.index, isSpectator: false })
-              : null,
-            players: roomPlayers(room),
-          });
-        }
-      }
+      emitPlayerJoined(room, playerToken, socket.id);
       socketActivity.set(socket.id, { kind: 'room', gameId: room.gameId, roomCode: code, isPublic: room.visibility === 'public' });
       broadcastPresence();
       if (room.visibility === 'public') broadcastOpenRooms();
@@ -1108,6 +1222,24 @@ io.on('connection', (socket) => {
           if (globalChat.length > GLOBAL_CHAT_BUF) globalChat.shift();
           io.to('global').emit('chat_message', { message: sysMsg });
         }
+
+        // Check if this is a tournament match
+        if (room.gameConfig?._tournamentId && room.gameConfig?._matchId) {
+          const tId = room.gameConfig._tournamentId as string;
+          if (!('draw' in result)) {
+            const tWinnerToken = nextState.winner as string;
+            if (tWinnerToken) {
+              const tResult = tournamentManager.reportMatchResult(tId, room.code, tWinnerToken);
+              if (typeof tResult !== 'string') {
+                io.to(`tournament:${tId}`).emit('tournament_state', { tournament: tResult.tournament });
+                // Start newly ready matches
+                for (const readyMatch of tResult.readyMatches) {
+                  startTournamentMatch(tId, readyMatch);
+                }
+              }
+            }
+          }
+        }
       }
     } catch (err) {
       const msg = err instanceof Error ? err.message : 'Unknown error';
@@ -1193,6 +1325,12 @@ io.on('connection', (socket) => {
     identifiedTokens.set(socket.id, playerToken);
     nicknameMap.set(socket.id, nickname);
     if (!profiles.has(playerToken)) profiles.set(playerToken, { nickname });
+
+    // Validate gameId
+    if (!(gameId in engineRegistry)) {
+      socket.emit('room_error', { code: 'INVALID_GAME', message: 'Unknown game.' });
+      return;
+    }
 
     // Leave any current room first (same as create_room)
     const existing = roomManager.getRoomBySocket(socket.id);
@@ -1287,22 +1425,7 @@ io.on('connection', (socket) => {
           socket.emit('chat_history', { scope: 'room', messages: roomChats.get(entry.roomCode) ?? [] });
           socket.emit('quick_play_joined', { roomCode: entry.roomCode });
           // Notify all existing players
-          for (const p of room.players) {
-            if (p.playerToken === playerToken) continue;
-            const pSock = io.sockets.sockets.get(p.socketId);
-            if (pSock) {
-              pSock.emit('player_joined', {
-                playerId: socket.id,
-                playerIndex: joiner.index,
-                playerCount: room.players.length,
-                spectatorCount: room.spectators.size,
-                state: room.state
-                  ? projectGameState(room.gameId, room.state, { playerIndex: p.index, isSpectator: false })
-                  : null,
-                players: roomPlayers(room),
-              });
-            }
-          }
+          emitPlayerJoined(room, playerToken, socket.id);
           socketActivity.set(socket.id, { kind: 'room', gameId: room.gameId, roomCode: entry.roomCode, isPublic: room.visibility === 'public' });
           broadcastPresence();
           emitRoomReady(room);
@@ -1429,6 +1552,11 @@ io.on('connection', (socket) => {
       cosmetics: profile ? buildCosmetics(profile) : undefined,
       level: presEntry?.level,
     };
+
+    // Mark spectator messages so clients can display a badge
+    if (scope === 'room' && roomManager.isSpectator(socket.id)) {
+      msg.isSpectator = true;
+    }
 
     if (scope === 'global') {
       globalChat.push(msg);
@@ -1846,6 +1974,91 @@ io.on('connection', (socket) => {
       gameId,
       entries: getEntries(lbMode, gameId, myToken),
     });
+  });
+
+  // ── Tournament handlers ──────────────────────────────────────────────────
+
+  socket.on('tournament_create', ({ playerToken, nickname, gameId, bracketSize, name, gameConfig }: {
+    playerToken: string; nickname: string; gameId: string; bracketSize: number; name: string; gameConfig?: Record<string, unknown>;
+  }) => {
+    if (!(gameId in engineRegistry)) {
+      socket.emit('tournament_error', { code: 'INVALID_GAME', message: 'Unknown game.' });
+      return;
+    }
+    const validBracketSize = ([4, 8, 16].includes(bracketSize) ? bracketSize : 8) as 4 | 8 | 16;
+    const tournament = tournamentManager.create({
+      gameId: gameId as GameId, bracketSize: validBracketSize, name, createdBy: playerToken, gameConfig,
+    });
+    // Creator auto-joins
+    tournamentManager.join(tournament.id, playerToken, nickname);
+    socket.join(`tournament:${tournament.id}`);
+    socket.emit('tournament_created', { tournamentId: tournament.id });
+    socket.emit('tournament_state', { tournament: tournamentManager.get(tournament.id)! });
+    // Broadcast updated list
+    io.emit('tournament_list', { tournaments: tournamentManager.list() });
+  });
+
+  socket.on('tournament_join', ({ playerToken, nickname, tournamentId }: {
+    playerToken: string; nickname: string; tournamentId: string;
+  }) => {
+    const result = tournamentManager.join(tournamentId, playerToken, nickname);
+    if (typeof result === 'string') {
+      socket.emit('tournament_error', { code: result, message: result });
+      return;
+    }
+    socket.join(`tournament:${tournamentId}`);
+    socket.emit('tournament_joined', { tournamentId });
+    io.to(`tournament:${tournamentId}`).emit('tournament_state', { tournament: result });
+    io.emit('tournament_list', { tournaments: tournamentManager.list() });
+  });
+
+  socket.on('tournament_leave', ({ playerToken, tournamentId }: {
+    playerToken: string; tournamentId: string;
+  }) => {
+    const result = tournamentManager.leave(tournamentId, playerToken);
+    socket.leave(`tournament:${tournamentId}`);
+    if (typeof result === 'string') {
+      if (result === 'TOURNAMENT_DELETED') {
+        io.to(`tournament:${tournamentId}`).emit('tournament_error', { code: 'TOURNAMENT_DELETED', message: 'Tournament was deleted.' });
+        io.emit('tournament_list', { tournaments: tournamentManager.list() });
+      } else {
+        socket.emit('tournament_error', { code: result, message: result });
+      }
+      return;
+    }
+    io.to(`tournament:${tournamentId}`).emit('tournament_state', { tournament: result });
+    io.emit('tournament_list', { tournaments: tournamentManager.list() });
+  });
+
+  socket.on('tournament_start', ({ playerToken, tournamentId }: {
+    playerToken: string; tournamentId: string;
+  }) => {
+    const result = tournamentManager.start(tournamentId, playerToken);
+    if (typeof result === 'string') {
+      socket.emit('tournament_error', { code: result, message: result });
+      return;
+    }
+    io.to(`tournament:${tournamentId}`).emit('tournament_state', { tournament: result });
+
+    // Start ready matches (first round)
+    const readyMatches = tournamentManager.getReadyMatches(tournamentId);
+    for (const match of readyMatches) {
+      startTournamentMatch(tournamentId, match);
+    }
+  });
+
+  socket.on('tournament_list', () => {
+    socket.emit('tournament_list', { tournaments: tournamentManager.list() });
+  });
+
+  socket.on('tournament_get', ({ tournamentId }: { tournamentId: string }) => {
+    const t = tournamentManager.get(tournamentId);
+    if (!t) {
+      socket.emit('tournament_error', { code: 'TOURNAMENT_NOT_FOUND', message: 'Tournament not found.' });
+      return;
+    }
+    socket.join(`tournament:${tournamentId}`);
+    socket.emit('tournament_state', { tournament: t });
   });
 
   // ── disconnect ────────────────────────────────────────────────────────────

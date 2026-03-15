@@ -27,8 +27,8 @@ interface DiffConfig {
 
 const DIFF_CONFIG: Record<Difficulty, DiffConfig> = {
   easy:   { fruitInterval: 1800, minFruits: 1, maxFruits: 3, bombChance: 0.05, gravity: 0.25, throwSpeed: 13 },
-  medium: { fruitInterval: 1400, minFruits: 2, maxFruits: 4, bombChance: 0.12, gravity: 0.28, throwSpeed: 14 },
-  hard:   { fruitInterval: 1000, minFruits: 2, maxFruits: 5, bombChance: 0.20, gravity: 0.30, throwSpeed: 15 },
+  medium: { fruitInterval: 1400, minFruits: 1, maxFruits: 3, bombChance: 0.12, gravity: 0.28, throwSpeed: 14 },
+  hard:   { fruitInterval: 1000, minFruits: 2, maxFruits: 4, bombChance: 0.20, gravity: 0.30, throwSpeed: 15 },
 };
 
 // ── Fruit definitions ────────────────────────────────────────────────────────
@@ -42,12 +42,12 @@ interface FruitDef {
 }
 
 const FRUIT_DEFS: FruitDef[] = [
-  { name: 'apple',      color: '#dc2626', innerColor: '#fef9c3', radius: 28, leafColor: '#16a34a' },
-  { name: 'orange',     color: '#f97316', innerColor: '#fef3c7', radius: 26, leafColor: '#15803d' },
-  { name: 'watermelon', color: '#16a34a', innerColor: '#ef4444', radius: 34, leafColor: '#166534' },
-  { name: 'banana',     color: '#facc15', innerColor: '#fef9c3', radius: 24, leafColor: '#a16207' },
-  { name: 'strawberry', color: '#ec4899', innerColor: '#fce7f3', radius: 22, leafColor: '#15803d' },
-  { name: 'pineapple',  color: '#d97706', innerColor: '#fef3c7', radius: 30, leafColor: '#16a34a' },
+  { name: 'apple',      color: '#dc2626', innerColor: '#fef9c3', radius: 34, leafColor: '#16a34a' },
+  { name: 'orange',     color: '#f97316', innerColor: '#fef3c7', radius: 36, leafColor: '#15803d' },
+  { name: 'watermelon', color: '#16a34a', innerColor: '#ef4444', radius: 42, leafColor: '#166534' },
+  { name: 'banana',     color: '#facc15', innerColor: '#fef9c3', radius: 33, leafColor: '#a16207' },
+  { name: 'strawberry', color: '#ec4899', innerColor: '#fce7f3', radius: 30, leafColor: '#15803d' },
+  { name: 'pineapple',  color: '#d97706', innerColor: '#fef3c7', radius: 38, leafColor: '#16a34a' },
 ];
 
 // ── Entity interfaces ────────────────────────────────────────────────────────
@@ -474,7 +474,7 @@ export function FruitNinjaGame() {
       // Wave spawning
       g.waveTimer += dt;
       // Accelerate spawn rate over time
-      const speedupFactor = Math.max(0.5, 1 - g.waveCount * 0.015);
+      const speedupFactor = Math.max(0.5, 1 - g.waveCount * 0.008);
       const interval = diff.fruitInterval * speedupFactor;
       if (g.waveTimer >= interval) {
         g.waveTimer = 0;

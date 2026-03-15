@@ -1,6 +1,7 @@
 'use client';
 
 import { getTodayStr } from '@/lib/dailyChallenges/definitions';
+import { isBrowser } from '@/lib/utils';
 
 const STORAGE_KEY = 'webgames_play_streak_v1';
 
@@ -11,10 +12,6 @@ export interface StreakData {
   currentStreak: number;
   /** All-time best streak. */
   bestStreak: number;
-}
-
-function isBrowser(): boolean {
-  return typeof window !== 'undefined';
 }
 
 function defaultData(): StreakData {

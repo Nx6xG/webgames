@@ -1,4 +1,5 @@
 import type { CosmeticsSelection, CosmeticsSlots } from 'shared';
+import { isBrowser } from '@/lib/utils';
 
 // ── Storage ──────────────────────────────────────────────────────────────────
 
@@ -8,10 +9,6 @@ export const COSMETICS_KEY = 'wg_cosmetics';
 const LEGACY_AVATAR_KEY = 'wg_avatar';
 const LEGACY_NAME_COLOR_KEY = 'wg_name_color';
 const LEGACY_FRAME_KEY = 'wg_avatar_frame';
-
-function isBrowser(): boolean {
-  return typeof window !== 'undefined';
-}
 
 /**
  * Load unified cosmetics from localStorage.

@@ -19,6 +19,15 @@ class ActionRateLimiter {
   clear(socketId: string): void {
     this.last.delete(socketId);
   }
+
+  /** Remove entries for socket IDs not in the given set of active IDs */
+  cleanDisconnected(activeSocketIds: Set<string>): void {
+    for (const [socketId] of this.last) {
+      if (!activeSocketIds.has(socketId)) {
+        this.last.delete(socketId);
+      }
+    }
+  }
 }
 
 export const rateLimiter = new ActionRateLimiter();

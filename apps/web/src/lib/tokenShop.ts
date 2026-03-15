@@ -14,16 +14,16 @@ export interface ShopItem {
 
 /** Shop-exclusive cosmetics (not unlockable via achievements). */
 export const SHOP_ITEMS: ShopItem[] = [
-  { id: 'shop_frame_crystal', slot: 'frame',     rarity: 'rare',      price: 3,  labelKey: 'shop.item.crystalFrame',   emoji: '💠' },
-  { id: 'shop_frame_plasma',  slot: 'frame',     rarity: 'legendary', price: 5,  labelKey: 'shop.item.plasmaFrame',    emoji: '🟣' },
-  { id: 'shop_aura_golden',   slot: 'aura',      rarity: 'rare',      price: 3,  labelKey: 'shop.item.goldenAura',     emoji: '🌟' },
-  { id: 'shop_aura_rainbow',  slot: 'aura',      rarity: 'legendary', price: 6,  labelKey: 'shop.item.rainbowAura',    emoji: '🌈' },
-  { id: 'shop_banner_galaxy', slot: 'banner',    rarity: 'rare',      price: 2,  labelKey: 'shop.item.galaxyBanner',   emoji: '🪐' },
-  { id: 'shop_banner_storm',  slot: 'banner',    rarity: 'epic',      price: 3,  labelKey: 'shop.item.stormBanner',    emoji: '⛈️' },
-  { id: 'shop_badge_vip',     slot: 'badge',     rarity: 'legendary', price: 5,  labelKey: 'shop.item.vipBadge',       emoji: '💎' },
-  { id: 'shop_head_halo',     slot: 'head',      rarity: 'rare',      price: 4,  labelKey: 'shop.item.halo',           emoji: '😇' },
-  { id: 'shop_card_hologram', slot: 'cardColor', rarity: 'legendary', price: 5,  labelKey: 'shop.item.hologramCard',   emoji: '✴️' },
-  { id: 'shop_portal_rift',   slot: 'portal',    rarity: 'epic',      price: 3,  labelKey: 'shop.item.riftPortal',     emoji: '🌀' },
+  { id: 'shop_frame_crystal', slot: 'frame',     rarity: 'rare',      price: 10, labelKey: 'shop.item.crystalFrame',   emoji: '💠' },
+  { id: 'shop_frame_plasma',  slot: 'frame',     rarity: 'legendary', price: 35, labelKey: 'shop.item.plasmaFrame',    emoji: '🟣' },
+  { id: 'shop_aura_golden',   slot: 'aura',      rarity: 'rare',      price: 8,  labelKey: 'shop.item.goldenAura',     emoji: '🌟' },
+  { id: 'shop_aura_rainbow',  slot: 'aura',      rarity: 'legendary', price: 30, labelKey: 'shop.item.rainbowAura',    emoji: '🌈' },
+  { id: 'shop_banner_galaxy', slot: 'banner',    rarity: 'rare',      price: 8,  labelKey: 'shop.item.galaxyBanner',   emoji: '🪐' },
+  { id: 'shop_banner_storm',  slot: 'banner',    rarity: 'epic',      price: 15, labelKey: 'shop.item.stormBanner',    emoji: '⛈️' },
+  { id: 'shop_badge_vip',     slot: 'badge',     rarity: 'legendary', price: 30, labelKey: 'shop.item.vipBadge',       emoji: '💎' },
+  { id: 'shop_head_halo',     slot: 'head',      rarity: 'rare',      price: 12, labelKey: 'shop.item.halo',           emoji: '😇' },
+  { id: 'shop_card_hologram', slot: 'cardColor', rarity: 'legendary', price: 25, labelKey: 'shop.item.hologramCard',   emoji: '✴️' },
+  { id: 'shop_portal_rift',   slot: 'portal',    rarity: 'epic',      price: 18, labelKey: 'shop.item.riftPortal',     emoji: '🌀' },
 ];
 
 /** Check if a shop item is owned. */

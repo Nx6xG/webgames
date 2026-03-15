@@ -52,7 +52,7 @@ export interface CfKillFeedEntry {
 
 // ── Power-ups ─────────────────────────────────────────────────────────────────
 
-export type CfPowerUpType = 'speed' | 'shield' | 'phase' | 'slow' | 'thin' | 'reverse' | 'big';
+export type CfPowerUpType = 'speed' | 'shield' | 'phase' | 'slow' | 'thin' | 'reverse' | 'big' | 'warp';
 
 /** A spawned power-up sitting on the arena. */
 export interface CfPowerUp {

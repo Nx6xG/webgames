@@ -19,7 +19,9 @@ import { RoomInviteButton } from '@/components/social/RoomInviteButton';
 import { useAchievements } from '@/hooks/useAchievements';
 import { ReconnectBanner } from '@/components/ui/ReconnectBanner';
 import { useBattleshipBot, type BotDifficulty } from './useBattleshipBot';
+import { ReplayControls } from '@/components/ui/ReplayControls';
 import { saveLastConfig, loadLastConfig, hasLastConfig } from '@/lib/lobbyPresets';
+import { useAutoJoin } from '@/hooks/useAutoJoin';
 
 // ── Cell display types ────────────────────────────────────────────────────────
 
@@ -710,6 +712,8 @@ export function BattleshipGame({ wsUrl, gameId, initialRoomCode, quickPlay: isQu
   const [shotTimerCfg,    setShotTimerCfg]     = useState(0);
   const [timerDisplay,    setTimerDisplay]     = useState<number | null>(null);
   const [showInfo,        setShowInfo]         = useState(false);
+  const [replayState, setReplayState]        = useState<BattleshipState | null>(null);
+  const [replayMode,  setReplayMode]         = useState(false);
   const [chatOpen,        setChatOpen]         = useState(false);
   const [unread,          setUnread]           = useState(0);
   const [placeError,      setPlaceError]       = useState<string | null>(null);
@@ -741,24 +745,9 @@ export function BattleshipGame({ wsUrl, gameId, initialRoomCode, quickPlay: isQu
   const [hoverCoord,    setHoverCoord]   = useState<Coord | null>(null);
   const [activeShipId,  setActiveShipId] = useState<ShipId>('');
 
-  const autoJoined      = useRef(false);
   const prevTotalRef    = useRef<number | null>(null);
 
-  // ── Connection effects ──────────────────────────────────────────────────────
-
-  useEffect(() => {
-    if (mp.connection === 'connected' && initialRoomCode && !autoJoined.current && mp.phase === 'lobby') {
-      autoJoined.current = true;
-      mp.joinRoom(initialRoomCode);
-    }
-  }, [mp.connection, initialRoomCode, mp.phase]); // eslint-disable-line
-
-  useEffect(() => {
-    if (mp.connection === 'connected' && isQuickPlay && !autoJoined.current && mp.phase === 'lobby') {
-      autoJoined.current = true;
-      mp.quickPlay();
-    }
-  }, [mp.connection, isQuickPlay, mp.phase]); // eslint-disable-line
+  useAutoJoin(mp, initialRoomCode, isQuickPlay, 'battleship');
 
   useEffect(() => {
     if (isQuickPlay && mp.roomCode) {
@@ -810,7 +799,8 @@ export function BattleshipGame({ wsUrl, gameId, initialRoomCode, quickPlay: isQu
   const myIdx = mp.playerIndex;
   const oppIdx: number | null = myIdx !== null ? (myIdx === 0 ? 1 : 0) : null;
   const mySlot: BsSlot | null = myIdx !== null ? (myIdx === 0 ? 'A' : 'B') : null;
-  const gs = mp.gameState;
+  const liveGs = mp.gameState;
+  const gs = replayMode && replayState ? replayState : liveGs;
 
   const ownShipsLen = gs?.players[myIdx ?? 0]?.ships.length ?? 0;
   const shipDefs: ShipDef[] = gs?.shipDefs ?? [];
@@ -869,7 +859,7 @@ export function BattleshipGame({ wsUrl, gameId, initialRoomCode, quickPlay: isQu
   // currentTurn is now a player token (UUID), not a BsSlot.
   const myPlayerId = gs && myIdx !== null ? gs.playerIds[myIdx] : null;
   const isMyTurn = !mp.isSpectator && gs?.phase === 'playing' && myPlayerId !== null && gs.currentTurn === myPlayerId;
-  const canFire  = isMyTurn && mp.roomReady && mp.matchCountdown === null;
+  const canFire  = isMyTurn && !replayMode && mp.roomReady && mp.matchCountdown === null;
 
   // Stable key that is non-empty only once per finished match (ignored on repeated pushes).
   const finishKey = gs?.phase === 'finished' && gs?.winner && !mp.isSpectator && myIdx !== null
@@ -1741,8 +1731,16 @@ export function BattleshipGame({ wsUrl, gameId, initialRoomCode, quickPlay: isQu
           </div>
         )}
 
+        {/* Replay */}
+        <ReplayControls<BattleshipState>
+          history={mpRaw.stateHistory as BattleshipState[]}
+          gameEnded={mp.phase === 'ended'}
+          onStep={(state) => setReplayState(state)}
+          onToggle={(active) => { setReplayMode(active); if (!active) setReplayState(null); }}
+        />
+
         {/* ── Rematch / Leave ──────────────────────────────────────────────── */}
-        {!mp.isSpectator && gs?.phase === 'finished' && mp.playerCount === 2 && (
+        {!mp.isSpectator && gs?.phase === 'finished' && mp.playerCount === 2 && !replayMode && (
           <div className="flex flex-col items-center gap-1.5">
             <button
               onClick={mp.requestRematch}

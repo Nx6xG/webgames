@@ -1,14 +1,11 @@
 import type { AchievementStats } from './definitions';
 import type { CosmeticSlot } from '@/lib/cosmetics';
+import { isBrowser } from '@/lib/utils';
 
 const STATS_KEY = 'webgames_stats_v1';
 const UNLOCKED_KEY = 'webgames_achievements_v1';
 const UNLOCKED_FRAMES_KEY = 'webgames_unlocked_frames_v1';
 const UNLOCKED_COSMETICS_KEY = 'webgames_unlocked_cosmetics_v1';
-
-function isBrowser(): boolean {
-  return typeof window !== 'undefined';
-}
 
 function defaultStats(): AchievementStats {
   return {

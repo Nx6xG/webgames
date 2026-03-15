@@ -11,6 +11,7 @@ import {
   isGotdBonusAvailable, claimGotdBonus, getGotdId,
   getMatchXpReward, MULTIPLAYER_GAME_IDS, XP_REWARDS,
   incrementWinStreak, checkStreakReset, getStreakBonus,
+  getPlayStreakBonus,
 } from '@/lib/progression';
 
 export type AchievementEvent =
@@ -32,6 +33,9 @@ export function consumeCompletedDaily(): string[] {
   _lastCompletedDaily = [];
   return r;
 }
+
+/** Play streak bonus XP awarded during the current call (reset each invocation). */
+let _playStreakBonusXp = 0;
 
 /** Level-ups produced during the last trackAchievementEvent call (in-memory, does NOT touch localStorage queue). */
 let _lastLevelUps: LevelUpResult[] = [];
@@ -128,6 +132,7 @@ export function trackAchievementEvent(
 
   // ── Daily challenge tracking ────────────────────────────────────────────────
   _lastCompletedDaily = [];
+  _playStreakBonusXp = 0;
   if (ev.type === 'game_played' || ev.type === 'game_won') {
     const today = getTodayStr();
     const challenges = getDailyChallenges(today);
@@ -152,6 +157,11 @@ export function trackAchievementEvent(
         }
         if (!stats.flags['all_dailies_completed']) {
           stats.flags['all_dailies_completed'] = true;
+        }
+        // Award play streak bonus XP (uncapped, like other daily rewards)
+        const playStreakBonus = getPlayStreakBonus(streakData.currentStreak);
+        if (playStreakBonus > 0) {
+          _playStreakBonusXp = playStreakBonus;
         }
         saveStats(stats);
       }
@@ -230,6 +240,9 @@ export function trackAchievementEvent(
       totalXp += XP_REWARDS.ALL_DAILIES_BONUS;
     }
   }
+
+  // Uncapped XP for play streak bonus (awarded when all dailies completed)
+  totalXp += _playStreakBonusXp;
 
   // Tier-based XP + tokens for newly unlocked achievements
   let achTokens = 0;

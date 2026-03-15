@@ -13,6 +13,7 @@ import { ChatPanelWithProfile as ChatPanel } from '@/components/chat/ChatPanelWi
 import { SpectatorBanner } from '@/components/ui/SpectatorBanner';
 import { WaitingForConnectionOverlay } from '@/components/WaitingForConnectionOverlay';
 import { saveLastConfig, loadLastConfig, hasLastConfig } from '@/lib/lobbyPresets';
+import { ReplayControls } from '@/components/ui/ReplayControls';
 
 const ARENA_W = 800;
 const ARENA_H = 600;
@@ -31,6 +32,7 @@ const POWERUP_COLORS: Record<CfPowerUpType, string> = {
   thin: '#e91e63',    // pink
   reverse: '#ff5722', // deep orange
   big: '#8bc34a',     // light green
+  warp: '#e74c3c',    // red
 };
 
 const POWERUP_ICONS: Record<CfPowerUpType, string> = {
@@ -41,6 +43,7 @@ const POWERUP_ICONS: Record<CfPowerUpType, string> = {
   thin: '📍',
   reverse: '🔄',
   big: '💪',
+  warp: '🌀',
 };
 
 // ── Death particle system (client-only) ──────────────────────────────────────
@@ -168,11 +171,12 @@ function effectMaxDuration(type: CfPowerUpType): number {
   switch (type) {
     case 'speed': return 60;
     case 'shield': return 300;
-    case 'phase': return 30;
+    case 'phase': return 60;
     case 'slow': return 90;
     case 'thin': return 120;
     case 'reverse': return 90;
     case 'big': return 90;
+    case 'warp': return 90;
   }
 }
 
@@ -180,7 +184,10 @@ export function CurveFeverGame({ wsUrl, gameId, initialRoomCode, quickPlay: auto
   const mp = useMultiplayer<CurveFeverState>(wsUrl, gameId);
   const { t } = useI18n();
   const ach = useAchievements('curvefever', mp.roomCode);
-  const gs = mp.gameState;
+  const [replayState, setReplayState] = useState<CurveFeverState | null>(null);
+  const [replayMode, setReplayMode] = useState(false);
+  const liveGs = mp.gameState;
+  const gs = replayMode && replayState ? replayState : liveGs;
 
   // Lobby config
   const [bestOf, setBestOf] = useState(5);
@@ -272,7 +279,7 @@ export function CurveFeverGame({ wsUrl, gameId, initialRoomCode, quickPlay: auto
 
   useEffect(() => {
     if (!gs || gs.phase !== 'playing') return;
-    if (mp.isSpectator) return;
+    if (mp.isSpectator || replayMode) return;
 
     const pressed = new Set<string>();
 
@@ -1174,7 +1181,7 @@ export function CurveFeverGame({ wsUrl, gameId, initialRoomCode, quickPlay: auto
                   {/* Per-power-up toggles */}
                   {cfPowerUps !== 'none' && (
                     <div className="flex flex-col gap-1.5 pl-1">
-                      {(['speed', 'shield', 'phase', 'slow', 'thin', 'reverse', 'big'] as CfPowerUpType[]).map((puType) => {
+                      {(['speed', 'shield', 'phase', 'slow', 'thin', 'reverse', 'big', 'warp'] as CfPowerUpType[]).map((puType) => {
                         const disabled = cfDisabledPUs.includes(puType);
                         return (
                           <label key={puType} className="flex items-start gap-2 cursor-pointer group">
@@ -1558,6 +1565,13 @@ export function CurveFeverGame({ wsUrl, gameId, initialRoomCode, quickPlay: auto
   const topScore = sortedPlayers[0]?.score ?? 0;
   const isMatchWinner = gs?.phase === 'finished' && gs.winner;
 
+  // Check if local player is behind the scoreboard overlay (top-left region)
+  const myPlayer = gs?.players.find(p => p.token === myToken);
+  const arenaW = gs?.arenaWidth || ARENA_W;
+  const arenaH = gs?.arenaHeight || ARENA_H;
+  const isPlayerNearScoreboard = myPlayer && myPlayer.alive && gs?.phase === 'playing'
+    && myPlayer.x < arenaW * 0.25 && myPlayer.y < arenaH * 0.35;
+
   // ── Game UI ─────────────────────────────────────────────────────────────
   return (
     <div className="relative w-full px-4 py-2">
@@ -1587,8 +1601,14 @@ export function CurveFeverGame({ wsUrl, gameId, initialRoomCode, quickPlay: auto
                 className="absolute inset-0 w-full h-full"
               />
 
-              {/* Scoreboard overlay (top-left) */}
-          <div className="absolute top-3 left-3 z-10 pointer-events-none">
+              {/* Scoreboard overlay (top-left) — fades when local player is behind it */}
+          <div
+            className="absolute top-3 left-3 z-10 pointer-events-none"
+            style={{
+              opacity: isPlayerNearScoreboard ? 0.2 : 1,
+              transition: 'opacity 0.3s ease',
+            }}
+          >
             <div
               className="rounded-xl p-3 space-y-1.5 pointer-events-auto"
               style={{
@@ -1755,10 +1775,18 @@ export function CurveFeverGame({ wsUrl, gameId, initialRoomCode, quickPlay: auto
             </div>
           </div>
 
+          {/* Replay */}
+          <ReplayControls<CurveFeverState>
+            history={mp.stateHistory as CurveFeverState[]}
+            gameEnded={mp.phase === 'ended'}
+            onStep={(state) => setReplayState(state)}
+            onToggle={(active) => { setReplayMode(active); if (!active) setReplayState(null); }}
+          />
+
           {/* Bottom bar: controls hint + rematch + leave */}
           <div className="flex items-center justify-center gap-4 mt-1">
             <p className="text-xs text-zinc-600">{t('curvefever.controls')}</p>
-            {gs?.phase === 'finished' && (
+            {gs?.phase === 'finished' && !replayMode && (
               <button
                 onClick={() => mp.requestRematch()}
                 className="px-6 py-2 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-white font-semibold transition-colors cursor-pointer"

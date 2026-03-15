@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState, useRef, useCallback, useSyncExternalStore } from 'react';
+import { useEffect, useState, useRef, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
 import type { UnoState, UnoCard, UnoColor, RoomVisibility } from 'shared';
 import { UNO_TARGET_SCORES, UNO_DEFAULT_TARGET, UNO_DEFAULT_RULES } from 'shared';
@@ -14,18 +14,9 @@ import { useAchievements } from '@/hooks/useAchievements';
 import { SpectatorBanner } from '@/components/ui/SpectatorBanner';
 import { ReconnectBanner } from '@/components/ui/ReconnectBanner';
 import { saveLastConfig, loadLastConfig, hasLastConfig } from '@/lib/lobbyPresets';
-
-// ── Compact viewport ────────────────────────────────────────────────────────
-
-const MQ = '(max-height: 800px)';
-function subscribeCompact(cb: () => void) {
-  const mql = window.matchMedia(MQ);
-  mql.addEventListener('change', cb);
-  return () => mql.removeEventListener('change', cb);
-}
-function getCompact() { return window.matchMedia(MQ).matches; }
-function getCompactServer() { return false; }
-function useCompact() { return useSyncExternalStore(subscribeCompact, getCompact, getCompactServer); }
+import { useCompact } from '@/hooks/useCompact';
+import { ReplayControls } from '@/components/ui/ReplayControls';
+import { useAutoJoin } from '@/hooks/useAutoJoin';
 
 // ── Color systems ───────────────────────────────────────────────────────────
 // Rich, saturated card colors that pop against the dark felt
@@ -286,9 +277,9 @@ function ActiveColorIndicator({ color, compact }: { color: UnoColor; compact: bo
 function ColorPicker({ onPick, pt }: { onPick: (color: UnoColor) => void; pt: (k: string) => string }) {
   const colors: UnoColor[] = ['red', 'yellow', 'green', 'blue'];
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center" style={{ backgroundColor: 'rgba(0,0,0,0.8)', backdropFilter: 'blur(8px)' }}>
+    <div className="fixed inset-0 z-50 flex items-end justify-center pb-48 sm:pb-56" style={{ backgroundColor: 'rgba(0,0,0,0.50)', backdropFilter: 'blur(4px)', pointerEvents: 'auto' }}>
       <div
-        className="flex flex-col items-center gap-6 p-10 rounded-3xl"
+        className="flex flex-col items-center gap-4 p-8 rounded-3xl"
         style={{
           background: 'linear-gradient(145deg, rgba(39,39,42,0.97) 0%, rgba(24,24,27,0.98) 100%)',
           border: '1px solid rgba(63,63,70,0.5)',
@@ -297,7 +288,7 @@ function ColorPicker({ onPick, pt }: { onPick: (color: UnoColor) => void; pt: (k
         }}
       >
         <p className="text-lg font-black text-zinc-100 tracking-tight">{pt('uno.chooseColor')}</p>
-        <div className="grid grid-cols-2 gap-5">
+        <div className="grid grid-cols-4 gap-3">
           {colors.map((clr) => {
             const c = CARD_COLORS[clr];
             return (
@@ -306,14 +297,14 @@ function ColorPicker({ onPick, pt }: { onPick: (color: UnoColor) => void; pt: (k
                 onClick={() => onPick(clr)}
                 className="cursor-pointer transition-all duration-200 hover:scale-110 active:scale-100"
                 style={{
-                  width: 96,
-                  height: 96,
-                  borderRadius: 20,
+                  width: 72,
+                  height: 72,
+                  borderRadius: 16,
                   background: `linear-gradient(145deg, ${c.bg}, ${c.darkBg})`,
                   border: `2px solid ${c.accent}`,
                   boxShadow: `0 8px 24px ${c.shadow}, inset 0 1px 0 rgba(255,255,255,0.15)`,
                   color: c.text,
-                  fontSize: 20,
+                  fontSize: 18,
                   fontWeight: 900,
                 }}
               >
@@ -641,7 +632,10 @@ const ANIM_STYLES = `
 
 export function UnoGame({ wsUrl, gameId, initialRoomCode, quickPlay: isQuickPlay }: GameComponentProps) {
   const mp = useMultiplayer<UnoState>(wsUrl, gameId);
-  const gs = mp.gameState;
+  const [replayState, setReplayState] = useState<UnoState | null>(null);
+  const [replayMode, setReplayMode] = useState(false);
+  const liveGs = mp.gameState;
+  const gs = replayMode && replayState ? replayState : liveGs;
   const myIdx = mp.playerIndex;
   const { t } = useI18n();
   const router = useRouter();
@@ -661,7 +655,7 @@ export function UnoGame({ wsUrl, gameId, initialRoomCode, quickPlay: isQuickPlay
   const [playDrawnCard, setPlayDrawnCard] = useState(UNO_DEFAULT_RULES.playDrawnCardImmediately);
   const [drawUntilPlayable, setDrawUntilPlayable] = useState(UNO_DEFAULT_RULES.drawUntilPlayable);
   const [forcedPlay, setForcedPlay] = useState(UNO_DEFAULT_RULES.forcedPlay);
-  const autoJoined = useRef(false);
+  const [stackSameCards, setStackSameCards] = useState(UNO_DEFAULT_RULES.stackSameCards);
 
   // ── Game UI state ─────────────────────────────────────────────────────────
   const [selectedCardId, setSelectedCardId] = useState<number | null>(null);
@@ -698,19 +692,7 @@ export function UnoGame({ wsUrl, gameId, initialRoomCode, quickPlay: isQuickPlay
   const [endOverlay, setEndOverlay] = useState<{ kind: 'round_end' | 'match_end'; iWon: boolean; winnerNick: string | null; points: number } | null>(null);
 
   // ── Auto-join / quick-play ────────────────────────────────────────────────
-  useEffect(() => {
-    if (mp.connection === 'connected' && initialRoomCode && !autoJoined.current && mp.phase === 'lobby') {
-      autoJoined.current = true;
-      mp.joinRoom(initialRoomCode);
-    }
-  }, [mp.connection, initialRoomCode, mp.phase, mp.joinRoom]);
-
-  useEffect(() => {
-    if (mp.connection === 'connected' && isQuickPlay && !autoJoined.current && mp.phase === 'lobby') {
-      autoJoined.current = true;
-      mp.quickPlay();
-    }
-  }, [mp.connection, isQuickPlay, mp.phase, mp.quickPlay]);
+  useAutoJoin(mp, initialRoomCode, isQuickPlay, 'uno');
 
   useEffect(() => {
     if (mp.roomCode && isQuickPlay) {
@@ -765,7 +747,7 @@ export function UnoGame({ wsUrl, gameId, initialRoomCode, quickPlay: isQuickPlay
 
   // ── Derived state ─────────────────────────────────────────────────────────
   const myHand: UnoCard[] = gs && myIdx !== null ? (gs.hands[myIdx] ?? []) : [];
-  const isMyTurn = !mp.isSpectator && gs !== null && gs.phase === 'playing' && myIdx !== null && gs.currentTurn === gs.playerIds[myIdx];
+  const isMyTurn = !mp.isSpectator && !replayMode && gs !== null && gs.phase === 'playing' && myIdx !== null && gs.currentTurn === gs.playerIds[myIdx];
   const activeColor = gs?.chosenColor ?? gs?.topCard?.color ?? null;
 
   const canPlayCard = useCallback((card: UnoCard): boolean => {
@@ -806,6 +788,15 @@ export function UnoGame({ wsUrl, gameId, initialRoomCode, quickPlay: isQuickPlay
       setPendingCardId(card.id);
       setShowColorPicker(true);
       return;
+    }
+    // Stack same cards: auto-play all identical cards (same color + value)
+    if (gs && gs.rules.stackSameCards && card.type === 'number' && gs.pendingDraw === 0 && gs.drawnCardId === null) {
+      const matching = myHand.filter(c => c.type === 'number' && c.color === card.color && c.value === card.value);
+      if (matching.length >= 2) {
+        mp.sendAction({ type: 'UNO_PLAY_STACK', cardIds: matching.map(c => c.id) });
+        setSelectedCardId(null);
+        return;
+      }
     }
     mp.sendAction({ type: 'UNO_PLAY_CARD', cardId: card.id });
     setSelectedCardId(null);
@@ -1323,11 +1314,15 @@ export function UnoGame({ wsUrl, gameId, initialRoomCode, quickPlay: isQuickPlay
                       const angle = handFanAngles[i];
                       const yOff = Math.abs(angle) * 0.3;
                       const isSelected = selectedCardId === card.id;
+                      // Stack same cards: count duplicates for badge
+                      const stackCount = (gs?.rules.stackSameCards && playable && card.type === 'number' && gs.pendingDraw === 0 && gs.drawnCardId === null)
+                        ? myHand.filter(c => c.type === 'number' && c.color === card.color && c.value === card.value).length
+                        : 0;
 
                       return (
                         <div
                           key={card.id}
-                          className="transition-all duration-200"
+                          className="transition-all duration-200 relative"
                           style={{
                             marginLeft: i === 0 ? 0 : compact ? -10 : -8,
                             transform: `rotate(${angle}deg) translateY(${isSelected ? -(yOff + 20) : -yOff}px)`,
@@ -1336,6 +1331,19 @@ export function UnoGame({ wsUrl, gameId, initialRoomCode, quickPlay: isQuickPlay
                             animation: `uno-card-enter 0.3s ease-out ${i * 40}ms both`,
                           }}
                         >
+                          {stackCount >= 2 && (
+                            <span
+                              className="absolute -top-1 -right-1 z-10 flex items-center justify-center text-[9px] font-black text-white rounded-full"
+                              style={{
+                                width: 18, height: 18,
+                                background: '#4f46e5',
+                                border: '2px solid rgba(24,24,27,0.9)',
+                                boxShadow: '0 2px 6px rgba(79,70,229,0.4)',
+                              }}
+                            >
+                              {stackCount}x
+                            </span>
+                          )}
                           <CardFace
                             card={card}
                             playable={playable}
@@ -1528,6 +1536,14 @@ export function UnoGame({ wsUrl, gameId, initialRoomCode, quickPlay: isQuickPlay
             </>
           )}
 
+          {/* Replay */}
+          <ReplayControls<UnoState>
+            history={mp.stateHistory as UnoState[]}
+            gameEnded={mp.phase === 'ended'}
+            onStep={(state) => setReplayState(state)}
+            onToggle={(active) => { setReplayMode(active); if (!active) setReplayState(null); }}
+          />
+
           {/* Leave button */}
           {mp.phase !== 'lobby' && !endOverlay && (
             <button
@@ -1702,6 +1718,7 @@ export function UnoGame({ wsUrl, gameId, initialRoomCode, quickPlay: isQuickPlay
                   [playDrawnCard, setPlayDrawnCard, 'uno.rules.playDrawnCard'] as const,
                   [drawUntilPlayable, setDrawUntilPlayable, 'uno.rules.drawUntilPlayable'] as const,
                   [forcedPlay, setForcedPlay, 'uno.rules.forcedPlay'] as const,
+                  [stackSameCards, setStackSameCards, 'uno.rules.stackSameCards'] as const,
                 ]).map(([val, setter, key]) => (
                   <label key={key} className="flex items-center justify-between cursor-pointer group">
                     <span className="text-xs text-zinc-300 group-hover:text-zinc-100 transition-colors select-none">{t(key)}</span>
@@ -1749,6 +1766,7 @@ export function UnoGame({ wsUrl, gameId, initialRoomCode, quickPlay: isQuickPlay
                     if (c.playDrawnCard != null) setPlayDrawnCard(c.playDrawnCard as boolean);
                     if (c.drawUntilPlayable != null) setDrawUntilPlayable(c.drawUntilPlayable as boolean);
                     if (c.forcedPlay != null) setForcedPlay(c.forcedPlay as boolean);
+                    if (c.stackSameCards != null) setStackSameCards(c.stackSameCards as boolean);
                   }}
                   className="w-full py-1.5 rounded-xl border border-zinc-700 hover:border-indigo-600 text-zinc-400 hover:text-indigo-300 text-xs font-medium transition-colors cursor-pointer"
                 >
@@ -1757,8 +1775,8 @@ export function UnoGame({ wsUrl, gameId, initialRoomCode, quickPlay: isQuickPlay
               )}
               <button
                 onClick={() => {
-                  saveLastConfig('uno', { maxPlayers, targetScore, stackDraw2, stackDraw4, allowDraw2OnDraw4, allowDraw4OnDraw2, playDrawnCard, drawUntilPlayable, forcedPlay });
-                  mp.createRoom({ visibility: roomVisibility, roomName: roomName.trim() || undefined, maxPlayers, unoConfig: { targetScore, stackDraw2, stackDraw4, allowDraw2OnDraw4, allowDraw4OnDraw2, playDrawnCardImmediately: playDrawnCard, drawUntilPlayable, forcedPlay } });
+                  saveLastConfig('uno', { maxPlayers, targetScore, stackDraw2, stackDraw4, allowDraw2OnDraw4, allowDraw4OnDraw2, playDrawnCard, drawUntilPlayable, forcedPlay, stackSameCards });
+                  mp.createRoom({ visibility: roomVisibility, roomName: roomName.trim() || undefined, maxPlayers, unoConfig: { targetScore, stackDraw2, stackDraw4, allowDraw2OnDraw4, allowDraw4OnDraw2, playDrawnCardImmediately: playDrawnCard, drawUntilPlayable, forcedPlay, stackSameCards } });
                 }}
                 className="w-full py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white font-bold transition-colors cursor-pointer active:scale-[0.98]"
               >

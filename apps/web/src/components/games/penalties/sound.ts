@@ -1,4 +1,4 @@
-import { isGloballyMuted } from '@/lib/globalMute';
+import { isGloballyMuted, getGlobalVolume } from '@/lib/globalMute';
 
 const AC = () => {
   if (typeof window === 'undefined') return null;
@@ -15,16 +15,20 @@ let _muted = false;
 export function isMuted() { return _muted; }
 export function setMuted(v: boolean) { _muted = v; }
 
-function play(fn: (c: AudioContext) => void) {
+function play(fn: (c: AudioContext, masterGain: GainNode) => void) {
   if (_muted || isGloballyMuted()) return;
   const c = getCtx();
   if (!c) return;
   if (c.state === 'suspended') c.resume();
-  try { fn(c); } catch { /* */ }
+  const vol = getGlobalVolume() / 100;
+  const mg = c.createGain();
+  mg.gain.value = vol;
+  mg.connect(c.destination);
+  try { fn(c, mg); } catch { /* */ }
 }
 
 export function kickSound() {
-  play(c => {
+  play((c, mg) => {
     const o = c.createOscillator();
     const g = c.createGain();
     o.type = 'sine';
@@ -32,13 +36,13 @@ export function kickSound() {
     o.frequency.exponentialRampToValueAtTime(80, c.currentTime + 0.15);
     g.gain.setValueAtTime(0.4, c.currentTime);
     g.gain.exponentialRampToValueAtTime(0.01, c.currentTime + 0.2);
-    o.connect(g).connect(c.destination);
+    o.connect(g).connect(mg);
     o.start(); o.stop(c.currentTime + 0.2);
   });
 }
 
 export function saveSound() {
-  play(c => {
+  play((c, mg) => {
     const o = c.createOscillator();
     const g = c.createGain();
     o.type = 'triangle';
@@ -46,13 +50,13 @@ export function saveSound() {
     o.frequency.exponentialRampToValueAtTime(150, c.currentTime + 0.3);
     g.gain.setValueAtTime(0.3, c.currentTime);
     g.gain.exponentialRampToValueAtTime(0.01, c.currentTime + 0.3);
-    o.connect(g).connect(c.destination);
+    o.connect(g).connect(mg);
     o.start(); o.stop(c.currentTime + 0.3);
   });
 }
 
 export function goalSound() {
-  play(c => {
+  play((c, mg) => {
     const o = c.createOscillator();
     const g = c.createGain();
     o.type = 'square';
@@ -61,13 +65,13 @@ export function goalSound() {
     o.frequency.setValueAtTime(660, c.currentTime + 0.2);
     g.gain.setValueAtTime(0.25, c.currentTime);
     g.gain.exponentialRampToValueAtTime(0.01, c.currentTime + 0.4);
-    o.connect(g).connect(c.destination);
+    o.connect(g).connect(mg);
     o.start(); o.stop(c.currentTime + 0.4);
   });
 }
 
 export function missSound() {
-  play(c => {
+  play((c, mg) => {
     const o = c.createOscillator();
     const g = c.createGain();
     o.type = 'sawtooth';
@@ -75,13 +79,13 @@ export function missSound() {
     o.frequency.exponentialRampToValueAtTime(100, c.currentTime + 0.3);
     g.gain.setValueAtTime(0.2, c.currentTime);
     g.gain.exponentialRampToValueAtTime(0.01, c.currentTime + 0.3);
-    o.connect(g).connect(c.destination);
+    o.connect(g).connect(mg);
     o.start(); o.stop(c.currentTime + 0.3);
   });
 }
 
 export function whistleSound() {
-  play(c => {
+  play((c, mg) => {
     const o = c.createOscillator();
     const g = c.createGain();
     o.type = 'sine';
@@ -90,13 +94,13 @@ export function whistleSound() {
     o.frequency.setValueAtTime(800, c.currentTime + 0.3);
     g.gain.setValueAtTime(0.3, c.currentTime);
     g.gain.exponentialRampToValueAtTime(0.01, c.currentTime + 0.5);
-    o.connect(g).connect(c.destination);
+    o.connect(g).connect(mg);
     o.start(); o.stop(c.currentTime + 0.5);
   });
 }
 
 export function crowdCheer() {
-  play(c => {
+  play((c, mg) => {
     // White noise burst for crowd cheer
     const bufferSize = c.sampleRate * 0.6;
     const buffer = c.createBuffer(1, bufferSize, c.sampleRate);
@@ -113,39 +117,39 @@ export function crowdCheer() {
     const g = c.createGain();
     g.gain.setValueAtTime(0.15, c.currentTime);
     g.gain.exponentialRampToValueAtTime(0.01, c.currentTime + 0.6);
-    src.connect(filt).connect(g).connect(c.destination);
+    src.connect(filt).connect(g).connect(mg);
     src.start();
   });
 }
 
 export function countdownBeep() {
-  play(c => {
+  play((c, mg) => {
     const o = c.createOscillator();
     const g = c.createGain();
     o.type = 'sine';
     o.frequency.value = 600;
     g.gain.setValueAtTime(0.2, c.currentTime);
     g.gain.exponentialRampToValueAtTime(0.01, c.currentTime + 0.15);
-    o.connect(g).connect(c.destination);
+    o.connect(g).connect(mg);
     o.start(); o.stop(c.currentTime + 0.15);
   });
 }
 
 export function countdownGo() {
-  play(c => {
+  play((c, mg) => {
     const o = c.createOscillator();
     const g = c.createGain();
     o.type = 'sine';
     o.frequency.value = 900;
     g.gain.setValueAtTime(0.25, c.currentTime);
     g.gain.exponentialRampToValueAtTime(0.01, c.currentTime + 0.2);
-    o.connect(g).connect(c.destination);
+    o.connect(g).connect(mg);
     o.start(); o.stop(c.currentTime + 0.2);
   });
 }
 
 export function winSound() {
-  play(c => {
+  play((c, mg) => {
     [440, 550, 660, 880].forEach((f, i) => {
       const o = c.createOscillator();
       const g = c.createGain();
@@ -154,7 +158,7 @@ export function winSound() {
       g.gain.setValueAtTime(0, c.currentTime + i * 0.12);
       g.gain.linearRampToValueAtTime(0.2, c.currentTime + i * 0.12 + 0.05);
       g.gain.exponentialRampToValueAtTime(0.01, c.currentTime + i * 0.12 + 0.3);
-      o.connect(g).connect(c.destination);
+      o.connect(g).connect(mg);
       o.start(c.currentTime + i * 0.12);
       o.stop(c.currentTime + i * 0.12 + 0.3);
     });
@@ -162,7 +166,7 @@ export function winSound() {
 }
 
 export function loseSound() {
-  play(c => {
+  play((c, mg) => {
     [300, 250, 200].forEach((f, i) => {
       const o = c.createOscillator();
       const g = c.createGain();
@@ -171,7 +175,7 @@ export function loseSound() {
       g.gain.setValueAtTime(0, c.currentTime + i * 0.2);
       g.gain.linearRampToValueAtTime(0.2, c.currentTime + i * 0.2 + 0.05);
       g.gain.exponentialRampToValueAtTime(0.01, c.currentTime + i * 0.2 + 0.4);
-      o.connect(g).connect(c.destination);
+      o.connect(g).connect(mg);
       o.start(c.currentTime + i * 0.2);
       o.stop(c.currentTime + i * 0.2 + 0.4);
     });

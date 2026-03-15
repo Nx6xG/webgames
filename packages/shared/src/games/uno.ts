@@ -27,6 +27,7 @@ export interface UnoRuleConfig {
   playDrawnCardImmediately?: boolean;
   drawUntilPlayable?: boolean;
   forcedPlay?: boolean;
+  stackSameCards?: boolean;
 }
 
 /** @deprecated Use UnoRuleConfig instead */
@@ -44,6 +45,7 @@ export const UNO_DEFAULT_RULES: Required<UnoRuleConfig> = {
   playDrawnCardImmediately: true,
   drawUntilPlayable: false,
   forcedPlay: false,
+  stackSameCards: false,
 };
 
 export interface UnoState {
@@ -76,6 +78,7 @@ export interface UnoState {
 export type UnoAction =
   | { type: 'UNO_START' }
   | { type: 'UNO_PLAY_CARD'; cardId: number; chosenColor?: UnoColor }
+  | { type: 'UNO_PLAY_STACK'; cardIds: number[]; chosenColor?: UnoColor }
   | { type: 'UNO_DRAW_CARD' }
   | { type: 'UNO_CALL_UNO' }
   | { type: 'UNO_NEXT_ROUND' };

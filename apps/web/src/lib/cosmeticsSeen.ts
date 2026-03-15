@@ -3,11 +3,9 @@
  * so we can show "NEW" badges on items the user hasn't viewed yet.
  */
 
-const SEEN_KEY = 'wg_cosmetics_seen_v1';
+import { isBrowser } from '@/lib/utils';
 
-function isBrowser(): boolean {
-  return typeof window !== 'undefined';
-}
+const SEEN_KEY = 'wg_cosmetics_seen_v1';
 
 type SeenMap = Record<string, string[]>;
 

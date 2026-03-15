@@ -18,34 +18,16 @@ const CUBE_SIZE = 34;
 const CUBE_X = 120;
 const GRAVITY = 0.65;
 const JUMP_VEL = -11.5;
-const LEVEL_LENGTH = 3200; // distance units per level segment
 
 const COUNTDOWN_STEPS = 3;
 const COUNTDOWN_STEP_MS = 600;
 
-// ── Difficulty ───────────────────────────────────────────────────────────────
-
-type Difficulty = 'easy' | 'medium' | 'hard';
-const DIFFICULTIES: Difficulty[] = ['easy', 'medium', 'hard'];
-
-interface DiffConfig {
-  baseSpeed: number;
-  speedInc: number;    // per level
-  maxSpeed: number;
-  obstacleDensity: number; // 0-1, chance per segment slot
-  gapMin: number;      // min gap between obstacles
-}
-
-const DIFF_CONFIG: Record<Difficulty, DiffConfig> = {
-  easy:   { baseSpeed: 4.0, speedInc: 0.3, maxSpeed: 7,  obstacleDensity: 0.30, gapMin: 220 },
-  medium: { baseSpeed: 5.0, speedInc: 0.4, maxSpeed: 9,  obstacleDensity: 0.42, gapMin: 170 },
-  hard:   { baseSpeed: 6.0, speedInc: 0.5, maxSpeed: 11, obstacleDensity: 0.55, gapMin: 140 },
-};
+const PROGRESS_KEY = 'webgames.geometrydash.levelProgress';
 
 // ── Obstacle types ───────────────────────────────────────────────────────────
 
 interface Obstacle {
-  x: number;         // world x position
+  x: number;
   type: 'spike' | 'block' | 'gap';
   width: number;
   height: number;
@@ -69,19 +51,362 @@ const LEVEL_COLORS = [
   { bg1: '#1e0a0a', bg2: '#3a1515', ground: '#6b2020', cube: '#ff6644', accent: '#ff6644', grid: 'rgba(255,102,68,0.06)' },
   { bg1: '#0a1e1e', bg2: '#153a3a', ground: '#1a5f5f', cube: '#44ddff', accent: '#44ddff', grid: 'rgba(68,221,255,0.06)' },
   { bg1: '#1e1e0a', bg2: '#3a3a15', ground: '#5f5f1a', cube: '#ffee44', accent: '#ffee44', grid: 'rgba(255,238,68,0.06)' },
+  { bg1: '#0f1a0f', bg2: '#1a3a1a', ground: '#2a5f2a', cube: '#66ff66', accent: '#66ff66', grid: 'rgba(102,255,102,0.06)' },
+  { bg1: '#1a0f1e', bg2: '#3a1a3a', ground: '#5f2a5f', cube: '#cc66ff', accent: '#cc66ff', grid: 'rgba(204,102,255,0.06)' },
+  { bg1: '#1e1a0a', bg2: '#3a2d15', ground: '#5f4a1a', cube: '#ffaa44', accent: '#ffaa44', grid: 'rgba(255,170,68,0.06)' },
+  { bg1: '#0a0f1e', bg2: '#152a3a', ground: '#1a3a6b', cube: '#4488ff', accent: '#4488ff', grid: 'rgba(68,136,255,0.06)' },
+  { bg1: '#1e0a10', bg2: '#3a1520', ground: '#6b2040', cube: '#ff4466', accent: '#ff4466', grid: 'rgba(255,68,102,0.06)' },
 ];
 
-type Phase = 'menu' | 'countdown' | 'playing' | 'paused' | 'ended';
+// ── Level definitions ────────────────────────────────────────────────────────
 
-// ── Procedural generation ────────────────────────────────────────────────────
+interface LevelObstacleDef {
+  type: 'spike' | 'spike2' | 'block' | 'gap';
+  offset: number;
+  width?: number;
+  height?: number;
+}
+
+interface LevelDef {
+  nameKey: string;
+  speed: number;
+  obstacles: LevelObstacleDef[];
+  length: number;
+  theme: number;
+  difficulty: number; // 1-10 stars
+}
+
+const LEVELS: LevelDef[] = [
+  // Level 1: Stereo Madness — gentle intro
+  {
+    nameKey: 'geometrydash.level.1',
+    speed: 4.5,
+    theme: 0,
+    length: 2400,
+    difficulty: 1,
+    obstacles: [
+      { type: 'spike', offset: 300 },
+      { type: 'spike', offset: 550 },
+      { type: 'spike', offset: 800 },
+      { type: 'block', offset: 1050, width: 60 },
+      { type: 'spike', offset: 1300 },
+      { type: 'spike2', offset: 1500 },
+      { type: 'gap', offset: 1700, width: 70 },
+      { type: 'spike', offset: 1950 },
+      { type: 'block', offset: 2100, width: 50 },
+    ],
+  },
+  // Level 2: Back on Track — tighter spacing
+  {
+    nameKey: 'geometrydash.level.2',
+    speed: 5.0,
+    theme: 1,
+    length: 2800,
+    difficulty: 2,
+    obstacles: [
+      { type: 'spike', offset: 250 },
+      { type: 'spike2', offset: 450 },
+      { type: 'spike', offset: 630 },
+      { type: 'block', offset: 800, width: 70, height: 40 },
+      { type: 'gap', offset: 1000, width: 80 },
+      { type: 'spike2', offset: 1200 },
+      { type: 'spike', offset: 1380 },
+      { type: 'spike2', offset: 1550 },
+      { type: 'block', offset: 1720, width: 50 },
+      { type: 'spike', offset: 1900 },
+      { type: 'gap', offset: 2080, width: 70 },
+      { type: 'spike2', offset: 2280 },
+      { type: 'spike', offset: 2460 },
+      { type: 'block', offset: 2630, width: 80 },
+    ],
+  },
+  // Level 3: Polargeist — gaps and blocks
+  {
+    nameKey: 'geometrydash.level.3',
+    speed: 5.5,
+    theme: 2,
+    length: 3000,
+    difficulty: 3,
+    obstacles: [
+      { type: 'spike', offset: 220 },
+      { type: 'gap', offset: 400, width: 75 },
+      { type: 'spike2', offset: 600 },
+      { type: 'block', offset: 780, width: 60, height: 45 },
+      { type: 'spike', offset: 960 },
+      { type: 'spike', offset: 1100 },
+      { type: 'gap', offset: 1280, width: 85 },
+      { type: 'spike2', offset: 1500 },
+      { type: 'block', offset: 1660, width: 70, height: 50 },
+      { type: 'spike', offset: 1850 },
+      { type: 'spike2', offset: 2000 },
+      { type: 'gap', offset: 2180, width: 80 },
+      { type: 'spike', offset: 2380 },
+      { type: 'block', offset: 2540, width: 60 },
+      { type: 'spike2', offset: 2720 },
+      { type: 'spike', offset: 2880 },
+    ],
+  },
+  // Level 4: Dry Out — block + spike combos
+  {
+    nameKey: 'geometrydash.level.4',
+    speed: 6.0,
+    theme: 3,
+    length: 3200,
+    difficulty: 4,
+    obstacles: [
+      { type: 'spike', offset: 200 },
+      { type: 'block', offset: 380, width: 50, height: 34 },
+      { type: 'spike', offset: 520 },
+      { type: 'spike2', offset: 680 },
+      { type: 'gap', offset: 850, width: 75 },
+      { type: 'spike', offset: 1030 },
+      { type: 'block', offset: 1180, width: 80, height: 50 },
+      { type: 'spike2', offset: 1380 },
+      { type: 'spike', offset: 1520 },
+      { type: 'gap', offset: 1680, width: 90 },
+      { type: 'block', offset: 1880, width: 60, height: 40 },
+      { type: 'spike', offset: 2050 },
+      { type: 'spike2', offset: 2200 },
+      { type: 'spike', offset: 2350 },
+      { type: 'block', offset: 2510, width: 70, height: 55 },
+      { type: 'gap', offset: 2700, width: 80 },
+      { type: 'spike2', offset: 2900 },
+      { type: 'spike', offset: 3050 },
+    ],
+  },
+  // Level 5: Base After Base — dense obstacle sections
+  {
+    nameKey: 'geometrydash.level.5',
+    speed: 6.5,
+    theme: 4,
+    length: 3400,
+    difficulty: 5,
+    obstacles: [
+      { type: 'spike', offset: 200 },
+      { type: 'spike', offset: 360 },
+      { type: 'spike2', offset: 520 },
+      { type: 'block', offset: 700, width: 55, height: 40 },
+      { type: 'gap', offset: 870, width: 80 },
+      { type: 'spike', offset: 1060 },
+      { type: 'spike2', offset: 1200 },
+      { type: 'spike', offset: 1340 },
+      { type: 'block', offset: 1500, width: 70, height: 50 },
+      { type: 'spike', offset: 1680 },
+      { type: 'gap', offset: 1840, width: 85 },
+      { type: 'spike2', offset: 2040 },
+      { type: 'spike', offset: 2180 },
+      { type: 'spike2', offset: 2320 },
+      { type: 'block', offset: 2480, width: 60, height: 45 },
+      { type: 'spike', offset: 2650 },
+      { type: 'gap', offset: 2810, width: 75 },
+      { type: 'spike', offset: 2990 },
+      { type: 'spike2', offset: 3130 },
+      { type: 'spike', offset: 3260 },
+    ],
+  },
+  // Level 6: Can't Let Go — alternating patterns
+  {
+    nameKey: 'geometrydash.level.6',
+    speed: 7.0,
+    theme: 5,
+    length: 3600,
+    difficulty: 6,
+    obstacles: [
+      { type: 'spike', offset: 180 },
+      { type: 'gap', offset: 340, width: 80 },
+      { type: 'spike2', offset: 520 },
+      { type: 'spike', offset: 660 },
+      { type: 'block', offset: 820, width: 65, height: 50 },
+      { type: 'spike2', offset: 990 },
+      { type: 'gap', offset: 1140, width: 90 },
+      { type: 'spike', offset: 1340 },
+      { type: 'spike', offset: 1470 },
+      { type: 'spike2', offset: 1600 },
+      { type: 'block', offset: 1760, width: 55, height: 40 },
+      { type: 'spike', offset: 1930 },
+      { type: 'gap', offset: 2080, width: 85 },
+      { type: 'spike2', offset: 2270 },
+      { type: 'spike', offset: 2400 },
+      { type: 'block', offset: 2560, width: 80, height: 55 },
+      { type: 'spike', offset: 2750 },
+      { type: 'spike2', offset: 2880 },
+      { type: 'gap', offset: 3040, width: 80 },
+      { type: 'spike', offset: 3230 },
+      { type: 'spike2', offset: 3370 },
+      { type: 'spike', offset: 3500 },
+    ],
+  },
+  // Level 7: Jumper — rapid-fire spikes
+  {
+    nameKey: 'geometrydash.level.7',
+    speed: 7.5,
+    theme: 6,
+    length: 3800,
+    difficulty: 7,
+    obstacles: [
+      { type: 'spike', offset: 170 },
+      { type: 'spike', offset: 330 },
+      { type: 'spike2', offset: 490 },
+      { type: 'spike', offset: 640 },
+      { type: 'gap', offset: 800, width: 85 },
+      { type: 'spike2', offset: 990 },
+      { type: 'spike', offset: 1130 },
+      { type: 'spike', offset: 1270 },
+      { type: 'block', offset: 1420, width: 60, height: 45 },
+      { type: 'spike2', offset: 1590 },
+      { type: 'spike', offset: 1720 },
+      { type: 'gap', offset: 1870, width: 90 },
+      { type: 'spike', offset: 2070 },
+      { type: 'spike2', offset: 2200 },
+      { type: 'spike', offset: 2330 },
+      { type: 'block', offset: 2480, width: 70, height: 55 },
+      { type: 'spike', offset: 2660 },
+      { type: 'spike2', offset: 2790 },
+      { type: 'gap', offset: 2940, width: 80 },
+      { type: 'spike', offset: 3130 },
+      { type: 'spike', offset: 3260 },
+      { type: 'spike2', offset: 3390 },
+      { type: 'block', offset: 3540, width: 50, height: 40 },
+      { type: 'spike', offset: 3700 },
+    ],
+  },
+  // Level 8: Time Machine — complex patterns
+  {
+    nameKey: 'geometrydash.level.8',
+    speed: 8.0,
+    theme: 7,
+    length: 4000,
+    difficulty: 8,
+    obstacles: [
+      { type: 'spike2', offset: 160 },
+      { type: 'spike', offset: 310 },
+      { type: 'block', offset: 460, width: 70, height: 50 },
+      { type: 'gap', offset: 640, width: 90 },
+      { type: 'spike', offset: 840 },
+      { type: 'spike2', offset: 970 },
+      { type: 'spike', offset: 1100 },
+      { type: 'spike2', offset: 1230 },
+      { type: 'block', offset: 1380, width: 55, height: 40 },
+      { type: 'spike', offset: 1540 },
+      { type: 'gap', offset: 1680, width: 95 },
+      { type: 'spike2', offset: 1890 },
+      { type: 'spike', offset: 2020 },
+      { type: 'spike', offset: 2150 },
+      { type: 'block', offset: 2300, width: 80, height: 60 },
+      { type: 'spike2', offset: 2490 },
+      { type: 'gap', offset: 2640, width: 85 },
+      { type: 'spike', offset: 2830 },
+      { type: 'spike2', offset: 2960 },
+      { type: 'spike', offset: 3090 },
+      { type: 'spike', offset: 3220 },
+      { type: 'block', offset: 3370, width: 60, height: 45 },
+      { type: 'gap', offset: 3540, width: 80 },
+      { type: 'spike2', offset: 3720 },
+      { type: 'spike', offset: 3860 },
+    ],
+  },
+  // Level 9: Cycles — extreme density
+  {
+    nameKey: 'geometrydash.level.9',
+    speed: 8.5,
+    theme: 8,
+    length: 4200,
+    difficulty: 9,
+    obstacles: [
+      { type: 'spike', offset: 150 },
+      { type: 'spike2', offset: 290 },
+      { type: 'spike', offset: 430 },
+      { type: 'gap', offset: 580, width: 85 },
+      { type: 'spike2', offset: 770 },
+      { type: 'spike', offset: 900 },
+      { type: 'block', offset: 1040, width: 60, height: 50 },
+      { type: 'spike', offset: 1210 },
+      { type: 'spike2', offset: 1340 },
+      { type: 'spike', offset: 1470 },
+      { type: 'gap', offset: 1620, width: 90 },
+      { type: 'spike', offset: 1820 },
+      { type: 'spike2', offset: 1950 },
+      { type: 'block', offset: 2090, width: 70, height: 55 },
+      { type: 'spike', offset: 2270 },
+      { type: 'spike', offset: 2400 },
+      { type: 'spike2', offset: 2530 },
+      { type: 'gap', offset: 2680, width: 85 },
+      { type: 'spike', offset: 2870 },
+      { type: 'block', offset: 3010, width: 55, height: 45 },
+      { type: 'spike2', offset: 3180 },
+      { type: 'spike', offset: 3310 },
+      { type: 'spike', offset: 3440 },
+      { type: 'gap', offset: 3590, width: 90 },
+      { type: 'spike2', offset: 3790 },
+      { type: 'spike', offset: 3920 },
+      { type: 'block', offset: 4060, width: 65, height: 50 },
+    ],
+  },
+  // Level 10: xStep — ultimate challenge
+  {
+    nameKey: 'geometrydash.level.10',
+    speed: 9.0,
+    theme: 9,
+    length: 4500,
+    difficulty: 10,
+    obstacles: [
+      { type: 'spike2', offset: 140 },
+      { type: 'spike', offset: 270 },
+      { type: 'spike', offset: 400 },
+      { type: 'block', offset: 540, width: 65, height: 50 },
+      { type: 'gap', offset: 710, width: 90 },
+      { type: 'spike2', offset: 900 },
+      { type: 'spike', offset: 1030 },
+      { type: 'spike2', offset: 1160 },
+      { type: 'spike', offset: 1290 },
+      { type: 'block', offset: 1430, width: 75, height: 55 },
+      { type: 'spike', offset: 1610 },
+      { type: 'gap', offset: 1750, width: 95 },
+      { type: 'spike2', offset: 1950 },
+      { type: 'spike', offset: 2080 },
+      { type: 'spike', offset: 2210 },
+      { type: 'spike2', offset: 2340 },
+      { type: 'block', offset: 2480, width: 60, height: 45 },
+      { type: 'spike', offset: 2650 },
+      { type: 'gap', offset: 2800, width: 90 },
+      { type: 'spike', offset: 3000 },
+      { type: 'spike2', offset: 3130 },
+      { type: 'spike', offset: 3260 },
+      { type: 'block', offset: 3400, width: 70, height: 60 },
+      { type: 'spike2', offset: 3580 },
+      { type: 'spike', offset: 3710 },
+      { type: 'gap', offset: 3860, width: 85 },
+      { type: 'spike', offset: 4050 },
+      { type: 'spike2', offset: 4180 },
+      { type: 'spike', offset: 4310 },
+    ],
+  },
+];
+
+// ── Endless mode procedural generation ───────────────────────────────────────
+
+const ENDLESS_LEVEL_LENGTH = 3200;
+
+interface EndlessDiffConfig {
+  baseSpeed: number;
+  speedInc: number;
+  maxSpeed: number;
+  obstacleDensity: number;
+  gapMin: number;
+}
+
+const ENDLESS_CONFIG: EndlessDiffConfig = {
+  baseSpeed: 6.0, speedInc: 0.4, maxSpeed: 12, obstacleDensity: 0.45, gapMin: 160,
+};
 
 let obstacleIdCounter = 0;
 
-function generateSegment(startX: number, cfg: DiffConfig, level: number): Obstacle[] {
+function generateEndlessSegment(startX: number, segLevel: number): Obstacle[] {
   const obstacles: Obstacle[] = [];
   const slotSize = 80;
-  const slots = Math.floor(LEVEL_LENGTH / slotSize);
+  const slots = Math.floor(ENDLESS_LEVEL_LENGTH / slotSize);
   let lastObsEnd = startX;
+  const cfg = ENDLESS_CONFIG;
 
   for (let i = 2; i < slots - 1; i++) {
     const sx = startX + i * slotSize;
@@ -89,24 +414,20 @@ function generateSegment(startX: number, cfg: DiffConfig, level: number): Obstac
     if (Math.random() > cfg.obstacleDensity) continue;
 
     const r = Math.random();
-    const diff = Math.min(level, 4);
+    const diff = Math.min(segLevel, 6);
 
     if (r < 0.45) {
-      // Single spike
       obstacles.push({ x: sx, type: 'spike', width: 30, height: 34, id: ++obstacleIdCounter });
       lastObsEnd = sx + 30;
     } else if (r < 0.65) {
-      // Double spike
       obstacles.push({ x: sx, type: 'spike', width: 30, height: 34, id: ++obstacleIdCounter });
       obstacles.push({ x: sx + 34, type: 'spike', width: 30, height: 34, id: ++obstacleIdCounter });
       lastObsEnd = sx + 64;
     } else if (r < 0.80) {
-      // Block (platform obstacle to jump onto or over)
       const bh = 34 + diff * 6;
       obstacles.push({ x: sx, type: 'block', width: 50 + Math.random() * 40, height: bh, id: ++obstacleIdCounter });
       lastObsEnd = sx + 60;
     } else {
-      // Gap in the ground
       const gw = 60 + diff * 10 + Math.random() * 30;
       obstacles.push({ x: sx, type: 'gap', width: gw, height: GROUND_H + 40, id: ++obstacleIdCounter });
       lastObsEnd = sx + gw;
@@ -116,54 +437,117 @@ function generateSegment(startX: number, cfg: DiffConfig, level: number): Obstac
   return obstacles;
 }
 
+// ── Generate obstacles from a level definition ──────────────────────────────
+
+function generateLevelObstaclesFull(levelDef: LevelDef): Obstacle[] {
+  obstacleIdCounter = 0;
+  const obstacles: Obstacle[] = [];
+  for (const o of levelDef.obstacles) {
+    if (o.type === 'spike') {
+      obstacles.push({ x: o.offset, type: 'spike', width: 30, height: 34, id: ++obstacleIdCounter });
+    } else if (o.type === 'spike2') {
+      obstacles.push({ x: o.offset, type: 'spike', width: 30, height: 34, id: ++obstacleIdCounter });
+      obstacles.push({ x: o.offset + 34, type: 'spike', width: 30, height: 34, id: ++obstacleIdCounter });
+    } else if (o.type === 'block') {
+      obstacles.push({ x: o.offset, type: 'block', width: o.width ?? 60, height: o.height ?? 40, id: ++obstacleIdCounter });
+    } else {
+      obstacles.push({ x: o.offset, type: 'gap', width: o.width ?? 70, height: GROUND_H + 40, id: ++obstacleIdCounter });
+    }
+  }
+  return obstacles;
+}
+
+// ── Level progress persistence ──────────────────────────────────────────────
+
+interface LevelProgress {
+  bestPercent: number;
+  stars: number; // 0-3
+  attempts: number;
+}
+
+function getLevelProgress(): Record<number, LevelProgress> {
+  try {
+    const raw = localStorage.getItem(PROGRESS_KEY);
+    if (!raw) return {};
+    return JSON.parse(raw) as Record<number, LevelProgress>;
+  } catch { return {}; }
+}
+
+function saveLevelProgress(progress: Record<number, LevelProgress>): void {
+  try { localStorage.setItem(PROGRESS_KEY, JSON.stringify(progress)); } catch { /* noop */ }
+}
+
+function isLevelUnlocked(levelIndex: number, progress: Record<number, LevelProgress>): boolean {
+  if (levelIndex === 0) return true;
+  const prev = progress[levelIndex - 1];
+  return prev !== undefined && prev.bestPercent >= 80;
+}
+
+// ── Phase ────────────────────────────────────────────────────────────────────
+
+type Phase = 'levelSelect' | 'countdown' | 'playing' | 'paused' | 'ended' | 'complete';
+
 // ── Component ────────────────────────────────────────────────────────────────
 
 export function GeometryDashGame() {
   const { t } = useI18n();
   const ach = useAchievements('geometrydash');
 
-  // ── State ────────────────────────────────────────────────────────────────
-  const [difficulty, setDifficulty] = useState<Difficulty>('medium');
-  const [phase, setPhase] = useState<Phase>('menu');
+  // ── State ──────────────────────────────────────────────────────────────
+  const [phase, setPhase] = useState<Phase>('levelSelect');
   const [percent, setPercent] = useState(0);
-  const [level, setLevel] = useState(1);
+  const [selectedLevel, setSelectedLevel] = useState(0); // index into LEVELS, or -1 for endless
+  const [levelAttempts, setLevelAttempts] = useState(0);
   const [stats, setStats] = useState<GdStats>(() => {
     if (typeof window === 'undefined') return { games: 0, bestPercent: 0, bestLevel: 0, attempts: 0 };
     return getStats();
   });
+  const [levelProgress, setLevelProgress] = useState<Record<number, LevelProgress>>(() => {
+    if (typeof window === 'undefined') return {};
+    return getLevelProgress();
+  });
   const [countdownNum, setCountdownNum] = useState(0);
+  const [completionStars, setCompletionStars] = useState(0);
 
   const canvasRef = useRef<HTMLCanvasElement>(null);
-  const phaseRef = useRef<Phase>('menu');
-  const diffRef = useRef<Difficulty>('medium');
+  const phaseRef = useRef<Phase>('levelSelect');
   const rafRef = useRef<number | null>(null);
   const countdownTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const savedRef = useRef(false);
 
-  // Game state refs (avoid stale closures in rAF loop)
+  // Game state refs
   const cubeYRef = useRef(GROUND_Y - CUBE_SIZE);
   const velYRef = useRef(0);
   const onGroundRef = useRef(true);
   const distRef = useRef(0);
-  const levelRef = useRef(1);
+  const selectedLevelRef = useRef(0);
+  const levelAttemptsRef = useRef(0);
   const obstaclesRef = useRef<Obstacle[]>([]);
-  const nextSegmentXRef = useRef(LEVEL_LENGTH);
+  const nextSegmentXRef = useRef(0);
   const rotationRef = useRef(0);
   const trailRef = useRef<TrailParticle[]>([]);
   const deathAnimRef = useRef(0);
   const gridOffsetRef = useRef(0);
-  const lastCheckpointRef = useRef(0);
 
   // Sync refs
   useEffect(() => { phaseRef.current = phase; }, [phase]);
+  useEffect(() => { selectedLevelRef.current = selectedLevel; }, [selectedLevel]);
+  useEffect(() => { levelAttemptsRef.current = levelAttempts; }, [levelAttempts]);
 
   // Achievement tracking
   useEffect(() => {
     if (phase === 'playing') ach.trackPlay();
-    if (phase === 'menu') ach.reset();
+    if (phase === 'levelSelect') ach.reset();
   }, [phase]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // ── Render function ──────────────────────────────────────────────────────
+  // ── Get current level info ────────────────────────────────────────────
+  const isEndless = selectedLevel === -1;
+  const currentLevelDef = isEndless ? null : LEVELS[selectedLevel];
+  const currentColors = isEndless
+    ? LEVEL_COLORS[0]
+    : LEVEL_COLORS[currentLevelDef!.theme % LEVEL_COLORS.length];
+
+  // ── Render function ───────────────────────────────────────────────────
   const render = useCallback(() => {
     const canvas = canvasRef.current;
     if (!canvas) return;
@@ -171,45 +555,39 @@ export function GeometryDashGame() {
     if (!ctx) return;
 
     const dist = distRef.current;
-    const lvl = levelRef.current;
-    const colors = LEVEL_COLORS[(lvl - 1) % LEVEL_COLORS.length];
+    const lvlIdx = selectedLevelRef.current;
+    const isEndlessMode = lvlIdx === -1;
+    const levelDef = isEndlessMode ? null : LEVELS[lvlIdx];
+    const colors = isEndlessMode
+      ? LEVEL_COLORS[Math.floor(dist / ENDLESS_LEVEL_LENGTH) % LEVEL_COLORS.length]
+      : LEVEL_COLORS[levelDef!.theme % LEVEL_COLORS.length];
     const cubeY = cubeYRef.current;
     const rotation = rotationRef.current;
     const obstacles = obstaclesRef.current;
     const trail = trailRef.current;
     const camera = dist - CUBE_X;
 
-    // ── Background gradient ────────────────────────────────────────────
+    // ── Background gradient ─────────────────────────────────────────
     const bgGrad = ctx.createLinearGradient(0, 0, 0, GAME_H);
     bgGrad.addColorStop(0, colors.bg1);
     bgGrad.addColorStop(1, colors.bg2);
     ctx.fillStyle = bgGrad;
     ctx.fillRect(0, 0, GAME_W, GAME_H);
 
-    // ── Scrolling grid lines ───────────────────────────────────────────
+    // ── Scrolling grid lines ────────────────────────────────────────
     const gridSpacing = 60;
     const gridOff = gridOffsetRef.current % gridSpacing;
     ctx.strokeStyle = colors.grid;
     ctx.lineWidth = 1;
-    // Vertical lines
     for (let gx = -gridOff; gx < GAME_W; gx += gridSpacing) {
-      ctx.beginPath();
-      ctx.moveTo(gx, 0);
-      ctx.lineTo(gx, GROUND_Y);
-      ctx.stroke();
+      ctx.beginPath(); ctx.moveTo(gx, 0); ctx.lineTo(gx, GROUND_Y); ctx.stroke();
     }
-    // Horizontal lines
     for (let gy = gridSpacing; gy < GROUND_Y; gy += gridSpacing) {
-      ctx.beginPath();
-      ctx.moveTo(0, gy);
-      ctx.lineTo(GAME_W, gy);
-      ctx.stroke();
+      ctx.beginPath(); ctx.moveTo(0, gy); ctx.lineTo(GAME_W, gy); ctx.stroke();
     }
 
-    // ── Ground ─────────────────────────────────────────────────────────
-    // Draw ground with gaps
+    // ── Ground ──────────────────────────────────────────────────────
     ctx.fillStyle = colors.ground;
-    // Build ground segments (skip gaps)
     const groundSegments: { x1: number; x2: number }[] = [];
     let gStart = 0;
     const gaps = obstacles.filter(o => o.type === 'gap');
@@ -217,14 +595,10 @@ export function GeometryDashGame() {
       const gapScreenX = gap.x - camera;
       const gapEnd = gapScreenX + gap.width;
       if (gapEnd < 0 || gapScreenX > GAME_W) continue;
-      if (gapScreenX > gStart) {
-        groundSegments.push({ x1: gStart, x2: gapScreenX });
-      }
+      if (gapScreenX > gStart) groundSegments.push({ x1: gStart, x2: gapScreenX });
       gStart = gapEnd;
     }
-    if (gStart < GAME_W) {
-      groundSegments.push({ x1: gStart, x2: GAME_W });
-    }
+    if (gStart < GAME_W) groundSegments.push({ x1: gStart, x2: GAME_W });
     for (const seg of groundSegments) {
       ctx.fillRect(seg.x1, GROUND_Y, seg.x2 - seg.x1, GROUND_H);
     }
@@ -237,20 +611,16 @@ export function GeometryDashGame() {
     for (const seg of groundSegments) {
       for (let gx = seg.x1 - groundGridOff; gx < seg.x2; gx += groundGridSpacing) {
         if (gx < seg.x1) continue;
-        ctx.beginPath();
-        ctx.moveTo(gx, GROUND_Y);
-        ctx.lineTo(gx, GAME_H);
-        ctx.stroke();
+        ctx.beginPath(); ctx.moveTo(gx, GROUND_Y); ctx.lineTo(gx, GAME_H); ctx.stroke();
       }
     }
 
-    // ── Obstacles ──────────────────────────────────────────────────────
+    // ── Obstacles ───────────────────────────────────────────────────
     for (const obs of obstacles) {
       const ox = obs.x - camera;
       if (ox + obs.width < -50 || ox > GAME_W + 50) continue;
 
       if (obs.type === 'spike') {
-        // Triangle spike
         ctx.fillStyle = colors.accent;
         ctx.beginPath();
         ctx.moveTo(ox, GROUND_Y);
@@ -258,19 +628,15 @@ export function GeometryDashGame() {
         ctx.lineTo(ox + obs.width, GROUND_Y);
         ctx.closePath();
         ctx.fill();
-        // Outline
         ctx.strokeStyle = 'rgba(255,255,255,0.3)';
         ctx.lineWidth = 1.5;
         ctx.stroke();
       } else if (obs.type === 'block') {
-        // Block obstacle
         ctx.fillStyle = colors.ground;
         ctx.fillRect(ox, GROUND_Y - obs.height, obs.width, obs.height);
-        // Border
         ctx.strokeStyle = colors.accent;
         ctx.lineWidth = 2;
         ctx.strokeRect(ox, GROUND_Y - obs.height, obs.width, obs.height);
-        // Inner cross pattern
         ctx.strokeStyle = 'rgba(255,255,255,0.1)';
         ctx.lineWidth = 1;
         ctx.beginPath();
@@ -280,10 +646,9 @@ export function GeometryDashGame() {
         ctx.lineTo(ox, GROUND_Y);
         ctx.stroke();
       }
-      // gap type: we already skipped it in ground rendering
     }
 
-    // ── Trail particles ────────────────────────────────────────────────
+    // ── Trail particles ─────────────────────────────────────────────
     for (const pt of trail) {
       const px = pt.x - camera + CUBE_X;
       ctx.globalAlpha = pt.alpha;
@@ -292,121 +657,147 @@ export function GeometryDashGame() {
     }
     ctx.globalAlpha = 1;
 
-    // ── Cube (player) ──────────────────────────────────────────────────
+    // ── Cube (player) ───────────────────────────────────────────────
     if (deathAnimRef.current <= 0) {
       ctx.save();
       const cx = CUBE_X + CUBE_SIZE / 2;
       const cy = cubeY + CUBE_SIZE / 2;
       ctx.translate(cx, cy);
       ctx.rotate(rotation);
-
-      // Glow
       ctx.shadowColor = colors.cube;
       ctx.shadowBlur = 12;
-
-      // Cube body
       ctx.fillStyle = colors.cube;
       ctx.fillRect(-CUBE_SIZE / 2, -CUBE_SIZE / 2, CUBE_SIZE, CUBE_SIZE);
-
-      // Inner square
       ctx.fillStyle = 'rgba(0,0,0,0.3)';
       const inner = CUBE_SIZE * 0.55;
       ctx.fillRect(-inner / 2, -inner / 2, inner, inner);
-
-      // Reset shadow
       ctx.shadowBlur = 0;
-
-      // Outline
       ctx.strokeStyle = 'rgba(255,255,255,0.5)';
       ctx.lineWidth = 2;
       ctx.strokeRect(-CUBE_SIZE / 2, -CUBE_SIZE / 2, CUBE_SIZE, CUBE_SIZE);
-
       ctx.restore();
     } else {
-      // Death shatter animation — particles flying out
-      const t = deathAnimRef.current;
+      const animT = deathAnimRef.current;
       const shards = 8;
       for (let i = 0; i < shards; i++) {
         const angle = (Math.PI * 2 * i) / shards;
-        const dist2 = t * 3;
+        const dist2 = animT * 3;
         const sx = CUBE_X + CUBE_SIZE / 2 + Math.cos(angle) * dist2;
-        const sy = cubeY + CUBE_SIZE / 2 + Math.sin(angle) * dist2 + t * 0.5;
-        const alpha = Math.max(0, 1 - t / 40);
-        const sz = CUBE_SIZE * 0.3 * (1 - t / 60);
+        const sy = cubeY + CUBE_SIZE / 2 + Math.sin(angle) * dist2 + animT * 0.5;
+        const alpha = Math.max(0, 1 - animT / 40);
+        const sz = CUBE_SIZE * 0.3 * (1 - animT / 60);
         if (sz <= 0) continue;
         ctx.globalAlpha = alpha;
         ctx.fillStyle = colors.cube;
         ctx.save();
         ctx.translate(sx, sy);
-        ctx.rotate(t * 0.1 * (i % 2 === 0 ? 1 : -1));
+        ctx.rotate(animT * 0.1 * (i % 2 === 0 ? 1 : -1));
         ctx.fillRect(-sz / 2, -sz / 2, sz, sz);
         ctx.restore();
       }
       ctx.globalAlpha = 1;
     }
 
-    // ── Progress bar ───────────────────────────────────────────────────
+    // ── Progress bar ────────────────────────────────────────────────
     const barW = GAME_W - 100;
     const barH = 6;
     const barX = 50;
     const barY = 16;
     ctx.fillStyle = 'rgba(255,255,255,0.1)';
     ctx.fillRect(barX, barY, barW, barH);
-    const pct = Math.min(distRef.current / (LEVEL_LENGTH * levelRef.current) * 100, 100);
-    ctx.fillStyle = colors.accent;
-    ctx.fillRect(barX, barY, barW * (pct / 100), barH);
-    // Percentage text
-    ctx.fillStyle = 'rgba(255,255,255,0.7)';
-    ctx.font = 'bold 11px monospace';
-    ctx.textAlign = 'right';
-    ctx.fillText(`${Math.floor(pct)}%`, barX + barW + 2, barY + barH + 12);
 
-    // Level indicator
-    ctx.textAlign = 'left';
-    ctx.fillStyle = colors.accent;
-    ctx.font = 'bold 12px monospace';
-    ctx.fillText(`LVL ${levelRef.current}`, barX, barY + barH + 12);
+    let pct: number;
+    if (isEndlessMode) {
+      const endlessLvl = Math.floor(dist / ENDLESS_LEVEL_LENGTH) + 1;
+      pct = Math.min(((dist % ENDLESS_LEVEL_LENGTH) / ENDLESS_LEVEL_LENGTH) * 100, 100);
+      ctx.fillStyle = colors.accent;
+      ctx.fillRect(barX, barY, barW * (pct / 100), barH);
+      ctx.fillStyle = 'rgba(255,255,255,0.7)';
+      ctx.font = 'bold 11px monospace';
+      ctx.textAlign = 'right';
+      ctx.fillText(`${Math.floor(pct)}%`, barX + barW + 2, barY + barH + 12);
+      ctx.textAlign = 'left';
+      ctx.fillStyle = colors.accent;
+      ctx.font = 'bold 12px monospace';
+      ctx.fillText(`ENDLESS LVL ${endlessLvl}`, barX, barY + barH + 12);
+    } else {
+      pct = Math.min((dist / levelDef!.length) * 100, 100);
+      ctx.fillStyle = colors.accent;
+      ctx.fillRect(barX, barY, barW * (pct / 100), barH);
+      ctx.fillStyle = 'rgba(255,255,255,0.7)';
+      ctx.font = 'bold 11px monospace';
+      ctx.textAlign = 'right';
+      ctx.fillText(`${Math.floor(pct)}%`, barX + barW + 2, barY + barH + 12);
+      ctx.textAlign = 'left';
+      ctx.fillStyle = colors.accent;
+      ctx.font = 'bold 12px monospace';
+      ctx.fillText(`LVL ${lvlIdx + 1}`, barX, barY + barH + 12);
+    }
   }, []);
 
-  // ── Game loop ────────────────────────────────────────────────────────────
+  // ── Game loop ─────────────────────────────────────────────────────────
   const tick = useCallback(() => {
     if (phaseRef.current !== 'playing') return;
 
-    const cfg = DIFF_CONFIG[diffRef.current];
-    const lvl = levelRef.current;
-    const speed = Math.min(cfg.baseSpeed + (lvl - 1) * cfg.speedInc, cfg.maxSpeed);
+    const lvlIdx = selectedLevelRef.current;
+    const isEndlessMode = lvlIdx === -1;
+    const levelDef = isEndlessMode ? null : LEVELS[lvlIdx];
+    const speed = isEndlessMode
+      ? Math.min(ENDLESS_CONFIG.baseSpeed + (Math.floor(distRef.current / ENDLESS_LEVEL_LENGTH)) * ENDLESS_CONFIG.speedInc, ENDLESS_CONFIG.maxSpeed)
+      : levelDef!.speed;
 
     // Move forward
     distRef.current += speed;
     gridOffsetRef.current += speed;
 
-    // Calculate level and percent
-    const totalDist = distRef.current;
-    const currentLevel = Math.floor(totalDist / LEVEL_LENGTH) + 1;
-    const levelDist = totalDist % LEVEL_LENGTH;
-    const pct = Math.floor((levelDist / LEVEL_LENGTH) * 100);
+    // Check level completion (non-endless)
+    if (!isEndlessMode && distRef.current >= levelDef!.length) {
+      distRef.current = levelDef!.length;
+      setPercent(100);
 
-    if (currentLevel !== levelRef.current) {
-      levelRef.current = currentLevel;
-      setLevel(currentLevel);
-      sfx.checkpointSound();
+      // Save completion
+      if (!savedRef.current) {
+        savedRef.current = true;
+        const attempts = levelAttemptsRef.current;
+        const stars = attempts <= 1 ? 3 : attempts <= 3 ? 2 : 1;
+        setCompletionStars(stars);
+
+        // Update progress
+        const prog = getLevelProgress();
+        const existing = prog[lvlIdx];
+        prog[lvlIdx] = {
+          bestPercent: 100,
+          stars: Math.max(stars, existing?.stars ?? 0),
+          attempts: (existing?.attempts ?? 0) + attempts,
+        };
+        saveLevelProgress(prog);
+        setLevelProgress({ ...prog });
+
+        // Update global stats
+        const newStats = recordRun(100, lvlIdx + 1);
+        setStats(newStats);
+      }
+
+      phaseRef.current = 'complete';
+      setPhase('complete');
+      render();
+      return;
     }
 
-    // Check for 10% checkpoints
-    const checkpoint10 = Math.floor(pct / 10) * 10;
-    if (checkpoint10 > 0 && checkpoint10 > lastCheckpointRef.current) {
-      lastCheckpointRef.current = checkpoint10;
-      // Small beep every 10%
-    }
-
+    // Calculate percent
+    const pct = isEndlessMode
+      ? Math.floor(((distRef.current % ENDLESS_LEVEL_LENGTH) / ENDLESS_LEVEL_LENGTH) * 100)
+      : Math.floor((distRef.current / levelDef!.length) * 100);
     setPercent(pct);
 
-    // Generate new obstacles as needed
-    while (distRef.current + GAME_W > nextSegmentXRef.current) {
-      const segLevel = Math.floor(nextSegmentXRef.current / LEVEL_LENGTH) + 1;
-      const newObs = generateSegment(nextSegmentXRef.current, cfg, segLevel);
-      obstaclesRef.current = [...obstaclesRef.current, ...newObs];
-      nextSegmentXRef.current += LEVEL_LENGTH;
+    // Endless mode: generate segments as needed
+    if (isEndlessMode) {
+      while (distRef.current + GAME_W > nextSegmentXRef.current) {
+        const segLevel = Math.floor(nextSegmentXRef.current / ENDLESS_LEVEL_LENGTH) + 1;
+        const newObs = generateEndlessSegment(nextSegmentXRef.current, segLevel);
+        obstaclesRef.current = [...obstaclesRef.current, ...newObs];
+        nextSegmentXRef.current += ENDLESS_LEVEL_LENGTH;
+      }
     }
 
     // Cull old obstacles
@@ -421,7 +812,7 @@ export function GeometryDashGame() {
     velY += GRAVITY;
     cubeY += velY;
 
-    // Check if cube is on a block
+    // Check block landing
     let onBlock = false;
     for (const obs of obstaclesRef.current) {
       if (obs.type === 'block') {
@@ -432,7 +823,6 @@ export function GeometryDashGame() {
         const blockRight = ox + obs.width;
         const blockTop = GROUND_Y - obs.height;
 
-        // Landing on top of block
         if (cubeRight > blockLeft + 4 && cubeLeft < blockRight - 4) {
           if (cubeY + CUBE_SIZE >= blockTop && cubeY + CUBE_SIZE <= blockTop + velY + 8 && velY >= 0) {
             cubeY = blockTop - CUBE_SIZE;
@@ -444,7 +834,7 @@ export function GeometryDashGame() {
       }
     }
 
-    // Check if over a gap
+    // Check gap
     let overGap = false;
     for (const obs of obstaclesRef.current) {
       if (obs.type === 'gap') {
@@ -457,7 +847,7 @@ export function GeometryDashGame() {
       }
     }
 
-    // Ground collision (only if not over a gap)
+    // Ground collision
     if (!onBlock && !overGap && cubeY + CUBE_SIZE >= GROUND_Y) {
       cubeY = GROUND_Y - CUBE_SIZE;
       velY = 0;
@@ -470,11 +860,10 @@ export function GeometryDashGame() {
       return;
     }
 
-    // Rotation — spin while in the air
+    // Rotation
     if (!onGround) {
       rotationRef.current += speed * 0.04;
     } else {
-      // Snap rotation to nearest 90 deg
       const snap = Math.PI / 2;
       rotationRef.current = Math.round(rotationRef.current / snap) * snap;
     }
@@ -483,7 +872,7 @@ export function GeometryDashGame() {
     velYRef.current = velY;
     onGroundRef.current = onGround;
 
-    // Trail particles
+    // Trail
     if (onGround) {
       trailRef.current.push({
         x: distRef.current - CUBE_X,
@@ -492,17 +881,15 @@ export function GeometryDashGame() {
         size: 4 + Math.random() * 4,
       });
     }
-    // Update trail
     trailRef.current = trailRef.current
       .map(p => ({ ...p, alpha: p.alpha - 0.02, size: p.size * 0.97 }))
       .filter(p => p.alpha > 0);
 
-    // Collision with spikes / blocks (side collision)
+    // Collision
     for (const obs of obstaclesRef.current) {
       const ox = obs.x - camera;
 
       if (obs.type === 'spike') {
-        // Triangle hitbox (simplified as smaller rect)
         const spikeLeft = ox + 5;
         const spikeRight = ox + obs.width - 5;
         const spikeTop = GROUND_Y - obs.height + 6;
@@ -517,7 +904,6 @@ export function GeometryDashGame() {
           return;
         }
       } else if (obs.type === 'block') {
-        // Side collision with blocks (not top — that is handled above)
         const blockLeft = ox;
         const blockRight = ox + obs.width;
         const blockTop = GROUND_Y - obs.height;
@@ -526,10 +912,8 @@ export function GeometryDashGame() {
         const cubeTop = cubeY;
         const cubeBottom = cubeY + CUBE_SIZE;
 
-        // Only collide from the side (not top, which is landing)
         if (cubeRight > blockLeft && cubeLeft < blockRight &&
             cubeBottom > blockTop + 4 && cubeTop < GROUND_Y) {
-          // Check if it's a side hit (cube's right edge hitting block's left edge)
           if (cubeRight - blockLeft < speed + 6 && cubeBottom > blockTop + 8) {
             die();
             return;
@@ -542,13 +926,12 @@ export function GeometryDashGame() {
     rafRef.current = requestAnimationFrame(tick);
   }, [render]);
 
-  // ── Die helper ─────────────────────────────────────────────────────────
+  // ── Die helper ────────────────────────────────────────────────────────
   const die = useCallback(() => {
     sfx.deathSound();
     phaseRef.current = 'ended';
     setPhase('ended');
 
-    // Death animation
     deathAnimRef.current = 1;
     const animLoop = () => {
       deathAnimRef.current += 1.5;
@@ -559,18 +942,35 @@ export function GeometryDashGame() {
     };
     requestAnimationFrame(animLoop);
 
-    // Save stats
     if (!savedRef.current) {
       savedRef.current = true;
-      const totalPct = Math.floor(
-        ((distRef.current % LEVEL_LENGTH) / LEVEL_LENGTH) * 100
-      );
-      const newStats = recordRun(totalPct, levelRef.current);
+      const lvlIdx = selectedLevelRef.current;
+      const isEndlessMode = lvlIdx === -1;
+      const levelDef = isEndlessMode ? null : LEVELS[lvlIdx];
+
+      const pct = isEndlessMode
+        ? Math.floor(((distRef.current % ENDLESS_LEVEL_LENGTH) / ENDLESS_LEVEL_LENGTH) * 100)
+        : Math.floor((distRef.current / levelDef!.length) * 100);
+
+      // Update level progress for non-endless
+      if (!isEndlessMode) {
+        const prog = getLevelProgress();
+        const existing = prog[lvlIdx];
+        prog[lvlIdx] = {
+          bestPercent: Math.max(pct, existing?.bestPercent ?? 0),
+          stars: existing?.stars ?? 0,
+          attempts: (existing?.attempts ?? 0) + 1,
+        };
+        saveLevelProgress(prog);
+        setLevelProgress({ ...prog });
+      }
+
+      const newStats = recordRun(pct, lvlIdx + 1);
       setStats(newStats);
     }
   }, [render]);
 
-  // ── Start / stop loop ────────────────────────────────────────────────
+  // ── Start / stop loop ─────────────────────────────────────────────────
   useEffect(() => {
     if (phase === 'playing') {
       if (rafRef.current) cancelAnimationFrame(rafRef.current);
@@ -584,35 +984,46 @@ export function GeometryDashGame() {
     return () => { if (rafRef.current) cancelAnimationFrame(rafRef.current); };
   }, [phase, tick]);
 
-  // ── Countdown ────────────────────────────────────────────────────────
-  const startCountdown = useCallback(() => {
+  // ── Countdown ─────────────────────────────────────────────────────────
+  const startCountdown = useCallback((lvlIdx: number, addAttempt: boolean) => {
     if (countdownTimerRef.current) clearTimeout(countdownTimerRef.current);
+
+    const isEndlessMode = lvlIdx === -1;
 
     // Reset game state
     cubeYRef.current = GROUND_Y - CUBE_SIZE;
     velYRef.current = 0;
     onGroundRef.current = true;
     distRef.current = 0;
-    levelRef.current = 1;
     obstacleIdCounter = 0;
-    const cfg = DIFF_CONFIG[diffRef.current];
-    obstaclesRef.current = generateSegment(0, cfg, 1);
-    nextSegmentXRef.current = LEVEL_LENGTH;
     rotationRef.current = 0;
     trailRef.current = [];
     deathAnimRef.current = 0;
     gridOffsetRef.current = 0;
-    lastCheckpointRef.current = 0;
     savedRef.current = false;
     setPercent(0);
-    setLevel(1);
+
+    if (addAttempt) {
+      setLevelAttempts(prev => {
+        const next = prev + 1;
+        levelAttemptsRef.current = next;
+        return next;
+      });
+    }
+
+    if (isEndlessMode) {
+      obstaclesRef.current = generateEndlessSegment(0, 1);
+      nextSegmentXRef.current = ENDLESS_LEVEL_LENGTH;
+    } else {
+      const levelDef = LEVELS[lvlIdx];
+      obstaclesRef.current = generateLevelObstaclesFull(levelDef);
+      nextSegmentXRef.current = levelDef.length + 1000; // no extra segments for designed levels
+    }
 
     setPhase('countdown');
     phaseRef.current = 'countdown';
     setCountdownNum(COUNTDOWN_STEPS);
     sfx.countdownBeep();
-
-    // Render the initial frame
     render();
 
     let step = COUNTDOWN_STEPS;
@@ -638,10 +1049,19 @@ export function GeometryDashGame() {
     return () => { if (countdownTimerRef.current) clearTimeout(countdownTimerRef.current); };
   }, []);
 
-  // ── Actions ──────────────────────────────────────────────────────────
+  // ── Start a level ─────────────────────────────────────────────────────
+  const startLevel = useCallback((lvlIdx: number) => {
+    setSelectedLevel(lvlIdx);
+    selectedLevelRef.current = lvlIdx;
+    setLevelAttempts(1);
+    levelAttemptsRef.current = 1;
+    startCountdown(lvlIdx, false);
+  }, [startCountdown]);
+
+  // ── Actions ───────────────────────────────────────────────────────────
   const jump = useCallback(() => {
-    if (phaseRef.current === 'menu' || phaseRef.current === 'ended') {
-      startCountdown();
+    if (phaseRef.current === 'ended') {
+      startCountdown(selectedLevelRef.current, true);
       return;
     }
     if (phaseRef.current === 'playing' && onGroundRef.current) {
@@ -661,10 +1081,32 @@ export function GeometryDashGame() {
     }
   }, []);
 
-  // ── Auto-pause on tab switch ─────────────────────────────────────────
+  const goToLevelSelect = useCallback(() => {
+    if (rafRef.current) {
+      cancelAnimationFrame(rafRef.current);
+      rafRef.current = null;
+    }
+    if (countdownTimerRef.current) {
+      clearTimeout(countdownTimerRef.current);
+      countdownTimerRef.current = null;
+    }
+    phaseRef.current = 'levelSelect';
+    setPhase('levelSelect');
+  }, []);
+
+  const goToNextLevel = useCallback(() => {
+    const nextIdx = selectedLevelRef.current + 1;
+    if (nextIdx < LEVELS.length) {
+      startLevel(nextIdx);
+    } else {
+      goToLevelSelect();
+    }
+  }, [startLevel, goToLevelSelect]);
+
+  // ── Auto-pause on tab switch ──────────────────────────────────────────
   useVisibilityPause(phase === 'playing', togglePause);
 
-  // ── Input ────────────────────────────────────────────────────────────
+  // ── Input ─────────────────────────────────────────────────────────────
   useEffect(() => {
     function onKey(e: KeyboardEvent) {
       if (e.key === ' ' || e.key === 'ArrowUp' || e.key === 'w' || e.key === 'W') {
@@ -677,26 +1119,163 @@ export function GeometryDashGame() {
       }
       if (e.key === 'Escape') {
         e.preventDefault();
-        togglePause();
+        if (phaseRef.current === 'paused' || phaseRef.current === 'ended' || phaseRef.current === 'complete') {
+          goToLevelSelect();
+        } else {
+          togglePause();
+        }
       }
     }
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
-  }, [jump, togglePause]);
+  }, [jump, togglePause, goToLevelSelect]);
 
   // Load stats on mount
   useEffect(() => {
     setStats(getStats());
+    setLevelProgress(getLevelProgress());
   }, []);
 
+  // ── Level Select Screen ───────────────────────────────────────────────
+  if (phase === 'levelSelect') {
+    return (
+      <div className="flex flex-col items-center gap-2 sm:gap-3 w-full mx-auto select-none flex-1 min-h-0">
+        {/* Title */}
+        <div className="shrink-0 flex items-center justify-between w-full max-w-[850px] px-1">
+          <span className="text-xs text-zinc-500 uppercase tracking-wider font-semibold">
+            {t('lobby.games.geometrydash.title')}
+          </span>
+          <span className="text-xs text-zinc-400">
+            {t('geometrydash.selectLevel')}
+          </span>
+        </div>
+
+        {/* Level grid */}
+        <div className="flex-1 min-h-0 w-full flex justify-center overflow-y-auto">
+          <div className="w-full max-w-[850px] px-2 py-4">
+            <div className="grid grid-cols-2 sm:grid-cols-5 gap-3">
+              {LEVELS.map((levelDef, idx) => {
+                const unlocked = isLevelUnlocked(idx, levelProgress);
+                const prog = levelProgress[idx];
+                const colors = LEVEL_COLORS[levelDef.theme % LEVEL_COLORS.length];
+                const bestPct = prog?.bestPercent ?? 0;
+                const starCount = prog?.stars ?? 0;
+
+                return (
+                  <button
+                    key={idx}
+                    disabled={!unlocked}
+                    onClick={() => unlocked && startLevel(idx)}
+                    className={`relative flex flex-col items-center gap-1.5 p-3 rounded-xl border-2 transition-all active:scale-[0.97] ${
+                      unlocked
+                        ? 'border-zinc-700 hover:border-zinc-500 bg-zinc-900 hover:bg-zinc-800 cursor-pointer'
+                        : 'border-zinc-800 bg-zinc-950 opacity-50 cursor-not-allowed'
+                    }`}
+                  >
+                    {/* Level number badge */}
+                    <div
+                      className="w-10 h-10 rounded-lg flex items-center justify-center font-black text-lg"
+                      style={{
+                        backgroundColor: unlocked ? colors.accent + '22' : 'transparent',
+                        color: unlocked ? colors.accent : '#666',
+                        border: `2px solid ${unlocked ? colors.accent + '44' : '#333'}`,
+                      }}
+                    >
+                      {idx + 1}
+                    </div>
+
+                    {/* Level name */}
+                    <span className={`text-[11px] font-bold text-center leading-tight ${unlocked ? 'text-zinc-200' : 'text-zinc-600'}`}>
+                      {t(levelDef.nameKey)}
+                    </span>
+
+                    {/* Difficulty stars */}
+                    <div className="flex gap-0.5">
+                      {Array.from({ length: 10 }, (_, i) => (
+                        <div
+                          key={i}
+                          className="w-1.5 h-1.5 rounded-full"
+                          style={{
+                            backgroundColor: i < levelDef.difficulty
+                              ? (unlocked ? colors.accent : '#555')
+                              : '#333',
+                          }}
+                        />
+                      ))}
+                    </div>
+
+                    {/* Progress / locked */}
+                    {unlocked ? (
+                      <div className="w-full mt-1">
+                        {/* Progress bar */}
+                        <div className="w-full h-1.5 bg-zinc-800 rounded-full overflow-hidden">
+                          <div
+                            className="h-full rounded-full transition-all"
+                            style={{
+                              width: `${bestPct}%`,
+                              backgroundColor: bestPct >= 100 ? colors.accent : colors.accent + '88',
+                            }}
+                          />
+                        </div>
+                        <div className="flex justify-between items-center mt-1">
+                          <span className="text-[9px] text-zinc-500 tabular-nums">{bestPct}%</span>
+                          {/* Earned stars */}
+                          <div className="flex gap-0.5">
+                            {[1, 2, 3].map(s => (
+                              <span
+                                key={s}
+                                className="text-[10px]"
+                                style={{ color: s <= starCount ? '#fbbf24' : '#555' }}
+                              >
+                                &#9733;
+                              </span>
+                            ))}
+                          </div>
+                        </div>
+                      </div>
+                    ) : (
+                      <span className="text-[9px] text-zinc-600 mt-1">
+                        {t('geometrydash.locked')}
+                      </span>
+                    )}
+                  </button>
+                );
+              })}
+            </div>
+
+            {/* Endless mode button */}
+            <div className="mt-4 flex justify-center">
+              <button
+                onClick={() => startLevel(-1)}
+                className="px-6 py-3 rounded-xl border-2 border-zinc-700 bg-zinc-900 hover:bg-zinc-800 hover:border-zinc-500 text-zinc-200 font-bold text-sm transition-all active:scale-[0.97]"
+              >
+                {t('geometrydash.endless')}
+              </button>
+            </div>
+
+            {/* Global stats */}
+            <div className="mt-4 flex justify-center gap-4 text-[11px] text-zinc-500">
+              <span>{t('geometrydash.attempts')}: <span className="text-zinc-300 font-bold">{stats.attempts}</span></span>
+              <span>{t('geometrydash.best')}: <span className="text-zinc-300 font-bold">{stats.bestPercent}%</span></span>
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  // ── Gameplay Screen ───────────────────────────────────────────────────
   return (
     <div className="flex flex-col items-center gap-2 sm:gap-3 w-full mx-auto select-none flex-1 min-h-0">
       {/* Score bar */}
       <div className="shrink-0 flex items-center justify-between w-full max-w-[850px] px-1">
         <div className="flex items-center gap-3">
-          <span className="text-xs text-zinc-500 uppercase tracking-wider font-semibold">
-            {t('lobby.games.geometrydash.title')}
-          </span>
+          <button
+            onClick={goToLevelSelect}
+            className="text-xs text-zinc-500 hover:text-zinc-300 uppercase tracking-wider font-semibold transition-colors"
+          >
+            &larr; {t('geometrydash.backToLevels')}
+          </button>
         </div>
         <div className="flex items-center gap-4 text-sm">
           <span className="text-zinc-400 text-xs">
@@ -704,11 +1283,11 @@ export function GeometryDashGame() {
           </span>
           <span className="text-zinc-600">|</span>
           <span className="text-zinc-400 text-xs">
-            LVL <span className="font-bold text-zinc-200 tabular-nums">{level}</span>
+            {isEndless ? t('geometrydash.endless') : t(currentLevelDef!.nameKey)}
           </span>
           <span className="text-zinc-600">|</span>
           <span className="text-zinc-400 text-xs">
-            {t('game.best')}: <span className="font-bold text-zinc-200 tabular-nums">{stats.bestPercent}%</span>
+            {t('geometrydash.attempts')}: <span className="font-bold text-zinc-200 tabular-nums">{levelAttempts}</span>
           </span>
         </div>
       </div>
@@ -718,10 +1297,9 @@ export function GeometryDashGame() {
         <div
           className="relative h-full overflow-hidden rounded-2xl border-2 border-zinc-800 bg-zinc-950"
           style={{ aspectRatio: `${GAME_W} / ${GAME_H}`, maxWidth: '100%' }}
-          onClick={() => { if (phase !== 'ended') jump(); }}
-          onPointerDown={(e) => { if (phase !== 'ended') { e.preventDefault(); } }}
+          onClick={() => { if (phase !== 'ended' && phase !== 'complete') jump(); }}
+          onPointerDown={(e) => { if (phase !== 'ended' && phase !== 'complete') { e.preventDefault(); } }}
         >
-          {/* Canvas */}
           <canvas
             ref={canvasRef}
             width={GAME_W}
@@ -730,57 +1308,6 @@ export function GeometryDashGame() {
           />
 
           {/* ── Overlays ──────────────────────────────────────────────── */}
-
-          {/* Menu */}
-          {phase === 'menu' && (
-            <div className="absolute inset-0 flex flex-col items-center justify-center bg-black/60 backdrop-blur-[2px] z-20">
-              <div className="text-3xl font-black text-emerald-400 mb-2 drop-shadow-lg">
-                {t('lobby.games.geometrydash.title')}
-              </div>
-              <p className="text-sm text-zinc-300 mb-5">
-                {t('lobby.games.geometrydash.desc')}
-              </p>
-
-              {/* Difficulty selector */}
-              <div className="flex flex-col items-center gap-1.5 mb-5">
-                <span className="text-[11px] text-zinc-400 uppercase tracking-wider font-semibold">
-                  {t('geometrydash.difficulty')}
-                </span>
-                <div className="flex gap-1.5">
-                  {DIFFICULTIES.map((d) => (
-                    <button
-                      key={d}
-                      onClick={(e) => { e.stopPropagation(); setDifficulty(d); diffRef.current = d; }}
-                      className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all active:scale-95 ${
-                        difficulty === d
-                          ? 'bg-emerald-600 text-white shadow-md shadow-emerald-900/40'
-                          : 'bg-zinc-800 text-zinc-400 hover:bg-zinc-700 hover:text-zinc-200'
-                      }`}
-                    >
-                      {t(`geometrydash.${d}`)}
-                    </button>
-                  ))}
-                </div>
-              </div>
-
-              {/* Stats */}
-              <div className="flex gap-4 text-[11px] text-zinc-400 mb-5">
-                <span>{t('geometrydash.attempts')}: <span className="text-zinc-200 font-bold">{stats.attempts}</span></span>
-                <span>{t('game.best')}: <span className="text-zinc-200 font-bold">{stats.bestPercent}%</span></span>
-              </div>
-
-              <button
-                onClick={(e) => { e.stopPropagation(); jump(); }}
-                className="px-6 py-3 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-sm transition-all active:scale-95 shadow-lg shadow-emerald-900/40"
-              >
-                {t('geometrydash.start')}
-              </button>
-
-              <p className="text-[11px] text-zinc-500 mt-3">
-                Space / W / Click
-              </p>
-            </div>
-          )}
 
           {/* Countdown */}
           {phase === 'countdown' && (
@@ -795,12 +1322,20 @@ export function GeometryDashGame() {
           {phase === 'paused' && (
             <div className="absolute inset-0 flex flex-col items-center justify-center bg-black/50 backdrop-blur-[2px] z-20">
               <div className="text-2xl font-black text-zinc-100 mb-4">{t('game.paused')}</div>
-              <button
-                onClick={(e) => { e.stopPropagation(); togglePause(); }}
-                className="px-6 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-sm transition-all active:scale-95"
-              >
-                {t('game.resume')}
-              </button>
+              <div className="flex gap-3">
+                <button
+                  onClick={(e) => { e.stopPropagation(); togglePause(); }}
+                  className="px-6 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-sm transition-all active:scale-95"
+                >
+                  {t('game.resume')}
+                </button>
+                <button
+                  onClick={(e) => { e.stopPropagation(); goToLevelSelect(); }}
+                  className="px-6 py-2.5 rounded-xl border border-zinc-600 text-zinc-300 hover:border-zinc-400 font-bold text-sm transition-all active:scale-95"
+                >
+                  {t('geometrydash.backToLevels')}
+                </button>
+              </div>
             </div>
           )}
 
@@ -810,22 +1345,66 @@ export function GeometryDashGame() {
               <div className="text-2xl font-black text-rose-400 mb-1">{t('game.over')}</div>
               <div className="text-4xl font-black text-zinc-100 mb-1 tabular-nums">{percent}%</div>
               <div className="text-xs text-zinc-400 mb-1">
-                LVL {level}
+                {isEndless ? t('geometrydash.endless') : t(currentLevelDef!.nameKey)}
               </div>
-              {percent >= stats.bestPercent && percent > 0 && (
-                <span className="text-xs font-bold text-amber-400 mb-2">{t('game.newBest')}</span>
-              )}
               <div className="text-xs text-zinc-400 mb-4">
-                {t('game.best')}: <span className="text-zinc-200 font-bold tabular-nums">{stats.bestPercent}%</span>
-                <span className="text-zinc-600 mx-2">|</span>
-                {t('geometrydash.attempts')}: <span className="text-zinc-200 font-bold tabular-nums">{stats.attempts}</span>
+                {t('geometrydash.attempts')}: <span className="text-zinc-200 font-bold tabular-nums">{levelAttempts}</span>
               </div>
-              <button
-                onClick={(e) => { e.stopPropagation(); jump(); }}
-                className="px-5 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-sm transition-all active:scale-95"
-              >
-                {t('game.restart')}
-              </button>
+              <div className="flex gap-3">
+                <button
+                  onClick={(e) => { e.stopPropagation(); jump(); }}
+                  className="px-5 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-sm transition-all active:scale-95"
+                >
+                  {t('game.restart')}
+                </button>
+                <button
+                  onClick={(e) => { e.stopPropagation(); goToLevelSelect(); }}
+                  className="px-5 py-2.5 rounded-xl border border-zinc-600 text-zinc-300 hover:border-zinc-400 font-bold text-sm transition-all active:scale-95"
+                >
+                  {t('geometrydash.backToLevels')}
+                </button>
+              </div>
+            </div>
+          )}
+
+          {/* Level Complete */}
+          {phase === 'complete' && (
+            <div className="absolute inset-0 flex flex-col items-center justify-center bg-black/60 backdrop-blur-[2px] z-20">
+              <div className="text-3xl font-black text-emerald-400 mb-2">{t('geometrydash.levelComplete')}</div>
+              <div className="text-lg font-bold text-zinc-200 mb-3">
+                {t(currentLevelDef!.nameKey)}
+              </div>
+              {/* Stars */}
+              <div className="flex gap-2 mb-4">
+                {[1, 2, 3].map(s => (
+                  <span
+                    key={s}
+                    className="text-4xl"
+                    style={{ color: s <= completionStars ? '#fbbf24' : '#555' }}
+                  >
+                    &#9733;
+                  </span>
+                ))}
+              </div>
+              <div className="text-xs text-zinc-400 mb-4">
+                {t('geometrydash.attempts')}: <span className="text-zinc-200 font-bold tabular-nums">{levelAttempts}</span>
+              </div>
+              <div className="flex gap-3">
+                {selectedLevel < LEVELS.length - 1 && (
+                  <button
+                    onClick={(e) => { e.stopPropagation(); goToNextLevel(); }}
+                    className="px-6 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-sm transition-all active:scale-95"
+                  >
+                    {t('geometrydash.nextLevel')}
+                  </button>
+                )}
+                <button
+                  onClick={(e) => { e.stopPropagation(); goToLevelSelect(); }}
+                  className="px-6 py-2.5 rounded-xl border border-zinc-600 text-zinc-300 hover:border-zinc-400 font-bold text-sm transition-all active:scale-95"
+                >
+                  {t('geometrydash.backToLevels')}
+                </button>
+              </div>
             </div>
           )}
         </div>

@@ -6,6 +6,7 @@ import { useI18n } from '@/components/providers/LanguageProvider';
 import { getDailyChallenges, getTodayStr, loadProgress } from '@/lib/dailyChallenges';
 import type { DailyChallenge, DailyChallengeProgress } from '@/lib/dailyChallenges';
 import { getActiveStreak } from '@/lib/playStreak';
+import { getPlayStreakBonus } from '@/lib/progression';
 
 const STORAGE_KEY = 'wg_daily_expanded';
 
@@ -77,8 +78,18 @@ export function DailyChallengesWidget() {
           </h2>
           <div className="flex items-center gap-3">
             {streak > 0 && (
-              <span className="text-xs text-amber-400 font-medium tabular-nums">
+              <span className="text-xs text-amber-400 font-medium tabular-nums group/streak relative cursor-default">
                 🔥 {streak} {t('daily.streak')}
+                {getPlayStreakBonus(streak) > 0 && (
+                  <span className="ml-1 text-emerald-400">(+{getPlayStreakBonus(streak)} XP)</span>
+                )}
+                <span className="absolute top-full left-1/2 -translate-x-1/2 mt-2 px-3 py-2 rounded-lg bg-zinc-800 border border-zinc-700 shadow-xl text-[11px] text-zinc-300 whitespace-nowrap opacity-0 pointer-events-none group-hover/streak:opacity-100 transition-opacity z-50">
+                  <span className="block font-bold text-zinc-100 mb-1">{t('daily.streakBonus')}</span>
+                  <span className={`block ${streak >= 3 ? 'text-emerald-400' : 'text-zinc-500'}`}>3+ {t('profilePage.days')}: +10 XP</span>
+                  <span className={`block ${streak >= 7 ? 'text-emerald-400' : 'text-zinc-500'}`}>7+ {t('profilePage.days')}: +20 XP</span>
+                  <span className={`block ${streak >= 14 ? 'text-emerald-400' : 'text-zinc-500'}`}>14+ {t('profilePage.days')}: +30 XP</span>
+                  <span className={`block ${streak >= 30 ? 'text-emerald-400' : 'text-zinc-500'}`}>30+ {t('profilePage.days')}: +50 XP</span>
+                </span>
               </span>
             )}
             <span className={`text-xs tabular-nums font-medium ${allDone ? 'text-emerald-400' : 'text-zinc-500'}`}>

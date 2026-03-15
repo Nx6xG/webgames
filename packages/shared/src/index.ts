@@ -184,6 +184,16 @@ export type {
   UnoRuleConfig,
 } from './games/uno';
 export type {
+  TournamentId,
+  TournamentStatus,
+  BracketSize,
+  TournamentConfig,
+  TournamentMatch,
+  TournamentPlayer,
+  TournamentState,
+  TournamentListItem,
+} from './tournament';
+export type {
   AnyGameState,
   AnyGameAction,
   ServerToClientEvents,

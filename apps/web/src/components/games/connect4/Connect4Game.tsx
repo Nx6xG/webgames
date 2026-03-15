@@ -19,6 +19,7 @@ import { useAchievements } from '@/hooks/useAchievements';
 import { SpectatorBanner } from '@/components/ui/SpectatorBanner';
 import { ReconnectBanner } from '@/components/ui/ReconnectBanner';
 import { ReplayControls } from '@/components/ui/ReplayControls';
+import { useAutoJoin } from '@/hooks/useAutoJoin';
 
 const ROWS = 6;
 const COLS = 7;
@@ -47,22 +48,8 @@ export function Connect4Game({ wsUrl, gameId, initialRoomCode, quickPlay: isQuic
   const [replayMode, setReplayMode] = useState(false);
   const prevTotalRef = useRef<number | null>(null);
   const prevBoardRef = useRef<Connect4Cell[][] | null>(null);
-  const autoJoined = useRef(false);
 
-  useEffect(() => {
-    if (mp.connection === 'connected' && initialRoomCode && !autoJoined.current && mp.phase === 'lobby') {
-      autoJoined.current = true;
-      mp.joinRoom(initialRoomCode);
-    }
-  }, [mp.connection, initialRoomCode, mp.phase]); // eslint-disable-line
-
-  // Auto quick-play when ?quickplay=true
-  useEffect(() => {
-    if (mp.connection === 'connected' && isQuickPlay && !autoJoined.current && mp.phase === 'lobby') {
-      autoJoined.current = true;
-      mp.quickPlay();
-    }
-  }, [mp.connection, isQuickPlay, mp.phase]); // eslint-disable-line
+  useAutoJoin(mp, initialRoomCode, isQuickPlay, 'connect4');
 
   // Replace URL with ?room=CODE once matched (for shareability + refresh)
   useEffect(() => {

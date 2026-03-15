@@ -405,7 +405,7 @@ export function TypingTestGame() {
           className="w-full max-w-3xl flex-1 min-h-0 overflow-y-auto bg-zinc-900/60 border border-zinc-800 rounded-xl p-6 focus:outline-none scrollbar-none"
           tabIndex={-1}
         >
-          <p className="font-mono text-xl leading-relaxed tracking-wide break-all select-none whitespace-pre-wrap">
+          <p className="font-mono text-xl leading-relaxed tracking-wide break-words select-none whitespace-pre-wrap">
             {text.split('').map((ch, i) => (
               <span
                 key={i}
