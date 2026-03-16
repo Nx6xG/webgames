@@ -35,7 +35,7 @@ type Difficulty = 'easy' | 'medium' | 'hard';
 const BOT_CONFIG: Record<Difficulty, { speed: number; offset: number; driftFactor: number; predict: number; reactionX: number }> = {
   easy:   { speed: 3.0, offset: 40, driftFactor: 0.25, predict: 0,    reactionX: W * 0.5 },
   medium: { speed: 5.0, offset: 18, driftFactor: 0.4,  predict: 0.6,  reactionX: W * 0.3 },
-  hard:   { speed: 5.5, offset: 18, driftFactor: 0.5,  predict: 0.8,  reactionX: W * 0.15 },
+  hard:   { speed: 4.5, offset: 30, driftFactor: 0.4,  predict: 0.6,  reactionX: W * 0.25 },
 };
 
 const GAME_KEYS = new Set(['ArrowUp', 'ArrowDown', 'w', 'W', 's', 'S', ' ', 'p', 'P', 'Escape']);

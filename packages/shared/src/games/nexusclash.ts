@@ -343,6 +343,8 @@ export const NC_CARDS: NcCardDef[] = [
   { id: 'leerenmagier', nameKey: 'nc.card.leerenmagier', cost: 3, power: 3, tags: ['arcane', 'shadow'], rarity: 'common', ability: { trigger: 'on_reveal', effect: 'debuff_enemies', value: 1 } },
   { id: 'assassine', nameKey: 'nc.card.assassine', cost: 3, power: 3, tags: ['shadow'], rarity: 'common', ability: { trigger: 'on_reveal', effect: 'destroy_weakest_enemy' } },
   { id: 'paladin', nameKey: 'nc.card.paladin', cost: 3, power: 4, tags: ['noble', 'divine'], rarity: 'common', ability: { trigger: 'on_reveal', effect: 'shield', value: 1 } },
+  { id: 'waldlaeufer', nameKey: 'nc.card.waldlaeufer', cost: 2, power: 3, tags: ['nature', 'beast'], rarity: 'common', ability: { trigger: 'on_reveal', effect: 'buff_allies', value: 1, tagFilter: 'beast' } },
+  { id: 'geisterjunge', nameKey: 'nc.card.geisterjunge', cost: 1, power: 2, tags: ['undead', 'shadow'], rarity: 'common', ability: { trigger: 'on_reveal', effect: 'debuff_enemies', value: 1 } },
   // ── Rares ──
   { id: 'apollo', nameKey: 'nc.card.apollo', cost: 3, power: 4, tags: ['divine', 'nature'], rarity: 'rare', ability: { trigger: 'ongoing', effect: 'power_per_tag', value: 1, tagFilter: 'divine' } },
   { id: 'greif', nameKey: 'nc.card.greif', cost: 3, power: 4, tags: ['beast', 'noble'], rarity: 'rare', ability: { trigger: 'ongoing', effect: 'double_push_if', conditionCount: 2, conditionTag: 'beast' } },
@@ -375,7 +377,7 @@ export const NC_CARDS_BY_RARITY: Record<NcRarity, NcCardDef[]> = {
   legendary: NC_CARDS.filter(c => c.rarity === 'legendary'),
 };
 
-/** Starter card ids (10 commons) */
+/** Starter card ids (12 commons) */
 export const NC_STARTER_CARDS: string[] = NC_CARDS.filter(c => c.rarity === 'common').map(c => c.id);
 
 /** Create a default new player profile */
@@ -387,7 +389,7 @@ export function createDefaultNcProfile(): NcPlayerProfile {
   const defaultDeck: NcDeckSlot = {
     id: 'default',
     name: 'Starter',
-    cards: NC_STARTER_CARDS.slice(0, NC_DECK_SIZE), // 10 unique commons (deck size 12, will grow as cards collected)
+    cards: NC_STARTER_CARDS.slice(0, NC_DECK_SIZE), // 12 unique commons = full starter deck
   };
   return {
     collection: { cards: collection },
