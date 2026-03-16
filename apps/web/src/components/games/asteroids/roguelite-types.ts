@@ -220,6 +220,8 @@ export interface MegaBossData {
   phase: MegaBossPhase;
   phaseHp: number;
   phaseMaxHp: number;
+  /** HP scale factor for this mega-boss encounter (wave 25=1x, 50=1.5x, etc.) */
+  hpScale: number;
   shieldRotation: number;
   shieldSegments: boolean[];
   homingMissiles: Array<{ x: number; y: number; vx: number; vy: number; life: number }>;

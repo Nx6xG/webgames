@@ -31,7 +31,7 @@ export const PERMANENT_UPGRADES: PermanentUpgrade[] = [
     descKey: 'asteroids.rl.upg.hull.desc',
     icon: '\u{1F6E1}',
     maxTier: 5,
-    costs: [50, 150, 400, 900, 1800],
+    costs: [100, 300, 800, 1800, 3600],
   },
   {
     id: 'engine',
@@ -39,7 +39,7 @@ export const PERMANENT_UPGRADES: PermanentUpgrade[] = [
     descKey: 'asteroids.rl.upg.engine.desc',
     icon: '\u{1F680}',
     maxTier: 5,
-    costs: [40, 120, 320, 720, 1500],
+    costs: [80, 250, 650, 1500, 3000],
   },
   {
     id: 'gyroscope',
@@ -47,7 +47,7 @@ export const PERMANENT_UPGRADES: PermanentUpgrade[] = [
     descKey: 'asteroids.rl.upg.gyroscope.desc',
     icon: '\u{1F504}',
     maxTier: 5,
-    costs: [40, 120, 320, 720, 1500],
+    costs: [80, 250, 650, 1500, 3000],
   },
   {
     id: 'caliber',
@@ -55,7 +55,7 @@ export const PERMANENT_UPGRADES: PermanentUpgrade[] = [
     descKey: 'asteroids.rl.upg.caliber.desc',
     icon: '\u{1F4A5}',
     maxTier: 5,
-    costs: [60, 180, 480, 1080, 2200],
+    costs: [120, 360, 960, 2200, 4500],
   },
   {
     id: 'fireRate',
@@ -63,7 +63,7 @@ export const PERMANENT_UPGRADES: PermanentUpgrade[] = [
     descKey: 'asteroids.rl.upg.fireRate.desc',
     icon: '\u26A1',
     maxTier: 5,
-    costs: [50, 150, 400, 900, 1800],
+    costs: [100, 300, 800, 1800, 3600],
   },
   {
     id: 'bulletSpeed',
@@ -71,7 +71,7 @@ export const PERMANENT_UPGRADES: PermanentUpgrade[] = [
     descKey: 'asteroids.rl.upg.bulletSpeed.desc',
     icon: '\u{1F3AF}',
     maxTier: 5,
-    costs: [35, 100, 270, 600, 1200],
+    costs: [70, 200, 550, 1200, 2500],
   },
   {
     id: 'magnet',
@@ -79,7 +79,7 @@ export const PERMANENT_UPGRADES: PermanentUpgrade[] = [
     descKey: 'asteroids.rl.upg.magnet.desc',
     icon: '\u{1F9F2}',
     maxTier: 3,
-    costs: [100, 350, 800],
+    costs: [200, 700, 1600],
   },
   {
     id: 'scrapBonus',
@@ -87,7 +87,7 @@ export const PERMANENT_UPGRADES: PermanentUpgrade[] = [
     descKey: 'asteroids.rl.upg.scrapBonus.desc',
     icon: '\u{1F4B0}',
     maxTier: 3,
-    costs: [80, 280, 700],
+    costs: [160, 560, 1400],
   },
   {
     id: 'shieldGen',
@@ -95,7 +95,7 @@ export const PERMANENT_UPGRADES: PermanentUpgrade[] = [
     descKey: 'asteroids.rl.upg.shieldGen.desc',
     icon: '\u{1F50B}',
     maxTier: 3,
-    costs: [150, 500, 1200],
+    costs: [300, 1000, 2400],
   },
   {
     id: 'critStrike',
@@ -103,7 +103,7 @@ export const PERMANENT_UPGRADES: PermanentUpgrade[] = [
     descKey: 'asteroids.rl.upg.critStrike.desc',
     icon: '\u2694\uFE0F',
     maxTier: 3,
-    costs: [120, 400, 1000],
+    costs: [250, 800, 2000],
   },
 ];
 
@@ -268,6 +268,19 @@ export function getBossVariantForWave(wave: number): BossVariant {
   // wave 25+: random
   const variants: BossVariant[] = ['standard', 'twin', 'shield', 'carrier'];
   return variants[Math.floor(Math.random() * variants.length)];
+}
+
+/** Wave-based HP scaling for bosses — they get stronger in late game */
+export function getBossWaveHpScale(wave: number): number {
+  if (wave <= 5) return 1;
+  // +15% HP per 5 waves after wave 5
+  return 1 + Math.floor((wave - 5) / 5) * 0.15;
+}
+
+/** Wave-based scaling for event rounds */
+export function getEventWaveScale(wave: number): number {
+  // 1.0 at wave 5, scales up to 3.0+ in late game
+  return 1 + Math.max(0, (wave - 5)) * 0.08;
 }
 
 // ---------------------------------------------------------------------------
@@ -440,6 +453,13 @@ export function getAscensionScrapBonus(ascensionLevel: number): number {
   return 1 + ascensionLevel * 0.05;
 }
 
+/** Power-up drop rate multiplier — decreases in late game to prevent oversaturation */
+export function getPowerupDropScale(wave: number): number {
+  if (wave <= 10) return 1;
+  // Drops to 0.4 by wave 50
+  return Math.max(0.4, 1 - (wave - 10) * 0.015);
+}
+
 // ---------------------------------------------------------------------------
 // Default run stats
 // ---------------------------------------------------------------------------
@@ -548,6 +568,12 @@ export const MEGA_BOSS_CONFIG = {
   },
   scrapReward: 1200,
 };
+
+/** Mega-boss HP scale per encounter (wave 25=1x, 50=1.5x, 75=2x, etc.) */
+export function getMegaBossHpScale(wave: number): number {
+  const encounter = Math.floor(wave / 25); // 1, 2, 3, ...
+  return 1 + (encounter - 1) * 0.5;
+}
 
 export function isMegaBossWave(wave: number): boolean {
   return wave > 0 && wave % 25 === 0;

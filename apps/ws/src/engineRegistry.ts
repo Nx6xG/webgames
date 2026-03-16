@@ -7,6 +7,7 @@ import { battleshipEngine } from './engines/battleship.js';
 import { liarsBarEngine } from './engines/liarsbar.js';
 import { curveFeverEngine } from './engines/curvefever.js';
 import { unoEngine } from './engines/uno.js';
+import { nexusClashEngine } from './engines/nexusclash.js';
 
 /**
  * Maps every GameId to its authoritative server-side engine.
@@ -25,4 +26,5 @@ export const engineRegistry: Record<GameId, GameEngine<any, any>> = {
   liarsbar:   liarsBarEngine,
   curvefever: curveFeverEngine,
   uno:        unoEngine,
+  nexusclash:  nexusClashEngine,
 };

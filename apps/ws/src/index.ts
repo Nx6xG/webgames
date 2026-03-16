@@ -59,6 +59,7 @@ const GAME_DISPLAY_NAMES: Record<GameId, string> = {
   liarsbar: "Liar's Deck",
   curvefever: 'Curve Fever',
   uno: 'UNO',
+  nexusclash: 'Nexus Clash',
 };
 
 /** Per-gameId matchmaking queue: gameId → waiting room info */

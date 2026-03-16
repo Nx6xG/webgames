@@ -11,6 +11,7 @@ import { loadStats, saveStats, updateStats } from './stats';
 import type { BreakoutStats } from './stats';
 import * as sfx from './sound';
 import { useVisibilityPause } from '@/hooks/useVisibilityPause';
+import TouchControls from '@/components/ui/TouchControls';
 
 // ── Constants ────────────────────────────────────────────────────────────────
 
@@ -1580,8 +1581,16 @@ export function BreakoutGame() {
         </div>
       </div>
 
+      {/* Mobile touch controls */}
+      <TouchControls
+        layout="leftright-action"
+        actionLabel={t('breakout.start')}
+        disabled={phase !== 'playing' && phase !== 'paused'}
+        extraButtons={[{ label: phase === 'paused' ? t('game.resume') : t('game.paused'), onPress: togglePause }]}
+      />
+
       {/* Controls hint + mute */}
-      <div className="flex items-center gap-4 text-xs text-zinc-600">
+      <div className="flex items-center gap-4 text-xs text-zinc-600 max-sm:hidden">
         <span>{t('breakout.controlsHint')}</span>
         <span className="text-zinc-700">|</span>
         <span>P / Esc {t('breakout.toPause')}</span>

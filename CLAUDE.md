@@ -69,9 +69,11 @@ German (`de`) is the default language. All strings in `apps/web/src/i18n/message
 
 ## Current Games
 
-**Multiplayer (8):** Tic-Tac-Toe, Connect 4, RPS (best-of / showdown modes), Chess (full rules + PGN export), Battleship (fog-of-war via state projection), Liar's Deck (2-6p bluffing), Curve Fever (2-6p real-time), UNO (2-4p, multi-round scoring + house rules).
+**Multiplayer (9):** Tic-Tac-Toe, Connect 4, RPS (best-of / showdown modes), Chess (full rules + PGN export), Battleship (fog-of-war via state projection), Liar's Deck (2-6p bluffing), Curve Fever (2-6p real-time), UNO (2-4p, multi-round scoring + house rules), Nexus Clash (2p CCG with collection/deck-building).
 
-**Singleplayer (8+):** Sudoku, Snake, Tetris, 2048, Pong, Breakout, Flappy, Minesweeper — each has its own route under `apps/web/src/app/games/<name>/`.
+**Singleplayer (18+):** Sudoku, Snake, Tetris, 2048, Pong, Breakout, Flappy, Minesweeper, Pac-Man, Asteroids, Crossy Road, Doodle Jump, Fruit Ninja, Geometry Dash, Mahjong, Penalties, Typing Test, Tic-Tac-Toe Solo — each has its own route under `apps/web/src/app/games/<name>/`.
+
+**Nexus Clash (CCG):** Lane-based tug-of-war card game with `simultaneousInput`. Has its own client-side progression system (`NcProfileManager.tsx` with localStorage): collection, currencies (coins/gems), pack opening, deck slots (12 unique cards each, `NC_MAX_COPIES=1`), daily/weekly quests. Deck cycling: when deck is empty, discard pile reshuffles back in. State projection strips decks, discard piles, opponent hands, and pending plays.
 
 ## Key Conventions
 
@@ -85,6 +87,7 @@ German (`de`) is the default language. All strings in `apps/web/src/i18n/message
 - Spectators: joining a full room makes you a spectator (read-only, cannot send actions)
 - Quick-play: per-GameId queue in `apps/ws/src/index.ts`; auto-matches into public rooms
 - Admin panel at `/admin` (requires Supabase admin role); routes in `apps/web/src/app/admin/`
+- **Hydration safety:** Never read localStorage in `useState` initializers — it causes SSR/client mismatches. Use `useEffect` to load client-only state after mount (see `NcProfileManager.tsx` for the pattern).
 
 ## Environment Variables
 

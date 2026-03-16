@@ -10,6 +10,7 @@ const BattleshipGame = dynamic(() => import('@/components/games/battleship/Battl
 const LiarsBarGame = dynamic(() => import('@/components/games/liarsbar/LiarsBarGame').then(m => m.LiarsBarGame));
 const CurveFeverGame = dynamic(() => import('@/components/games/curvefever/CurveFeverGame').then(m => m.CurveFeverGame));
 const UnoGame = dynamic(() => import('@/components/games/uno/UnoGame').then(m => m.UnoGame));
+const NexusClashGame = dynamic(() => import('@/components/games/nexusclash/NexusClashGame').then(m => m.NexusClashGame));
 
 /**
  * Props every game component must accept.
@@ -187,5 +188,21 @@ export const webRegistry: Record<GameId, WebGameEntry> = {
     titleKey: 'lobby.games.uno.title',
     descKey:  'lobby.games.uno.desc',
     Component: UnoGame,
+  },
+  nexusclash: {
+    manifest: {
+      id: 'nexusclash',
+      name: 'Nexus Clash',
+      description: 'Lane-based card game with simultaneous turns. Push your lanes to breakthrough!',
+      categories: ['cards', 'strategy', '2 players'],
+      version: '1.0.0',
+      routeSlug: 'nexusclash',
+      minPlayers: 2,
+      maxPlayers: 2,
+    },
+    titleKey: 'lobby.games.nexusclash.title',
+    descKey:  'lobby.games.nexusclash.desc',
+    Component: NexusClashGame,
+    fullWidth: true,
   },
 };

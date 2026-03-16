@@ -1,73 +1,33 @@
 'use client';
 
-import { useState, useCallback } from 'react';
 import { useI18n } from '@/components/providers/LanguageProvider';
+import type { UseReplayReturn } from '@/hooks/useReplay';
 
-interface ReplayControlsProps<TState> {
-  /** Full ordered list of state snapshots (from useMultiplayer.stateHistory). */
-  history: TState[];
-  /** Called when the user navigates to a different step. Receives the state at that step. */
-  onStep: (state: TState, stepIndex: number) => void;
-  /** Called when replay mode is toggled on/off. */
-  onToggle: (active: boolean) => void;
+// Re-export hook for convenience
+export { useReplay } from '@/hooks/useReplay';
+export type { UseReplayReturn } from '@/hooks/useReplay';
+
+interface ReplayControlsProps<T> {
+  /** Return value from useReplay(history). */
+  replay: UseReplayReturn<T>;
   /** Whether the game has ended (only show replay button when ended). */
   gameEnded: boolean;
 }
 
-export function useReplay<TState>() {
-  const [replayActive, setReplayActive] = useState(false);
-  const [replayStep, setReplayStep] = useState(0);
-
-  const enterReplay = useCallback((historyLength: number) => {
-    setReplayActive(true);
-    setReplayStep(historyLength - 1);
-  }, []);
-
-  const exitReplay = useCallback(() => {
-    setReplayActive(false);
-    setReplayStep(0);
-  }, []);
-
-  return { replayActive, replayStep, setReplayStep, enterReplay, exitReplay };
-}
-
-export function ReplayControls<TState>({
-  history,
-  onStep,
-  onToggle,
+export function ReplayControls<T>({
+  replay,
   gameEnded,
-}: ReplayControlsProps<TState>) {
+}: ReplayControlsProps<T>) {
   const { t } = useI18n();
-  const [active, setActive] = useState(false);
-  const [step, setStep] = useState(0);
-  const total = history.length;
+  const { isReplaying, currentStep, totalSteps, start, stop, next, prev, goToStart, goToEnd, goToStep } = replay;
 
-  const toggle = useCallback(() => {
-    if (active) {
-      setActive(false);
-      onToggle(false);
-      // Restore to final state
-      if (total > 0) onStep(history[total - 1], total - 1);
-    } else {
-      setActive(true);
-      setStep(total - 1);
-      onToggle(true);
-    }
-  }, [active, onToggle, onStep, history, total]);
-
-  const goTo = useCallback((idx: number) => {
-    const clamped = Math.max(0, Math.min(total - 1, idx));
-    setStep(clamped);
-    onStep(history[clamped], clamped);
-  }, [total, onStep, history]);
-
-  if (!gameEnded || total < 2) return null;
+  if (!gameEnded || totalSteps < 2) return null;
 
   return (
     <div className="flex flex-col items-center gap-2">
-      {!active ? (
+      {!isReplaying ? (
         <button
-          onClick={toggle}
+          onClick={start}
           className="flex items-center gap-1.5 px-4 py-2 rounded-lg border border-zinc-700 bg-zinc-800/60 text-zinc-300 hover:bg-zinc-700 hover:text-zinc-100 text-xs font-semibold transition-colors"
         >
           <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
@@ -86,30 +46,30 @@ export function ReplayControls<TState>({
 
           {/* Step indicator */}
           <span className="text-xs text-zinc-500 tabular-nums">
-            {step + 1} / {total}
+            {currentStep + 1} / {totalSteps}
           </span>
 
           {/* Navigation buttons */}
           <div className="flex items-center gap-1">
-            <NavButton label="⏮" onClick={() => goTo(0)} disabled={step === 0} />
-            <NavButton label="◀" onClick={() => goTo(step - 1)} disabled={step === 0} />
-            <NavButton label="▶" onClick={() => goTo(step + 1)} disabled={step === total - 1} />
-            <NavButton label="⏭" onClick={() => goTo(total - 1)} disabled={step === total - 1} />
+            <NavButton label="⏮" onClick={goToStart} disabled={currentStep === 0} />
+            <NavButton label="◀" onClick={prev} disabled={currentStep === 0} />
+            <NavButton label="▶" onClick={next} disabled={currentStep === totalSteps - 1} />
+            <NavButton label="⏭" onClick={goToEnd} disabled={currentStep === totalSteps - 1} />
           </div>
 
           {/* Scrubber */}
           <input
             type="range"
             min={0}
-            max={total - 1}
-            value={step}
-            onChange={(e) => goTo(Number(e.target.value))}
+            max={totalSteps - 1}
+            value={currentStep}
+            onChange={(e) => goToStep(Number(e.target.value))}
             className="w-full h-1 accent-indigo-500 bg-zinc-700 rounded-full cursor-pointer"
           />
 
           {/* Exit */}
           <button
-            onClick={toggle}
+            onClick={stop}
             className="text-[10px] text-zinc-500 hover:text-zinc-300 transition-colors"
           >
             {t('replay.exit')}

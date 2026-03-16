@@ -577,19 +577,21 @@ function GameCard({
             </button>
           ) : (
             <Link
-              href={`/games/${game.routeSlug}?quickplay=true`}
+              href={game.id === 'nexusclash' ? `/games/${game.routeSlug}` : `/games/${game.routeSlug}?quickplay=true`}
               className="flex-1 py-2 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-white text-sm font-semibold text-center transition-colors"
             >
-              {t('lobby.quickPlay')}
+              {game.id === 'nexusclash' ? t('modal.play') : t('lobby.quickPlay')}
             </Link>
           )}
-          <Link
-            href={`/games/${game.routeSlug}`}
-            className="px-3 py-2 rounded-lg border border-zinc-700 hover:border-zinc-500 text-zinc-400 hover:text-zinc-200 text-sm transition-colors"
-            title="Create or join a custom room"
-          >
-            {t('lobby.customGame')}
-          </Link>
+          {game.id !== 'nexusclash' && (
+            <Link
+              href={`/games/${game.routeSlug}`}
+              className="px-3 py-2 rounded-lg border border-zinc-700 hover:border-zinc-500 text-zinc-400 hover:text-zinc-200 text-sm transition-colors"
+              title="Create or join a custom room"
+            >
+              {t('lobby.customGame')}
+            </Link>
+          )}
         </div>
         {isHost && !partyTooLarge && (
           <p className="text-[10px] text-indigo-400/70 text-center">{t('party.launchHint')}</p>
@@ -730,9 +732,9 @@ export default function HomePage() {
       descKey: entry.descKey,
       tags: entry.manifest.categories,
       controlsKey: GAME_CONTROLS_KEY[entry.manifest.id] ?? 'modal.controls.default',
-      mode: 'multiplayer',
-      playHref: `/games/${entry.manifest.routeSlug}?quickplay=true`,
-      customHref: `/games/${entry.manifest.routeSlug}`,
+      mode: entry.manifest.id === 'nexusclash' ? 'singleplayer' : 'multiplayer',
+      playHref: entry.manifest.id === 'nexusclash' ? `/games/${entry.manifest.routeSlug}` : `/games/${entry.manifest.routeSlug}?quickplay=true`,
+      customHref: entry.manifest.id === 'nexusclash' ? undefined : `/games/${entry.manifest.routeSlug}`,
       maxPlayers: entry.manifest.maxPlayers,
       plays: s?.plays ?? 0,
       wins: s?.wins ?? 0,

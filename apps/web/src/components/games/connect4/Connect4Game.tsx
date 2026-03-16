@@ -19,7 +19,9 @@ import { useAchievements } from '@/hooks/useAchievements';
 import { SpectatorBanner } from '@/components/ui/SpectatorBanner';
 import { ReconnectBanner } from '@/components/ui/ReconnectBanner';
 import { ReplayControls } from '@/components/ui/ReplayControls';
+import { useReplay } from '@/hooks/useReplay';
 import { useAutoJoin } from '@/hooks/useAutoJoin';
+import { useUnreadMessages } from '@/hooks/useUnreadMessages';
 
 const ROWS = 6;
 const COLS = 7;
@@ -42,11 +44,8 @@ export function Connect4Game({ wsUrl, gameId, initialRoomCode, quickPlay: isQuic
   const [hoveredCol, setHoveredCol] = useState<number | null>(null);
   const [fallingCell, setFallingCell] = useState<string | null>(null);
   const [showInfo, setShowInfo] = useState(false);
-  const [chatOpen, setChatOpen] = useState(false);
-  const [unread, setUnread] = useState(0);
-  const [replayState, setReplayState] = useState<Connect4State | null>(null);
-  const [replayMode, setReplayMode] = useState(false);
-  const prevTotalRef = useRef<number | null>(null);
+  const { chatOpen, setChatOpen, unread } = useUnreadMessages(mp);
+  const replay = useReplay<Connect4State>(mp.stateHistory as Connect4State[]);
   const prevBoardRef = useRef<Connect4Cell[][] | null>(null);
 
   useAutoJoin(mp, initialRoomCode, isQuickPlay, 'connect4');
@@ -57,20 +56,6 @@ export function Connect4Game({ wsUrl, gameId, initialRoomCode, quickPlay: isQuic
       router.replace(`/games/${gameId}?room=${mp.roomCode}`);
     }
   }, [mp.roomCode]); // eslint-disable-line
-
-  // Track unread messages while chat is collapsed
-  useEffect(() => {
-    const total = mp.roomMessages.length + mp.globalMessages.length;
-    if (prevTotalRef.current === null) {
-      prevTotalRef.current = total;
-      return;
-    }
-    if (!chatOpen && total > prevTotalRef.current) {
-      setUnread((u) => u + (total - prevTotalRef.current!));
-    }
-    prevTotalRef.current = total;
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [mp.roomMessages.length, mp.globalMessages.length]);
 
   // ── Achievement tracking ──────────────────────────────────────────────────
   const prevPhaseRef = useRef(mp.phase);
@@ -113,7 +98,7 @@ export function Connect4Game({ wsUrl, gameId, initialRoomCode, quickPlay: isQuic
     gs.currentPlayer === gs.players[mp.playerIndex!]?.id;
 
   const boardDisabled =
-    replayMode || mp.isSpectator || mp.phase !== 'playing' || !mp.roomReady || !isMyTurn || gs?.status !== 'ongoing' || mp.matchCountdown !== null;
+    replay.isReplaying || mp.isSpectator || mp.phase !== 'playing' || !mp.roomReady || !isMyTurn || gs?.status !== 'ongoing' || mp.matchCountdown !== null;
 
   // Detect newly placed piece to trigger fall animation (local + remote moves)
   useEffect(() => {
@@ -149,10 +134,10 @@ export function Connect4Game({ wsUrl, gameId, initialRoomCode, quickPlay: isQuic
     return null; // column full
   }, [hoveredCol, gs?.board, boardDisabled]);
 
-  const displayGs = replayMode && replayState ? replayState : gs;
+  const displayGs = replay.displayState ?? gs;
   const board = displayGs?.board ?? Array.from({ length: ROWS }, () => Array<0>(COLS).fill(0));
-  const displayWinSet = replayMode && replayState
-    ? new Set<string>(replayState.winnerCells?.map(([r, c]: [number, number]) => `${r},${c}`) ?? [])
+  const displayWinSet = replay.isReplaying && replay.currentState
+    ? new Set<string>(replay.currentState.winnerCells?.map(([r, c]: [number, number]) => `${r},${c}`) ?? [])
     : winSet;
 
   function handleDrop(col: number) {
@@ -360,14 +345,12 @@ export function Connect4Game({ wsUrl, gameId, initialRoomCode, quickPlay: isQuic
 
         {/* Replay */}
         <ReplayControls<Connect4State>
-          history={mp.stateHistory as Connect4State[]}
+          replay={replay}
           gameEnded={mp.phase === 'ended'}
-          onStep={(state) => setReplayState(state)}
-          onToggle={(active) => { setReplayMode(active); if (!active) setReplayState(null); }}
         />
 
         {/* Rematch */}
-        {!mp.isSpectator && gs && gs.status !== 'ongoing' && mp.playerCount === 2 && !replayMode && (
+        {!mp.isSpectator && gs && gs.status !== 'ongoing' && mp.playerCount === 2 && !replay.isReplaying && (
           <div className="flex flex-col items-center gap-1.5">
             <button
               onClick={mp.requestRematch}
@@ -541,7 +524,7 @@ export function Connect4Game({ wsUrl, gameId, initialRoomCode, quickPlay: isQuic
           collapsible
           defaultOpen={false}
           open={chatOpen}
-          onOpenChange={(o) => { setChatOpen(o); if (o) setUnread(0); }}
+          onOpenChange={setChatOpen}
           showUnreadBadge
           unreadCount={unread}
           className="rounded-xl border border-zinc-800 bg-zinc-900"

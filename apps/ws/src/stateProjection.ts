@@ -27,6 +27,7 @@ import type {
   LiarsBarState,
   CurveFeverState,
   UnoState,
+  NexusClashState,
 } from 'shared';
 
 // ── Viewer context ─────────────────────────────────────────────────────────────
@@ -91,6 +92,7 @@ export function projectGameState(
   state: AnyGameState,
   ctx: ViewerCtx,
 ): AnyGameState {
+  if (gameId === 'nexusclash') return projectNexusClash(state as NexusClashState, ctx);
   if (gameId === 'uno') return projectUno(state as UnoState, ctx);
   if (gameId === 'liarsbar') return projectLiarsBar(state as LiarsBarState, ctx);
   if (gameId === 'curvefever') return projectCurveFever(state as CurveFeverState);
@@ -203,4 +205,46 @@ function projectUno(state: UnoState, ctx: ViewerCtx): UnoState {
   );
 
   return { ...base, hands: projected };
+}
+
+// ── Nexus Clash projector ────────────────────────────────────────────────────
+
+/**
+ * Strip opponent's pendingPlays, both decks, both discard piles, and opponent's hand.
+ * Spectators: strip both hands and both pendingPlays.
+ */
+function projectNexusClash(state: NexusClashState, ctx: ViewerCtx): NexusClashState {
+  const emptyDecks = [[], []] as [string[], string[]];
+  const emptyDiscards = [[], []] as [string[], string[]];
+
+  const base = {
+    ...state,
+    decks: emptyDecks,
+    discardPiles: emptyDiscards,
+  };
+
+  if (ctx.isSpectator || ctx.playerIndex === null) {
+    return {
+      ...base,
+      hands: [[], []] as [string[], string[]],
+      pendingPlays: [[], []] as [NexusClashState['pendingPlays'][0], NexusClashState['pendingPlays'][1]],
+    };
+  }
+
+  const pi = ctx.playerIndex as 0 | 1;
+  const opp: 0 | 1 = pi === 0 ? 1 : 0;
+
+  const projectedHands: [string[], string[]] = [[], []];
+  projectedHands[pi] = [...state.hands[pi]];
+  projectedHands[opp] = [];
+
+  const projectedPending: [NexusClashState['pendingPlays'][0], NexusClashState['pendingPlays'][1]] = [[], []];
+  projectedPending[pi] = [...state.pendingPlays[pi]];
+  projectedPending[opp] = [];
+
+  return {
+    ...base,
+    hands: projectedHands,
+    pendingPlays: projectedPending,
+  };
 }

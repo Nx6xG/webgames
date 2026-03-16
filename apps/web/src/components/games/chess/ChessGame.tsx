@@ -22,6 +22,7 @@ import { useChessBot, type ChessBotState } from './useChessBot';
 import type { BotDifficulty } from './botEngine';
 import { saveLastConfig, loadLastConfig, hasLastConfig } from '@/lib/lobbyPresets';
 import { useAutoJoin } from '@/hooks/useAutoJoin';
+import { useUnreadMessages } from '@/hooks/useUnreadMessages';
 
 // ── Piece rendering ────────────────────────────────────────────────────────────
 
@@ -294,8 +295,7 @@ export function ChessGame({ wsUrl, gameId, initialRoomCode, quickPlay: isQuickPl
   const [roomVisibility, setRoomVisibility]     = useState<'private' | 'public'>('private');
   const [roomName, setRoomName]                 = useState('');
   const [showInfo, setShowInfo]                 = useState(false);
-  const [chatOpen, setChatOpen]                 = useState(false);
-  const [unread, setUnread]                     = useState(0);
+  const { chatOpen, setChatOpen, unread }       = useUnreadMessages(mpRaw);
   const [selectedSq, setSelectedSq]             = useState<number | null>(null);
   const [legalHighlights, setLegalHighlights]   = useState<number[]>([]);
   const [pendingPromotion, setPendingPromotion] = useState<{ from: number; to: number } | null>(null);
@@ -345,7 +345,6 @@ export function ChessGame({ wsUrl, gameId, initialRoomCode, quickPlay: isQuickPl
     clearError: bot.clearError,
   } : mpRaw;
 
-  const prevTotalRef    = useRef<number | null>(null);
   const moveListRef     = useRef<HTMLDivElement>(null);
   const userScrolledRef = useRef(false);
 
@@ -356,18 +355,6 @@ export function ChessGame({ wsUrl, gameId, initialRoomCode, quickPlay: isQuickPl
       router.replace(`/games/${gameId}?room=${mp.roomCode}`);
     }
   }, [mp.roomCode]); // eslint-disable-line
-
-  // ── Unread chat tracking ─────────────────────────────────────────────────────
-
-  useEffect(() => {
-    const total = mp.roomMessages.length + mp.globalMessages.length;
-    if (prevTotalRef.current === null) { prevTotalRef.current = total; return; }
-    if (!chatOpen && total > prevTotalRef.current) {
-      setUnread((u) => u + (total - prevTotalRef.current!));
-    }
-    prevTotalRef.current = total;
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [mp.roomMessages.length, mp.globalMessages.length]);
 
   // ── Achievement tracking ──────────────────────────────────────────────────
   const prevPhaseRef = useRef(mp.phase);
@@ -1408,7 +1395,7 @@ export function ChessGame({ wsUrl, gameId, initialRoomCode, quickPlay: isQuickPl
           collapsible
           defaultOpen={false}
           open={chatOpen}
-          onOpenChange={(o) => { setChatOpen(o); if (o) setUnread(0); }}
+          onOpenChange={setChatOpen}
           showUnreadBadge
           unreadCount={unread}
           className="rounded-xl border border-zinc-800 bg-zinc-900"

@@ -6,6 +6,7 @@ import type { BattleshipState, BattleshipAction } from './games/battleship';
 import type { LiarsBarState, LiarsBarAction } from './games/liarsbar';
 import type { CurveFeverState, CurveFeverAction } from './games/curvefever';
 import type { UnoState, UnoAction } from './games/uno';
+import type { NexusClashState, NexusClashAction } from './games/nexusclash';
 import type { GameId } from './registry';
 import type { TournamentState, TournamentListItem, BracketSize } from './tournament';
 
@@ -14,10 +15,10 @@ import type { TournamentState, TournamentListItem, BracketSize } from './tournam
 // the rest of the code stays unchanged.
 
 /** Union of all possible game states across every registered game. */
-export type AnyGameState = TicTacToeState | Connect4State | RpsState | ChessState | BattleshipState | LiarsBarState | CurveFeverState | UnoState;
+export type AnyGameState = TicTacToeState | Connect4State | RpsState | ChessState | BattleshipState | LiarsBarState | CurveFeverState | UnoState | NexusClashState;
 
 /** Union of all possible game actions across every registered game. */
-export type AnyGameAction = TicTacToeAction | Connect4Action | RpsAction | ChessAction | BattleshipAction | LiarsBarAction | CurveFeverAction | UnoAction;
+export type AnyGameAction = TicTacToeAction | Connect4Action | RpsAction | ChessAction | BattleshipAction | LiarsBarAction | CurveFeverAction | UnoAction | NexusClashAction;
 
 // ─── Cosmetics ───────────────────────────────────────────────────────────────
 

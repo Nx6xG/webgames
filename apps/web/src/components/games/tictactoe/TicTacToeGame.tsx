@@ -20,7 +20,9 @@ import { useAchievements } from '@/hooks/useAchievements';
 import { SpectatorBanner } from '@/components/ui/SpectatorBanner';
 import { ReconnectBanner } from '@/components/ui/ReconnectBanner';
 import { ReplayControls } from '@/components/ui/ReplayControls';
+import { useReplay } from '@/hooks/useReplay';
 import { useAutoJoin } from '@/hooks/useAutoJoin';
+import { useUnreadMessages } from '@/hooks/useUnreadMessages';
 
 export function TicTacToeGame({ wsUrl, gameId, initialRoomCode, quickPlay: isQuickPlay }: GameComponentProps) {
   const router = useRouter();
@@ -32,11 +34,8 @@ export function TicTacToeGame({ wsUrl, gameId, initialRoomCode, quickPlay: isQui
   const [roomVisibility, setRoomVisibility] = useState<'private' | 'public'>('private');
   const [roomName, setRoomName] = useState('');
   const [showInfo, setShowInfo] = useState(false);
-  const [chatOpen, setChatOpen] = useState(false);
-  const [unread, setUnread] = useState(0);
-  const [replayState, setReplayState] = useState<TicTacToeState | null>(null);
-  const [replayMode, setReplayMode] = useState(false);
-  const prevTotalRef = useRef<number | null>(null);
+  const { chatOpen, setChatOpen, unread } = useUnreadMessages(mp);
+  const replay = useReplay<TicTacToeState>(mp.stateHistory as TicTacToeState[]);
 
   useAutoJoin(mp, initialRoomCode, isQuickPlay, 'tictactoe');
 
@@ -46,20 +45,6 @@ export function TicTacToeGame({ wsUrl, gameId, initialRoomCode, quickPlay: isQui
       router.replace(`/games/${gameId}?room=${mp.roomCode}`);
     }
   }, [mp.roomCode]); // eslint-disable-line
-
-  // Track unread messages while chat is collapsed
-  useEffect(() => {
-    const total = mp.roomMessages.length + mp.globalMessages.length;
-    if (prevTotalRef.current === null) {
-      prevTotalRef.current = total;
-      return;
-    }
-    if (!chatOpen && total > prevTotalRef.current) {
-      setUnread((u) => u + (total - prevTotalRef.current!));
-    }
-    prevTotalRef.current = total;
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [mp.roomMessages.length, mp.globalMessages.length]);
 
   // ── Achievement tracking ──────────────────────────────────────────────────
   const prevPhaseRef = useRef(mp.phase);
@@ -198,23 +183,21 @@ export function TicTacToeGame({ wsUrl, gameId, initialRoomCode, quickPlay: isQui
         <ReconnectBanner mp={mp} />
         <StatusBanner />
         <TicTacToeBoard
-          board={(replayMode && replayState ? replayState : gs)?.board ?? Array(9).fill(null)}
-          winnerCells={replayMode ? (replayState?.winnerCells ?? undefined) : gs?.winnerCells}
-          disabled={boardDisabled || replayMode}
+          board={(replay.displayState ?? gs)?.board ?? Array(9).fill(null)}
+          winnerCells={replay.isReplaying ? (replay.currentState?.winnerCells ?? undefined) : gs?.winnerCells}
+          disabled={boardDisabled || replay.isReplaying}
           onCellClick={handleCellClick}
         />
         {mp.isSpectator && <SpectatorBanner spectatorCount={mp.spectatorCount} />}
 
         {/* Replay */}
         <ReplayControls<TicTacToeState>
-          history={mp.stateHistory as TicTacToeState[]}
+          replay={replay}
           gameEnded={mp.phase === 'ended'}
-          onStep={(state) => setReplayState(state)}
-          onToggle={(active) => { setReplayMode(active); if (!active) setReplayState(null); }}
         />
 
         {/* Rematch */}
-        {!mp.isSpectator && gs && gs.status !== 'ongoing' && mp.playerCount === 2 && !replayMode && (
+        {!mp.isSpectator && gs && gs.status !== 'ongoing' && mp.playerCount === 2 && !replay.isReplaying && (
           <div className="flex flex-col items-center gap-1.5">
             <button
               onClick={mp.requestRematch}
@@ -392,7 +375,7 @@ export function TicTacToeGame({ wsUrl, gameId, initialRoomCode, quickPlay: isQui
           collapsible
           defaultOpen={false}
           open={chatOpen}
-          onOpenChange={(o) => { setChatOpen(o); if (o) setUnread(0); }}
+          onOpenChange={setChatOpen}
           showUnreadBadge
           unreadCount={unread}
           className="rounded-xl border border-zinc-800 bg-zinc-900"

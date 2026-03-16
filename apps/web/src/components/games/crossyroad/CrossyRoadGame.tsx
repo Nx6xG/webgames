@@ -4,6 +4,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { useI18n } from '@/components/providers/LanguageProvider';
 import { useAchievements } from '@/hooks/useAchievements';
 import { usePersonalScores } from '@/hooks/usePersonalScores';
+import TouchControls from '@/components/ui/TouchControls';
 import { useVisibilityPause } from '@/hooks/useVisibilityPause';
 import { ScoreboardPanel } from '@/components/ui/ScoreboardPanel';
 import { useAuth } from '@/components/providers/AuthProvider';
@@ -1900,6 +1901,12 @@ export function CrossyRoadGame() {
         )}
         </div>
       </div>
+
+      {/* Mobile touch controls */}
+      <TouchControls
+        layout="dpad"
+        disabled={phase !== 'playing'}
+      />
 
       {/* Scoreboard — below the game, mobile/tablet only */}
       {phase === 'over' && (

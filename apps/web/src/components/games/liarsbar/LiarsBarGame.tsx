@@ -21,7 +21,9 @@ import { ReconnectBanner } from '@/components/ui/ReconnectBanner';
 import { saveLastConfig, loadLastConfig, hasLastConfig } from '@/lib/lobbyPresets';
 import { useCompact } from '@/hooks/useCompact';
 import { ReplayControls } from '@/components/ui/ReplayControls';
+import { useReplay } from '@/hooks/useReplay';
 import { useAutoJoin } from '@/hooks/useAutoJoin';
+import { useUnreadMessages } from '@/hooks/useUnreadMessages';
 
 // ── SVG icons (inline, no deps) ──────────────────────────────────────────────
 
@@ -174,14 +176,11 @@ export function LiarsBarGame({ wsUrl, gameId, initialRoomCode, quickPlay: isQuic
   const [roomVisibility, setRoomVisibility] = useState<'private' | 'public'>('private');
   const [roomName, setRoomName] = useState('');
   const [showInfo, setShowInfo] = useState(false);
-  const [chatOpen, setChatOpen] = useState(false);
-  const [unread, setUnread] = useState(0);
-  const prevTotalRef = useRef<number | null>(null);
+  const { chatOpen, setChatOpen, unread } = useUnreadMessages(mp);
   const [selectedCards, setSelectedCards] = useState<Set<number>>(new Set());
   const [maxPlayers, setMaxPlayers] = useState(4);
   const [ldMode, setLdMode] = useState<LdMode>('classic');
-  const [replayState, setReplayState] = useState<LiarsBarState | null>(null);
-  const [replayMode, setReplayMode] = useState(false);
+  const replay = useReplay<LiarsBarState>(mp.stateHistory as LiarsBarState[]);
 
   // End-overlay latch — set once per finished match, cleared on rematch
   const lastFinishKeyRef = useRef<string>('');
@@ -195,17 +194,6 @@ export function LiarsBarGame({ wsUrl, gameId, initialRoomCode, quickPlay: isQuic
       router.replace(`/games/${gameId}?room=${mp.roomCode}`);
     }
   }, [mp.roomCode]); // eslint-disable-line
-
-  // Track unread messages
-  useEffect(() => {
-    const total = mp.roomMessages.length + mp.globalMessages.length;
-    if (prevTotalRef.current === null) { prevTotalRef.current = total; return; }
-    if (!chatOpen && total > prevTotalRef.current) {
-      setUnread((u) => u + (total - prevTotalRef.current!));
-    }
-    prevTotalRef.current = total;
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [mp.roomMessages.length, mp.globalMessages.length]);
 
   // ── Achievement tracking ──────────────────────────────────────────────────
   const prevPhaseRef = useRef(mp.phase);
@@ -243,7 +231,7 @@ export function LiarsBarGame({ wsUrl, gameId, initialRoomCode, quickPlay: isQuic
   }, [mp.gameState?.phase, mp.gameState?.turnIndex]);
 
   const liveGs = mp.gameState;
-  const gs = replayMode && replayState ? replayState : liveGs;
+  const gs = replay.displayState ?? liveGs;
   const myIdx = mp.playerIndex;
 
   const getNickname = (playerToken: string) => {
@@ -275,7 +263,7 @@ export function LiarsBarGame({ wsUrl, gameId, initialRoomCode, quickPlay: isQuic
 
   const isMyTurn =
     !mp.isSpectator &&
-    !replayMode &&
+    !replay.isReplaying &&
     gs !== null &&
     myIdx !== null &&
     gs.phase === 'turn' &&
@@ -884,10 +872,8 @@ export function LiarsBarGame({ wsUrl, gameId, initialRoomCode, quickPlay: isQuic
 
         {/* Replay */}
         <ReplayControls<LiarsBarState>
-          history={mp.stateHistory as LiarsBarState[]}
+          replay={replay}
           gameEnded={mp.phase === 'ended'}
-          onStep={(state) => setReplayState(state)}
-          onToggle={(active) => { setReplayMode(active); if (!active) setReplayState(null); }}
         />
 
         {(mp.phase === 'playing' || mp.phase === 'waiting') && (
@@ -1103,7 +1089,7 @@ export function LiarsBarGame({ wsUrl, gameId, initialRoomCode, quickPlay: isQuic
           collapsible
           defaultOpen={false}
           open={chatOpen}
-          onOpenChange={(o) => { setChatOpen(o); if (o) setUnread(0); }}
+          onOpenChange={setChatOpen}
           showUnreadBadge
           unreadCount={unread}
           className="rounded-xl border border-zinc-800 bg-zinc-900"

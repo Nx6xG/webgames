@@ -14,6 +14,8 @@ import { SpectatorBanner } from '@/components/ui/SpectatorBanner';
 import { WaitingForConnectionOverlay } from '@/components/WaitingForConnectionOverlay';
 import { saveLastConfig, loadLastConfig, hasLastConfig } from '@/lib/lobbyPresets';
 import { ReplayControls } from '@/components/ui/ReplayControls';
+import { useReplay } from '@/hooks/useReplay';
+import { useUnreadMessages } from '@/hooks/useUnreadMessages';
 
 const ARENA_W = 800;
 const ARENA_H = 600;
@@ -184,10 +186,9 @@ export function CurveFeverGame({ wsUrl, gameId, initialRoomCode, quickPlay: auto
   const mp = useMultiplayer<CurveFeverState>(wsUrl, gameId);
   const { t } = useI18n();
   const ach = useAchievements('curvefever', mp.roomCode);
-  const [replayState, setReplayState] = useState<CurveFeverState | null>(null);
-  const [replayMode, setReplayMode] = useState(false);
+  const replay = useReplay<CurveFeverState>(mp.stateHistory as CurveFeverState[]);
   const liveGs = mp.gameState;
-  const gs = replayMode && replayState ? replayState : liveGs;
+  const gs = replay.displayState ?? liveGs;
 
   // Lobby config
   const [bestOf, setBestOf] = useState(5);
@@ -279,7 +280,7 @@ export function CurveFeverGame({ wsUrl, gameId, initialRoomCode, quickPlay: auto
 
   useEffect(() => {
     if (!gs || gs.phase !== 'playing') return;
-    if (mp.isSpectator || replayMode) return;
+    if (mp.isSpectator || replay.isReplaying) return;
 
     // Reset steer ref so held keys re-send after round transitions
     lastSteerRef.current = 'none';
@@ -1057,15 +1058,7 @@ export function CurveFeverGame({ wsUrl, gameId, initialRoomCode, quickPlay: auto
   const winsNeeded = gs ? gs.winsNeeded : Math.ceil(bestOf / 2);
 
   // Chat state
-  const [chatOpen, setChatOpen] = useState(false);
-  const [unread, setUnread] = useState(0);
-  const prevMsgLen = useRef(0);
-
-  useEffect(() => {
-    const total = (mp.roomMessages?.length ?? 0) + (mp.globalMessages?.length ?? 0);
-    if (total > prevMsgLen.current && !chatOpen) setUnread((u) => u + total - prevMsgLen.current);
-    prevMsgLen.current = total;
-  }, [mp.roomMessages?.length, mp.globalMessages?.length, chatOpen]);
+  const { chatOpen, setChatOpen, unread } = useUnreadMessages(mp);
 
   // ── Lobby UI ─────────────────────────────────────────────────────────────
   const showLobby = mp.phase === 'lobby' || (gs?.phase === 'lobby') || (mp.phase === 'waiting' && !gs);
@@ -1564,10 +1557,7 @@ export function CurveFeverGame({ wsUrl, gameId, initialRoomCode, quickPlay: auto
               onSend={mp.sendChat}
               collapsible
               open={chatOpen}
-              onOpenChange={(open) => {
-                setChatOpen(open);
-                if (open) setUnread(0);
-              }}
+              onOpenChange={setChatOpen}
               showUnreadBadge={unread > 0}
             />
           )}
@@ -1793,16 +1783,14 @@ export function CurveFeverGame({ wsUrl, gameId, initialRoomCode, quickPlay: auto
 
           {/* Replay */}
           <ReplayControls<CurveFeverState>
-            history={mp.stateHistory as CurveFeverState[]}
+            replay={replay}
             gameEnded={mp.phase === 'ended'}
-            onStep={(state) => setReplayState(state)}
-            onToggle={(active) => { setReplayMode(active); if (!active) setReplayState(null); }}
           />
 
           {/* Bottom bar: controls hint + rematch + leave */}
           <div className="flex items-center justify-center gap-4 mt-1">
             <p className="text-xs text-zinc-600">{t('curvefever.controls')}</p>
-            {gs?.phase === 'finished' && !replayMode && (
+            {gs?.phase === 'finished' && !replay.isReplaying && (
               <>
                 <button
                   onClick={() => mp.requestRematch()}
@@ -1880,10 +1868,7 @@ export function CurveFeverGame({ wsUrl, gameId, initialRoomCode, quickPlay: auto
             onSend={mp.sendChat}
             collapsible
             open={chatOpen}
-            onOpenChange={(open) => {
-              setChatOpen(open);
-              if (open) setUnread(0);
-            }}
+            onOpenChange={setChatOpen}
             showUnreadBadge={unread > 0}
           />
         </aside>

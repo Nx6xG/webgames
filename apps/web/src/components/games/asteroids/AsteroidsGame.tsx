@@ -39,6 +39,10 @@ import {
   MEGA_BOSS_CONFIG,
   isMegaBossWave,
   getDailyModifiers,
+  getBossWaveHpScale,
+  getEventWaveScale,
+  getPowerupDropScale,
+  getMegaBossHpScale,
 } from './roguelite-data';
 import type { AppliedStats } from './roguelite-data';
 import type { ArtifactDef } from './roguelite-types';
@@ -583,7 +587,7 @@ export function AsteroidsGame() {
   useEffect(() => {
     function onKeyDown(e: KeyboardEvent) {
       const key = e.key;
-      if (['ArrowLeft', 'ArrowRight', 'ArrowUp', ' ', 'w', 'W', 'a', 'A', 'd', 'D'].includes(key)) {
+      if (['ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown', ' ', 'w', 'W', 'a', 'A', 'd', 'D', 's', 'S'].includes(key)) {
         e.preventDefault();
       }
       keysRef.current.add(key);
@@ -721,8 +725,12 @@ export function AsteroidsGame() {
       // Wave event timer
       if (isRL && game.rlWaveEvent) {
         game.rlWaveEvent.timer -= dt;
-        if (game.rlWaveEvent.timer <= 0) {
-          // Event expired — clear event asteroids
+        // Mini boss rush: end early when all enemies are dead
+        const eventEnemiesDead = game.rlWaveEvent.type === 'miniBossRush'
+          && !game.boss
+          && game.asteroids.filter(a => a.rlEventAsteroid).length === 0;
+        if (game.rlWaveEvent.timer <= 0 || eventEnemiesDead) {
+          // Event expired or completed — clear event asteroids
           game.asteroids = game.asteroids.filter(a => !a.rlEventAsteroid);
           game.rlWaveEvent = null;
         }
@@ -744,9 +752,13 @@ export function AsteroidsGame() {
         if (Math.random() < 0.3) sfx.thrustSound();
       }
 
+      // ── Ship brake (S / ArrowDown) ──
+      const braking = keys.has('ArrowDown') || keys.has('s') || keys.has('S');
+      const brakeFriction = braking ? 0.93 : SHIP_FRICTION;
+
       // ── Ship movement ──
-      game.ship.vel.x *= SHIP_FRICTION;
-      game.ship.vel.y *= SHIP_FRICTION;
+      game.ship.vel.x *= brakeFriction;
+      game.ship.vel.y *= brakeFriction;
       game.ship.pos.x += game.ship.vel.x;
       game.ship.pos.y += game.ship.vel.y;
       game.ship.pos = wrap(game.ship.pos);
@@ -1057,14 +1069,15 @@ export function AsteroidsGame() {
                 if (si === 0) sfx.bigExplosionSound();
                 else sfx.explosionSound();
 
-                // Power-up spawn (famine curse disables)
+                // Power-up spawn (famine curse disables, scales down in late game)
                 const famineCurse = isRL && (game.rlCurses?.includes('famine') || hasDM('noPowerups'));
                 const puChance = hasArt('killSpawnPowerup') ? 0.05 : 0;
-                if (!famineCurse && si === 0 && Math.random() < POWERUP_SPAWN_CHANCE) {
+                const puScale = isRL ? getPowerupDropScale(game.wave) : 1;
+                if (!famineCurse && si === 0 && Math.random() < POWERUP_SPAWN_CHANCE * puScale) {
                   game.powerUps.push(spawnPowerUp(a.pos));
-                } else if (si === 1 && Math.random() < POWERUP_MEDIUM_CHANCE) {
+                } else if (!famineCurse && si === 1 && Math.random() < POWERUP_MEDIUM_CHANCE * puScale) {
                   game.powerUps.push(spawnPowerUp(a.pos));
-                } else if (si === 2 && Math.random() < POWERUP_SMALL_CHANCE) {
+                } else if (!famineCurse && si === 2 && Math.random() < POWERUP_SMALL_CHANCE * puScale) {
                   game.powerUps.push(spawnPowerUp(a.pos));
                 } else if (puChance > 0 && Math.random() < puChance) {
                   game.powerUps.push(spawnPowerUp(a.pos));
@@ -1763,15 +1776,17 @@ export function AsteroidsGame() {
         if (mb.phaseHp <= 0 && !mb.defeated) {
           if (mb.phase === 'shield') {
             mb.phase = 'swarm';
-            mb.phaseHp = MEGA_BOSS_CONFIG.phases.swarm.hp;
-            mb.phaseMaxHp = MEGA_BOSS_CONFIG.phases.swarm.hp;
+            const swarmHp = Math.ceil(MEGA_BOSS_CONFIG.phases.swarm.hp * (mb.hpScale ?? 1));
+            mb.phaseHp = swarmHp;
+            mb.phaseMaxHp = swarmHp;
             mb.teleportTimer = MEGA_BOSS_CONFIG.phases.swarm.spawnInterval * 16;
             mb.homingMissiles = [];
             game.particles.push(...makeParticles({ x: mb.x, y: mb.y }, 30, '#38bdf8'));
           } else if (mb.phase === 'swarm') {
             mb.phase = 'core';
-            mb.phaseHp = MEGA_BOSS_CONFIG.phases.core.hp;
-            mb.phaseMaxHp = MEGA_BOSS_CONFIG.phases.core.hp;
+            const coreHp = Math.ceil(MEGA_BOSS_CONFIG.phases.core.hp * (mb.hpScale ?? 1));
+            mb.phaseHp = coreHp;
+            mb.phaseMaxHp = coreHp;
             mb.teleportTimer = MEGA_BOSS_CONFIG.phases.core.teleportInterval;
             mb.homingMissiles = [];
             game.particles.push(...makeParticles({ x: mb.x, y: mb.y }, 30, '#f59e0b'));
@@ -1975,12 +1990,15 @@ export function AsteroidsGame() {
           }
         }
 
-        // Mega-boss at wave 25, 50, 75...
+        // Mega-boss at wave 25, 50, 75... (scales with each encounter)
         if (isRL && isMegaBossWave(game.wave)) {
+          const megaScale = getMegaBossHpScale(game.wave);
+          const megaShieldHp = Math.ceil(MEGA_BOSS_CONFIG.phases.shield.hp * megaScale);
           game.rlMegaBoss = {
             phase: 'shield',
-            phaseHp: MEGA_BOSS_CONFIG.phases.shield.hp,
-            phaseMaxHp: MEGA_BOSS_CONFIG.phases.shield.hp,
+            phaseHp: megaShieldHp,
+            phaseMaxHp: megaShieldHp,
+            hpScale: megaScale,
             shieldRotation: 0,
             shieldSegments: Array(MEGA_BOSS_CONFIG.phases.shield.segments).fill(true),
             homingMissiles: [],
@@ -1999,7 +2017,8 @@ export function AsteroidsGame() {
             const variant = getBossVariantForWave(game.wave);
             const cfg = BOSS_VARIANT_CONFIG[variant];
             const berserker = game.rlCurses?.includes('berserker');
-            const hpMult = (berserker ? 1.5 : 1) * (hasDM('bossRush') ? 2 : 1);
+            const waveScale = getBossWaveHpScale(game.wave);
+            const hpMult = waveScale * (berserker ? 1.5 : 1) * (hasDM('bossRush') ? 2 : 1);
             const fireMult = berserker ? 0.7 : 1;
             game.boss = {
               ...createBoss(),
@@ -2069,7 +2088,8 @@ export function AsteroidsGame() {
           if (modeRef.current === 'roguelite') {
             const variant = getBossVariantForWave(game.wave);
             const cfg = BOSS_VARIANT_CONFIG[variant];
-            const bossHpMult2 = (game.rlDailyModifiers ?? []).includes('bossRush') ? 2 : 1;
+            const waveScale2 = getBossWaveHpScale(game.wave);
+            const bossHpMult2 = waveScale2 * ((game.rlDailyModifiers ?? []).includes('bossRush') ? 2 : 1);
             game.boss = {
               ...createBoss(),
               hp: Math.ceil(cfg.hp * bossHpMult2),
@@ -2110,43 +2130,45 @@ export function AsteroidsGame() {
       if (game && game.rlWaveEvent) {
         const config = DIFF_CONFIG[diffRef.current];
         const evtType = game.rlWaveEvent.type;
+        const evtScale = getEventWaveScale(game.wave);
         if (evtType === 'scrapBonus') {
-          // Spawn scrap-only asteroids (can't damage player)
-          const count = 15;
+          // Spawn scrap-only asteroids (scales with wave)
+          const count = Math.ceil(15 * evtScale);
           const asteroids = spawnWaveAsteroids(count, game.ship.pos, config.speedMult * 0.6);
           for (const a of asteroids) {
             assignRogueliteAsteroidData(a, game.wave, game.rlDailyModifiers);
-            a.rlScrapValue = (a.rlScrapValue ?? 5) * 3;
+            a.rlScrapValue = Math.ceil((a.rlScrapValue ?? 5) * 3 * evtScale);
             a.rlEventAsteroid = true;
           }
           game.asteroids = asteroids;
         } else if (evtType === 'asteroidSprint') {
-          // Dense fast field
-          const count = (config.startCount + (game.wave - 1) * config.countIncrement) * 3;
-          const asteroids = spawnWaveAsteroids(count, game.ship.pos, config.speedMult * 1.5);
+          // Dense field — 2x count (reduced from 3x), speed scales gently
+          const count = Math.ceil((config.startCount + (game.wave - 1) * config.countIncrement) * 2);
+          const asteroids = spawnWaveAsteroids(count, game.ship.pos, config.speedMult * 1.25);
           for (const a of asteroids) {
             assignRogueliteAsteroidData(a, game.wave, game.rlDailyModifiers);
             a.rlEventAsteroid = true;
           }
           game.asteroids = asteroids;
         } else if (evtType === 'miniBossRush') {
-          // 3 mini-bosses
+          // Mini-bosses scale with wave
+          const mbHp = Math.ceil(5 * evtScale);
+          const mbAstHp = Math.ceil(8 * evtScale);
+          const mbScrap = Math.ceil(100 * evtScale);
+          game.asteroids = [];
           for (let i = 0; i < 3; i++) {
-            const mb = createBoss();
-            mb.hp = 5;
-            mb.maxHp = 5;
-            mb.x = 100 + i * 300;
-            game.asteroids = []; // clear field
-            if (!game.boss) {
+            if (i === 0) {
+              const mb = createBoss();
+              mb.hp = mbHp;
+              mb.maxHp = mbHp;
+              mb.x = 100 + i * 300;
               game.boss = mb;
-            }
-            // Additional mini-bosses as big asteroids with high HP
-            if (i > 0) {
+            } else {
               const bigAst = createAsteroid(0, { x: 100 + i * 300, y: 80 }, config.speedMult);
               assignRogueliteAsteroidData(bigAst, game.wave);
-              bigAst.rlHp = 8;
-              bigAst.rlMaxHp = 8;
-              bigAst.rlScrapValue = 100;
+              bigAst.rlHp = mbAstHp;
+              bigAst.rlMaxHp = mbAstHp;
+              bigAst.rlScrapValue = mbScrap;
               bigAst.rlEventAsteroid = true;
               game.asteroids.push(bigAst);
             }
@@ -2550,16 +2572,16 @@ export function AsteroidsGame() {
                 return (
                   <div
                     key={buff.id}
-                    className="flex items-center gap-1 rounded px-2 py-0.5 text-xs font-bold"
+                    className="flex items-center gap-1.5 rounded px-2.5 py-0.5 text-xs font-bold"
                     style={{
                       backgroundColor: def.color + '22',
                       color: def.color,
                       border: `1px solid ${def.color}44`,
                     }}
-                    title={t(def.nameKey)}
                   >
                     <span>{def.icon}</span>
-                    {buff.wavesRemaining > 0 && <span className="tabular-nums">{buff.wavesRemaining}</span>}
+                    <span className="text-[11px]">{t(def.nameKey)}</span>
+                    {buff.wavesRemaining > 0 && <span className="tabular-nums opacity-70">{buff.wavesRemaining}W</span>}
                   </div>
                 );
               })}
@@ -2571,6 +2593,7 @@ export function AsteroidsGame() {
             <div className="flex gap-1.5 justify-center">
               <MobileBtn label="<" onPress={() => keysRef.current.add('ArrowLeft')} onRelease={() => keysRef.current.delete('ArrowLeft')} />
               <MobileBtn label="^" onPress={() => keysRef.current.add('ArrowUp')} onRelease={() => keysRef.current.delete('ArrowUp')} />
+              <MobileBtn label="v" onPress={() => keysRef.current.add('ArrowDown')} onRelease={() => keysRef.current.delete('ArrowDown')} />
               <MobileBtn label=">" onPress={() => keysRef.current.add('ArrowRight')} onRelease={() => keysRef.current.delete('ArrowRight')} />
             </div>
             <div className="flex gap-1.5 justify-center">
@@ -2596,6 +2619,7 @@ export function AsteroidsGame() {
           {/* Controls hint */}
           <div className="shrink-0 hidden sm:block text-center text-[11px] space-x-3" style={{ color: 'var(--muted)' }}>
             <span>Arrow/WASD: {t('asteroids.move')}</span>
+            <span>S/↓: {t('asteroids.brake')}</span>
             <span>Space: {t('asteroids.fire')}</span>
             <span>P/Esc: {t('game.paused')}</span>
           </div>

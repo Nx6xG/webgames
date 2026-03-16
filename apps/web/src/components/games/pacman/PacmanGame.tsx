@@ -9,6 +9,7 @@ import { ScoreboardPanel } from '@/components/ui/ScoreboardPanel';
 import { useAuth } from '@/components/providers/AuthProvider';
 import { useNickname } from '@/components/providers/NicknameProvider';
 import { useSwipe } from '@/hooks/useSwipe';
+import TouchControls from '@/components/ui/TouchControls';
 import { loadStats, saveStats, updateStats } from './stats';
 import * as sfx from './sound';
 
@@ -895,8 +896,15 @@ export function PacmanGame() {
           )}
         </div>
 
+        {/* Mobile touch controls */}
+        <TouchControls
+          layout="dpad"
+          disabled={phase !== 'playing'}
+          extraButtons={[{ label: phase === 'paused' ? t('game.resume') : t('game.paused'), onPress: togglePause }]}
+        />
+
         {/* Controls hint */}
-        <p className="text-xs text-zinc-600 text-center max-w-[320px]">
+        <p className="text-xs text-zinc-600 text-center max-w-[320px] max-sm:hidden">
           {t('pacman.controls')}
         </p>
 

@@ -22,7 +22,9 @@ import { useRpsBot } from './useRpsBot';
 import { saveLastConfig, loadLastConfig, hasLastConfig } from '@/lib/lobbyPresets';
 import type { BotDifficulty } from './botEngine';
 import { ReplayControls } from '@/components/ui/ReplayControls';
+import { useReplay } from '@/hooks/useReplay';
 import { useAutoJoin } from '@/hooks/useAutoJoin';
+import { useUnreadMessages } from '@/hooks/useUnreadMessages';
 
 const PICKS: RpsPick[] = ['rock', 'paper', 'scissors'];
 
@@ -77,11 +79,8 @@ export function RpsGame({ wsUrl, gameId, initialRoomCode, quickPlay: isQuickPlay
   const [rpsMode, setRpsMode]             = useState<RpsMode>('best_of');
   const [bestOfChoice, setBestOfChoice]   = useState(3);
   const [showInfo, setShowInfo]           = useState(false);
-  const [replayState, setReplayState]    = useState<RpsState | null>(null);
-  const [replayMode, setReplayMode]      = useState(false);
-  const [chatOpen, setChatOpen]           = useState(false);
-  const [unread, setUnread]               = useState(0);
-  const prevTotalRef = useRef<number | null>(null);
+  const replay = useReplay<RpsState>(mp.stateHistory as RpsState[]);
+  const { chatOpen, setChatOpen, unread } = useUnreadMessages(mp);
 
   useAutoJoin(mp, initialRoomCode, isQuickPlay, 'rps');
 
@@ -91,17 +90,6 @@ export function RpsGame({ wsUrl, gameId, initialRoomCode, quickPlay: isQuickPlay
       router.replace(`/games/${gameId}?room=${mp.roomCode}`);
     }
   }, [mp.roomCode]); // eslint-disable-line
-
-  // Track unread messages while chat is collapsed
-  useEffect(() => {
-    const total = mp.roomMessages.length + mp.globalMessages.length;
-    if (prevTotalRef.current === null) { prevTotalRef.current = total; return; }
-    if (!chatOpen && total > prevTotalRef.current) {
-      setUnread((u) => u + (total - prevTotalRef.current!));
-    }
-    prevTotalRef.current = total;
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [mp.roomMessages.length, mp.globalMessages.length]);
 
   // ── Achievement tracking ──────────────────────────────────────────────────
   const prevPhaseRef = useRef(mp.phase);
@@ -129,7 +117,7 @@ export function RpsGame({ wsUrl, gameId, initialRoomCode, quickPlay: isQuickPlay
   }, [mp.gameState?.status]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const liveGs = mp.gameState;
-  const gs     = replayMode && replayState ? replayState : liveGs;
+  const gs     = replay.displayState ?? liveGs;
   const myIdx  = mp.playerIndex; // 0 | 1 | null
 
   const p0nick  = mp.players.find((p) => p.index === 0)?.nickname ?? t('game.common.player1');
@@ -149,7 +137,7 @@ export function RpsGame({ wsUrl, gameId, initialRoomCode, quickPlay: isQuickPlay
 
   const canPick =
     !mp.isSpectator &&
-    !replayMode &&
+    !replay.isReplaying &&
     mp.phase === 'playing' &&
     mp.roomReady &&
     gs?.status === 'ongoing' &&
@@ -538,14 +526,12 @@ export function RpsGame({ wsUrl, gameId, initialRoomCode, quickPlay: isQuickPlay
 
         {/* Replay */}
         <ReplayControls<RpsState>
-          history={mpRaw.stateHistory as RpsState[]}
+          replay={replay}
           gameEnded={mp.phase === 'ended'}
-          onStep={(state) => setReplayState(state)}
-          onToggle={(active) => { setReplayMode(active); if (!active) setReplayState(null); }}
         />
 
         {/* Rematch */}
-        {!mp.isSpectator && gs && gs.status !== 'ongoing' && mp.playerCount === 2 && !replayMode && (
+        {!mp.isSpectator && gs && gs.status !== 'ongoing' && mp.playerCount === 2 && !replay.isReplaying && (
           <div className="flex flex-col items-center gap-1.5">
             <button
               onClick={mp.requestRematch}
@@ -832,7 +818,7 @@ export function RpsGame({ wsUrl, gameId, initialRoomCode, quickPlay: isQuickPlay
           collapsible
           defaultOpen={false}
           open={chatOpen}
-          onOpenChange={(o) => { setChatOpen(o); if (o) setUnread(0); }}
+          onOpenChange={setChatOpen}
           showUnreadBadge
           unreadCount={unread}
           className="rounded-xl border border-zinc-800 bg-zinc-900"

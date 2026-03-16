@@ -11,6 +11,7 @@ import { useAuth } from '@/components/providers/AuthProvider';
 import { useNickname } from '@/components/providers/NicknameProvider';
 import { useSwipe } from '@/hooks/useSwipe';
 import { useVisibilityPause } from '@/hooks/useVisibilityPause';
+import TouchControls from '@/components/ui/TouchControls';
 import { useSkinShop } from '@/hooks/useSkinShop';
 import { SkinShopOverlay } from '@/components/ui/SkinShopOverlay';
 import type { SkinDef } from '@/lib/skinShop';
@@ -721,8 +722,15 @@ export function SnakeGame() {
           <span className="px-2 py-0.5 rounded bg-zinc-800 text-zinc-400 font-medium">{gridSize}&times;{gridSize}</span>
         </div>
 
+        {/* ── Mobile touch controls ────────────────────────────────────── */}
+        <TouchControls
+          layout="dpad"
+          disabled={phase !== 'running' && phase !== 'countdown'}
+          extraButtons={[{ label: phase === 'paused' ? t('game.resume') : t('game.paused'), onPress: togglePause }]}
+        />
+
         {/* ── Hint ─────────────────────────────────────────────────────── */}
-        <p className="text-xs text-zinc-600 text-center max-w-[320px]">
+        <p className="text-xs text-zinc-600 text-center max-w-[320px] max-sm:hidden">
           {t('snake.controls')}
         </p>
 

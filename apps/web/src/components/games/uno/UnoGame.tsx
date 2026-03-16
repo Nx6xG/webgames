@@ -16,7 +16,9 @@ import { ReconnectBanner } from '@/components/ui/ReconnectBanner';
 import { saveLastConfig, loadLastConfig, hasLastConfig } from '@/lib/lobbyPresets';
 import { useCompact } from '@/hooks/useCompact';
 import { ReplayControls } from '@/components/ui/ReplayControls';
+import { useReplay } from '@/hooks/useReplay';
 import { useAutoJoin } from '@/hooks/useAutoJoin';
+import { useUnreadMessages } from '@/hooks/useUnreadMessages';
 
 // ── Color systems ───────────────────────────────────────────────────────────
 // Rich, saturated card colors that pop against the dark felt
@@ -633,10 +635,9 @@ const ANIM_STYLES = `
 
 export function UnoGame({ wsUrl, gameId, initialRoomCode, quickPlay: isQuickPlay }: GameComponentProps) {
   const mp = useMultiplayer<UnoState>(wsUrl, gameId);
-  const [replayState, setReplayState] = useState<UnoState | null>(null);
-  const [replayMode, setReplayMode] = useState(false);
+  const replay = useReplay<UnoState>(mp.stateHistory as UnoState[]);
   const liveGs = mp.gameState;
-  const gs = replayMode && replayState ? replayState : liveGs;
+  const gs = replay.displayState ?? liveGs;
   const myIdx = mp.playerIndex;
   const { t } = useI18n();
   const router = useRouter();
@@ -662,9 +663,7 @@ export function UnoGame({ wsUrl, gameId, initialRoomCode, quickPlay: isQuickPlay
   const [selectedCardId, setSelectedCardId] = useState<number | null>(null);
   const [showColorPicker, setShowColorPicker] = useState(false);
   const [pendingCardId, setPendingCardId] = useState<number | null>(null);
-  const [chatOpen, setChatOpen] = useState(false);
-  const [unread, setUnread] = useState(0);
-  const prevTotalRef = useRef<number | null>(null);
+  const { chatOpen, setChatOpen, unread } = useUnreadMessages(mp);
 
   // ── UNO announcement overlay ─────────────────────────────────────────────
   const [unoAnnouncement, setUnoAnnouncement] = useState<{ nickname: string; timestamp: number } | null>(null);
@@ -736,19 +735,9 @@ export function UnoGame({ wsUrl, gameId, initialRoomCode, quickPlay: isQuickPlay
     if (!iWon && kind === 'match_end') ach.trackLoss();
   }, [finishKey, gs, myIdx, ach]);
 
-  // ── Chat unread tracking ─────────────────────────────────────────────────
-  useEffect(() => {
-    const total = mp.roomMessages.length + mp.globalMessages.length;
-    if (prevTotalRef.current === null) { prevTotalRef.current = total; return; }
-    if (!chatOpen && total > prevTotalRef.current) {
-      setUnread((u) => u + (total - prevTotalRef.current!));
-    }
-    prevTotalRef.current = total;
-  }, [mp.roomMessages.length, mp.globalMessages.length, chatOpen]);
-
   // ── Derived state ─────────────────────────────────────────────────────────
   const myHand: UnoCard[] = gs && myIdx !== null ? (gs.hands[myIdx] ?? []) : [];
-  const isMyTurn = !mp.isSpectator && !replayMode && gs !== null && gs.phase === 'playing' && myIdx !== null && gs.currentTurn === gs.playerIds[myIdx];
+  const isMyTurn = !mp.isSpectator && !replay.isReplaying && gs !== null && gs.phase === 'playing' && myIdx !== null && gs.currentTurn === gs.playerIds[myIdx];
   const activeColor = gs?.chosenColor ?? gs?.topCard?.color ?? null;
 
   const canPlayCard = useCallback((card: UnoCard): boolean => {
@@ -1554,10 +1543,8 @@ export function UnoGame({ wsUrl, gameId, initialRoomCode, quickPlay: isQuickPlay
 
           {/* Replay */}
           <ReplayControls<UnoState>
-            history={mp.stateHistory as UnoState[]}
+            replay={replay}
             gameEnded={mp.phase === 'ended'}
-            onStep={(state) => setReplayState(state)}
-            onToggle={(active) => { setReplayMode(active); if (!active) setReplayState(null); }}
           />
 
           {/* Leave button */}
@@ -1873,10 +1860,7 @@ export function UnoGame({ wsUrl, gameId, initialRoomCode, quickPlay: isQuickPlay
               onSend={mp.sendChat}
               collapsible
               open={chatOpen}
-              onOpenChange={(open) => {
-                setChatOpen(open);
-                if (open) setUnread(0);
-              }}
+              onOpenChange={setChatOpen}
               showUnreadBadge={unread > 0}
             />
           )}

@@ -183,6 +183,96 @@ export type {
   UnoEngineConfig,
   UnoRuleConfig,
 } from './games/uno';
+import {
+  NC_CARDS as _ncCards,
+  NC_CARD_MAP as _ncCardMap,
+  NC_CARDS_BY_RARITY as _ncCardsByRarity,
+  NC_STARTER_CARDS as _ncStarterCards,
+  NC_LANE_MODIFIERS as _ncLaneModifiers,
+  NC_DECK_SIZE as _ncDeckSize,
+  NC_MAX_COPIES as _ncMaxCopies,
+  NC_START_HAND as _ncStartHand,
+  NC_DRAW_PER_ROUND as _ncDrawPerRound,
+  NC_START_MANA as _ncStartMana,
+  NC_MAX_MANA as _ncMaxMana,
+  NC_MANA_PER_ROUND as _ncManaPerRound,
+  NC_LANES as _ncLanes,
+  NC_PUSH_PER_POWER as _ncPushPerPower,
+  NC_BREAKTHROUGH_THRESHOLD as _ncBreakthroughThreshold,
+  NC_BREAKTHROUGHS_TO_WIN as _ncBreakthroughsToWin,
+  NC_MAX_ROUNDS as _ncMaxRounds,
+  NC_TURN_TIME_MS as _ncTurnTimeMs,
+  NC_STANDARD_PACK_COST as _ncStdPackCost,
+  NC_PREMIUM_PACK_COST as _ncPremPackCost,
+  NC_CARDS_PER_PACK as _ncCardsPerPack,
+  NC_STANDARD_RATES as _ncStdRates,
+  NC_PREMIUM_RATES as _ncPremRates,
+  NC_DUPLICATE_REFUND as _ncDupRefund,
+  NC_WIN_COINS as _ncWinCoins,
+  NC_LOSS_COINS as _ncLossCoins,
+  NC_DAILY_QUEST_COINS as _ncDailyQuestCoins,
+  NC_WEEKLY_QUEST_GEMS as _ncWeeklyQuestGems,
+  NC_STARTER_COINS as _ncStarterCoins,
+  createDefaultNcProfile as _createDefaultNcProfile,
+} from './games/nexusclash';
+export const NC_CARDS = _ncCards;
+export const NC_CARD_MAP = _ncCardMap;
+export const NC_CARDS_BY_RARITY = _ncCardsByRarity;
+export const NC_STARTER_CARDS = _ncStarterCards;
+export const NC_LANE_MODIFIERS = _ncLaneModifiers;
+export const NC_DECK_SIZE = _ncDeckSize;
+export const NC_MAX_COPIES = _ncMaxCopies;
+export const NC_START_HAND = _ncStartHand;
+export const NC_DRAW_PER_ROUND = _ncDrawPerRound;
+export const NC_START_MANA = _ncStartMana;
+export const NC_MAX_MANA = _ncMaxMana;
+export const NC_MANA_PER_ROUND = _ncManaPerRound;
+export const NC_LANES = _ncLanes;
+export const NC_PUSH_PER_POWER = _ncPushPerPower;
+export const NC_BREAKTHROUGH_THRESHOLD = _ncBreakthroughThreshold;
+export const NC_BREAKTHROUGHS_TO_WIN = _ncBreakthroughsToWin;
+export const NC_MAX_ROUNDS = _ncMaxRounds;
+export const NC_TURN_TIME_MS = _ncTurnTimeMs;
+export const NC_STANDARD_PACK_COST = _ncStdPackCost;
+export const NC_PREMIUM_PACK_COST = _ncPremPackCost;
+export const NC_CARDS_PER_PACK = _ncCardsPerPack;
+export const NC_STANDARD_RATES = _ncStdRates;
+export const NC_PREMIUM_RATES = _ncPremRates;
+export const NC_DUPLICATE_REFUND = _ncDupRefund;
+export const NC_WIN_COINS = _ncWinCoins;
+export const NC_LOSS_COINS = _ncLossCoins;
+export const NC_DAILY_QUEST_COINS = _ncDailyQuestCoins;
+export const NC_WEEKLY_QUEST_GEMS = _ncWeeklyQuestGems;
+export const NC_STARTER_COINS = _ncStarterCoins;
+export const createDefaultNcProfile = _createDefaultNcProfile;
+export type {
+  NcTag,
+  NcRarity,
+  NcTrigger,
+  NcEffectType,
+  NcAbility,
+  NcCardDef,
+  NcCardInstance,
+  NcLaneModifier,
+  NcLane,
+  NcPendingPlay,
+  NcPhase,
+  NcResolveEvent,
+  NexusClashState,
+  NcPlaceCardAction,
+  NcUndoPlaceAction,
+  NcConfirmAction,
+  NexusClashAction,
+  NcPlayerCollection,
+  NcCurrencies,
+  NcPackType,
+  NcPackResult,
+  NcQuestType,
+  NcQuestGoal,
+  NcQuest,
+  NcDeckSlot,
+  NcPlayerProfile,
+} from './games/nexusclash';
 export type {
   TournamentId,
   TournamentStatus,

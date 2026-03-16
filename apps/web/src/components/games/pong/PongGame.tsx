@@ -7,6 +7,7 @@ import { loadStats, saveStats, updateStats } from './stats';
 import type { PongStats } from './stats';
 import * as sfx from './sound';
 import { useVisibilityPause } from '@/hooks/useVisibilityPause';
+import TouchControls from '@/components/ui/TouchControls';
 import { useSkinShop } from '@/hooks/useSkinShop';
 import { SkinShopOverlay } from '@/components/ui/SkinShopOverlay';
 import type { SkinDef } from '@/lib/skinShop';
@@ -1173,9 +1174,19 @@ export function PongGame() {
         </div>
       </div>
 
+      {/* Mobile touch controls */}
+      <TouchControls
+        layout="updown"
+        disabled={phase !== 'playing' && phase !== 'paused'}
+        extraButtons={[{
+          label: phase === 'paused' ? t('game.resume') : t('game.paused'),
+          onPress: () => setPhase(phase === 'playing' ? 'paused' : phase === 'paused' ? 'playing' : phase),
+        }]}
+      />
+
       {/* Controls hint */}
       {phase === 'playing' && (
-        <p className="text-zinc-600 text-xs">P / ESC {t('pong.toPause')}</p>
+        <p className="text-zinc-600 text-xs max-sm:hidden">P / ESC {t('pong.toPause')}</p>
       )}
     </div>
   );

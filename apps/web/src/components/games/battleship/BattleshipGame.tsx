@@ -20,8 +20,10 @@ import { useAchievements } from '@/hooks/useAchievements';
 import { ReconnectBanner } from '@/components/ui/ReconnectBanner';
 import { useBattleshipBot, type BotDifficulty } from './useBattleshipBot';
 import { ReplayControls } from '@/components/ui/ReplayControls';
+import { useReplay } from '@/hooks/useReplay';
 import { saveLastConfig, loadLastConfig, hasLastConfig } from '@/lib/lobbyPresets';
 import { useAutoJoin } from '@/hooks/useAutoJoin';
+import { useUnreadMessages } from '@/hooks/useUnreadMessages';
 
 // ── Cell display types ────────────────────────────────────────────────────────
 
@@ -712,10 +714,8 @@ export function BattleshipGame({ wsUrl, gameId, initialRoomCode, quickPlay: isQu
   const [shotTimerCfg,    setShotTimerCfg]     = useState(0);
   const [timerDisplay,    setTimerDisplay]     = useState<number | null>(null);
   const [showInfo,        setShowInfo]         = useState(false);
-  const [replayState, setReplayState]        = useState<BattleshipState | null>(null);
-  const [replayMode,  setReplayMode]         = useState(false);
-  const [chatOpen,        setChatOpen]         = useState(false);
-  const [unread,          setUnread]           = useState(0);
+  const replay = useReplay<BattleshipState>(mp.stateHistory as BattleshipState[]);
+  const { chatOpen, setChatOpen, unread }    = useUnreadMessages(mp);
   const [placeError,      setPlaceError]       = useState<string | null>(null);
   const placeErrorTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [shotOverlay, setShotOverlay] = useState<{ text: string; kind: 'hit' | 'miss' | 'sunk' } | null>(null);
@@ -745,8 +745,6 @@ export function BattleshipGame({ wsUrl, gameId, initialRoomCode, quickPlay: isQu
   const [hoverCoord,    setHoverCoord]   = useState<Coord | null>(null);
   const [activeShipId,  setActiveShipId] = useState<ShipId>('');
 
-  const prevTotalRef    = useRef<number | null>(null);
-
   useAutoJoin(mp, initialRoomCode, isQuickPlay, 'battleship');
 
   useEffect(() => {
@@ -754,17 +752,6 @@ export function BattleshipGame({ wsUrl, gameId, initialRoomCode, quickPlay: isQu
       router.replace(`/games/${gameId}?room=${mp.roomCode}`);
     }
   }, [mp.roomCode]); // eslint-disable-line
-
-  // Track unread chat messages
-  useEffect(() => {
-    const total = mp.roomMessages.length + mp.globalMessages.length;
-    if (prevTotalRef.current === null) { prevTotalRef.current = total; return; }
-    if (!chatOpen && total > prevTotalRef.current) {
-      setUnread((u) => u + (total - prevTotalRef.current!));
-    }
-    prevTotalRef.current = total;
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [mp.roomMessages.length, mp.globalMessages.length]);
 
   // ── Achievement tracking ──────────────────────────────────────────────────
   const prevPhaseRef = useRef(mp.phase);
@@ -800,7 +787,7 @@ export function BattleshipGame({ wsUrl, gameId, initialRoomCode, quickPlay: isQu
   const oppIdx: number | null = myIdx !== null ? (myIdx === 0 ? 1 : 0) : null;
   const mySlot: BsSlot | null = myIdx !== null ? (myIdx === 0 ? 'A' : 'B') : null;
   const liveGs = mp.gameState;
-  const gs = replayMode && replayState ? replayState : liveGs;
+  const gs = replay.displayState ?? liveGs;
 
   const ownShipsLen = gs?.players[myIdx ?? 0]?.ships.length ?? 0;
   const shipDefs: ShipDef[] = gs?.shipDefs ?? [];
@@ -859,7 +846,7 @@ export function BattleshipGame({ wsUrl, gameId, initialRoomCode, quickPlay: isQu
   // currentTurn is now a player token (UUID), not a BsSlot.
   const myPlayerId = gs && myIdx !== null ? gs.playerIds[myIdx] : null;
   const isMyTurn = !mp.isSpectator && gs?.phase === 'playing' && myPlayerId !== null && gs.currentTurn === myPlayerId;
-  const canFire  = isMyTurn && !replayMode && mp.roomReady && mp.matchCountdown === null;
+  const canFire  = isMyTurn && !replay.isReplaying && mp.roomReady && mp.matchCountdown === null;
 
   // Stable key that is non-empty only once per finished match (ignored on repeated pushes).
   const finishKey = gs?.phase === 'finished' && gs?.winner && !mp.isSpectator && myIdx !== null
@@ -1733,14 +1720,12 @@ export function BattleshipGame({ wsUrl, gameId, initialRoomCode, quickPlay: isQu
 
         {/* Replay */}
         <ReplayControls<BattleshipState>
-          history={mpRaw.stateHistory as BattleshipState[]}
+          replay={replay}
           gameEnded={mp.phase === 'ended'}
-          onStep={(state) => setReplayState(state)}
-          onToggle={(active) => { setReplayMode(active); if (!active) setReplayState(null); }}
         />
 
         {/* ── Rematch / Leave ──────────────────────────────────────────────── */}
-        {!mp.isSpectator && gs?.phase === 'finished' && mp.playerCount === 2 && !replayMode && (
+        {!mp.isSpectator && gs?.phase === 'finished' && mp.playerCount === 2 && !replay.isReplaying && (
           <div className="flex flex-col items-center gap-1.5">
             <button
               onClick={mp.requestRematch}
@@ -2174,7 +2159,7 @@ export function BattleshipGame({ wsUrl, gameId, initialRoomCode, quickPlay: isQu
           collapsible
           defaultOpen={false}
           open={chatOpen}
-          onOpenChange={(o) => { setChatOpen(o); if (o) setUnread(0); }}
+          onOpenChange={setChatOpen}
           showUnreadBadge
           unreadCount={unread}
           className="rounded-xl border border-zinc-800 bg-zinc-900"
