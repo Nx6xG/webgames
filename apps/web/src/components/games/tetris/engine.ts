@@ -232,12 +232,20 @@ function placePiece(board: Board, piece: Piece): Board {
 }
 
 /** Removes full rows, shifts remaining rows down. Returns new board + count. */
-export function clearLines(board: Board): { board: Board; linesCleared: number } {
-  const kept = board.filter(row => row.some(cell => cell === 0));
-  const linesCleared = BOARD_ROWS - kept.length;
-  if (linesCleared === 0) return { board, linesCleared: 0 };
+export function clearLines(board: Board): { board: Board; linesCleared: number; clearedRows: number[] } {
+  const clearedRows: number[] = [];
+  const kept: number[][] = [];
+  for (let r = 0; r < board.length; r++) {
+    if (board[r].every(cell => cell !== 0)) {
+      clearedRows.push(r);
+    } else {
+      kept.push(board[r]);
+    }
+  }
+  const linesCleared = clearedRows.length;
+  if (linesCleared === 0) return { board, linesCleared: 0, clearedRows: [] };
   const empty = Array.from({ length: linesCleared }, () => Array(BOARD_COLS).fill(0));
-  return { board: [...empty, ...kept], linesCleared };
+  return { board: [...empty, ...kept], linesCleared, clearedRows };
 }
 
 // ── Scoring ───────────────────────────────────────────────────────────────────
@@ -278,13 +286,13 @@ function lockAndSpawn(state: TetrisState): TetrisState {
   // Place the piece
   const boardAfterPlace = placePiece(state.board, state.active);
   // Clear full lines
-  const { board, linesCleared } = clearLines(boardAfterPlace);
+  const { board, linesCleared, clearedRows } = clearLines(boardAfterPlace);
   // Update totals
   const scoreGained = scoreForClear(linesCleared, state.level);
   const newLines = state.lines + linesCleared;
   const newLevel = updateLevel(newLines);
   const lastClear: ClearInfo | undefined =
-    linesCleared > 0 ? { linesCleared, scoreGained } : undefined;
+    linesCleared > 0 ? { linesCleared, scoreGained, clearedRows } : undefined;
 
   const updated: TetrisState = {
     ...state,

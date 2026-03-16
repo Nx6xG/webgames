@@ -236,90 +236,108 @@ export function Game2048() {
   const swipeHandlers = useSwipe({ onSwipe: handleMove });
 
   return (
-    <div className="flex flex-col items-center gap-3 py-2 px-4">
+    <div className="relative w-full flex-1 min-h-0">
+      {/* ── Game column ──────────────────────────────────────────────── */}
+      <div className="flex flex-col items-center gap-3 py-2 px-4 flex-1 min-w-0">
 
-      {/* ── Header row ───────────────────────────────────────────────── */}
-      <div className="w-full max-w-[420px] flex items-center gap-3">
-        <span className="text-4xl font-black text-zinc-100 tracking-tight mr-auto">{t('game.name.2048')}</span>
+        {/* ── Header row ───────────────────────────────────────────────── */}
+        <div className="w-full max-w-[420px] flex items-center gap-3">
+          <span className="text-4xl font-black text-zinc-100 tracking-tight mr-auto">{t('game.name.2048')}</span>
 
-        <ScoreBox label={t('game.score')} value={state.score} />
-        <ScoreBox label={t('game.best')}  value={state.best} />
+          <ScoreBox label={t('game.score')} value={state.score} />
+          <ScoreBox label={t('game.best')}  value={state.best} />
 
-        <button
-          onClick={handleNewGame}
-          className="px-4 py-2 rounded-lg bg-zinc-700 hover:bg-zinc-600 text-zinc-100 text-sm font-semibold transition-colors shrink-0"
-        >
-          {t('game.new')}
-        </button>
-      </div>
-
-      {/* ── Board ────────────────────────────────────────────────────── */}
-      <div className="relative w-full max-w-[420px] touch-none" {...swipeHandlers}>
-
-        {/* Background: static empty cell grid */}
-        <div className="grid grid-cols-4 gap-2 p-3 rounded-xl bg-zinc-800/50 border border-zinc-700/60">
-          {Array.from({ length: 16 }, (_, i) => (
-            <div key={i} className="aspect-square rounded-lg bg-zinc-800/80" />
-          ))}
+          <button
+            onClick={handleNewGame}
+            className="px-4 py-2 rounded-lg bg-zinc-700 hover:bg-zinc-600 text-zinc-100 text-sm font-semibold transition-colors shrink-0"
+          >
+            {t('game.new')}
+          </button>
         </div>
 
-        {/* Animated tile layer */}
-        <div className="absolute inset-0 rounded-xl overflow-hidden pointer-events-none">
-          {state.tiles.map(tile => (
-            <TileView key={tile.id} tile={tile} />
-          ))}
-        </div>
+        {/* ── Board ────────────────────────────────────────────────────── */}
+        <div className="relative w-full max-w-[420px] touch-none" {...swipeHandlers}>
 
-        {/* Game over overlay */}
-        {state.status === 'over' && (
-          <Overlay>
-            <p className="text-2xl font-black text-zinc-100">{t('game.over')}</p>
-            <p className="text-sm text-zinc-400">{t('game.score')}: {state.score.toLocaleString()}</p>
-            <button
-              onClick={handleNewGame}
-              className="mt-1 px-6 py-2 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-white text-sm font-semibold transition-colors"
-            >
-              {t('game.newGame')}
-            </button>
-          </Overlay>
-        )}
+          {/* Background: static empty cell grid */}
+          <div className="grid grid-cols-4 gap-2 p-3 rounded-xl bg-zinc-800/50 border border-zinc-700/60">
+            {Array.from({ length: 16 }, (_, i) => (
+              <div key={i} className="aspect-square rounded-lg bg-zinc-800/80" />
+            ))}
+          </div>
 
-        {/* Win overlay */}
-        {state.status === 'won' && (
-          <Overlay tint="indigo">
-            <p className="text-2xl font-black text-indigo-200">{t('game.reached2048')}</p>
-            <div className="flex gap-3 mt-1">
-              <button
-                onClick={() => setState(engineKeepPlaying)}
-                className="px-4 py-2 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-white text-sm font-semibold transition-colors"
-              >
-                {t('game.keepPlaying')}
-              </button>
+          {/* Animated tile layer */}
+          <div className="absolute inset-0 rounded-xl overflow-hidden pointer-events-none">
+            {state.tiles.map(tile => (
+              <TileView key={tile.id} tile={tile} />
+            ))}
+          </div>
+
+          {/* Game over overlay */}
+          {state.status === 'over' && (
+            <Overlay>
+              <p className="text-2xl font-black text-zinc-100">{t('game.over')}</p>
+              <p className="text-sm text-zinc-400">{t('game.score')}: {state.score.toLocaleString()}</p>
               <button
                 onClick={handleNewGame}
-                className="px-4 py-2 rounded-lg border border-indigo-700 text-indigo-300 hover:text-indigo-100 text-sm font-semibold transition-colors"
+                className="mt-1 px-6 py-2 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-white text-sm font-semibold transition-colors"
               >
                 {t('game.newGame')}
               </button>
-            </div>
-          </Overlay>
-        )}
+            </Overlay>
+          )}
+
+          {/* Win overlay */}
+          {state.status === 'won' && (
+            <Overlay tint="indigo">
+              <p className="text-2xl font-black text-indigo-200">{t('game.reached2048')}</p>
+              <div className="flex gap-3 mt-1">
+                <button
+                  onClick={() => setState(engineKeepPlaying)}
+                  className="px-4 py-2 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-white text-sm font-semibold transition-colors"
+                >
+                  {t('game.keepPlaying')}
+                </button>
+                <button
+                  onClick={handleNewGame}
+                  className="px-4 py-2 rounded-lg border border-indigo-700 text-indigo-300 hover:text-indigo-100 text-sm font-semibold transition-colors"
+                >
+                  {t('game.newGame')}
+                </button>
+              </div>
+            </Overlay>
+          )}
+        </div>
+
+        {/* ── Hint ─────────────────────────────────────────────────────── */}
+        <p className="text-xs text-zinc-600 text-center max-w-[320px]">
+          {t('2048.controls')}
+        </p>
+
+        {/* ── Personal best list (mobile only) ─────────────────────────── */}
+        <div className="lg:hidden">
+          <ScoreboardPanel
+            gameId="2048"
+            scores={pb.scores}
+            lastInsertId={pb.lastInsertId}
+            isNewBest={pb.isNewBest}
+            onClear={pb.clear}
+          />
+        </div>
+
       </div>
 
-      {/* ── Hint ─────────────────────────────────────────────────────── */}
-      <p className="text-xs text-zinc-600 text-center max-w-[320px]">
-        {t('2048.controls')}
-      </p>
-
-      {/* ── Personal best list ───────────────────────────────────────── */}
-      <ScoreboardPanel
-        gameId="2048"
-        scores={pb.scores}
-        lastInsertId={pb.lastInsertId}
-        isNewBest={pb.isNewBest}
-        onClear={pb.clear}
-      />
-
+      {/* ── Sidebar (desktop) ────────────────────────────────────────── */}
+      <aside className="hidden lg:block absolute right-0 top-0 w-[240px]">
+        <div className="flex flex-col gap-3">
+          <ScoreboardPanel
+            gameId="2048"
+            scores={pb.scores}
+            lastInsertId={pb.lastInsertId}
+            isNewBest={pb.isNewBest}
+            onClear={pb.clear}
+          />
+        </div>
+      </aside>
     </div>
   );
 }

@@ -1325,12 +1325,19 @@ io.on('connection', (socket) => {
     // Stop any tick loop
     stopTickLoop(room.code);
 
-    // Reset room state but keep config and players
-    room.state = null;
     room.rematchVotes.clear();
 
-    // Notify all players to return to lobby/waiting phase
+    // Re-create initial state in lobby phase (preserves settings/bots via gameConfig)
+    const engine = engineRegistry[room.gameId];
+    const playerTokens = room.players
+      .sort((a, b) => a.index - b.index)
+      .map((p) => p.playerToken);
+    const newState = engine.initialState(playerTokens, undefined, room.gameConfig ?? undefined);
+    room.state = newState;
+
+    // Notify all players to return to lobby/waiting phase, then send fresh lobby state
     io.to(code).emit('returned_to_lobby', { roomCode: code });
+    emitGameState(room, newState);
     emitRoomReady(room);
     console.log(`[lobby] ${code} returned to lobby`);
   });

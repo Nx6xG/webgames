@@ -95,9 +95,9 @@ interface BotParams {
 }
 
 const BOT_PARAMS: Record<CfBotDifficulty, BotParams> = {
-  easy:   { lookahead: 80,  rays: 5,  reactionDelay: 2, jitter: 0.08, angleSpread: 0.6,  seekPowerUps: false, dangerThreshold: 0.5 },
-  medium: { lookahead: 140, rays: 9,  reactionDelay: 0, jitter: 0.02, angleSpread: 1.0,  seekPowerUps: true,  dangerThreshold: 0.25 },
-  hard:   { lookahead: 220, rays: 15, reactionDelay: 0, jitter: 0.005, angleSpread: 1.4, seekPowerUps: true,  dangerThreshold: 0.15 },
+  easy:   { lookahead: 100, rays: 7,  reactionDelay: 1, jitter: 0.06, angleSpread: 0.8,  seekPowerUps: false, dangerThreshold: 0.45 },
+  medium: { lookahead: 180, rays: 11, reactionDelay: 0, jitter: 0.01, angleSpread: 1.2,  seekPowerUps: true,  dangerThreshold: 0.2 },
+  hard:   { lookahead: 260, rays: 17, reactionDelay: 0, jitter: 0.002, angleSpread: 1.6, seekPowerUps: true,  dangerThreshold: 0.12 },
 };
 
 const BOT_NAMES = ['Alpha', 'Beta', 'Gamma', 'Delta', 'Epsilon'];

@@ -486,237 +486,271 @@ export function SnakeGame() {
   // Config screen
   if (phase === 'config') {
     return (
-      <div className="flex flex-col items-center gap-3 py-2 px-4">
-        {/* Header */}
-        <div className="w-full max-w-[420px] flex items-center gap-3">
-          <span className="text-4xl font-black text-zinc-100 tracking-tight mr-auto">{t('game.name.snake')}</span>
-          <button
-            onClick={() => shop.setShowShop(true)}
-            className="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-amber-950/40 border border-amber-800/30 text-amber-400 font-bold text-sm hover:bg-amber-950/60 transition-colors"
-          >
-            <span className="text-base">●</span> {shop.wallet}
-          </button>
-          <ScoreBox label={t('game.best')} value={state.best} />
-        </div>
-
-        {/* Skin shop overlay */}
-        {shop.showShop && (
-          <div className="w-full max-w-[420px] relative" style={{ minHeight: 420 }}>
-            <SkinShopOverlay
-              skins={SNAKE_SKINS}
-              wallet={shop.wallet}
-              owned={shop.owned}
-              activeSkin={shop.activeSkin}
-              onBuy={shop.buy}
-              onEquip={shop.equip}
-              onClose={() => shop.setShowShop(false)}
-              renderPreview={renderSnakePreview}
-            />
-          </div>
-        )}
-
-        {/* Config card */}
-        <div className="w-full max-w-[420px] rounded-xl bg-zinc-800 border border-zinc-700/60 shadow-lg shadow-black/30 p-6 flex flex-col gap-6">
-
-          {/* Mode selector */}
-          <div className="flex flex-col gap-2">
-            <span className="text-sm font-semibold text-zinc-400 uppercase tracking-wider">{t('snake.mode')}</span>
-            <div className="grid grid-cols-3 gap-2">
-              {MODE_OPTIONS.map(m => (
-                <button
-                  key={m}
-                  onClick={() => setSelectedMode(m)}
-                  className={`px-3 py-2.5 rounded-lg text-sm font-semibold transition-colors ${
-                    selectedMode === m
-                      ? 'bg-indigo-600 text-white'
-                      : 'bg-zinc-900 text-zinc-400 hover:bg-zinc-700 hover:text-zinc-200'
-                  }`}
-                >
-                  {t(modeKeys[m])}
-                </button>
-              ))}
-            </div>
-            <p className="text-xs text-zinc-500 min-h-[2rem]">
-              {selectedMode === 'classic' && t('snake.mode.classic.desc')}
-              {selectedMode === 'no_walls' && t('snake.mode.noWalls.desc')}
-              {selectedMode === 'speed' && t('snake.mode.speed.desc')}
-            </p>
-          </div>
-
-          {/* Grid size selector */}
-          <div className="flex flex-col gap-2">
-            <span className="text-sm font-semibold text-zinc-400 uppercase tracking-wider">{t('snake.gridSize')}</span>
-            <div className="grid grid-cols-3 gap-2">
-              {GRID_OPTIONS.map(g => (
-                <button
-                  key={g}
-                  onClick={() => setSelectedGrid(g)}
-                  className={`px-3 py-2.5 rounded-lg text-sm font-semibold transition-colors ${
-                    selectedGrid === g
-                      ? 'bg-indigo-600 text-white'
-                      : 'bg-zinc-900 text-zinc-400 hover:bg-zinc-700 hover:text-zinc-200'
-                  }`}
-                >
-                  {t(gridKeys[g])}
-                </button>
-              ))}
-            </div>
-          </div>
-
-          {/* Start + Shop buttons */}
-          <div className="flex gap-2">
-            <button
-              onClick={handleStart}
-              className="flex-1 py-3 rounded-lg text-white text-lg font-bold transition-opacity hover:opacity-90"
-              style={{ backgroundColor: skinColors.body }}
-            >
-              {t('snake.start')}
-            </button>
+      <div className="relative w-full flex-1 min-h-0">
+        <div className="flex flex-col items-center gap-3 py-2 px-4 flex-1 min-w-0">
+          {/* Header */}
+          <div className="w-full max-w-[420px] flex items-center gap-3">
+            <span className="text-4xl font-black text-zinc-100 tracking-tight mr-auto">{t('game.name.snake')}</span>
             <button
               onClick={() => shop.setShowShop(true)}
-              className="px-5 py-3 rounded-lg bg-amber-600 hover:bg-amber-500 text-white font-bold text-lg transition-colors"
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-amber-950/40 border border-amber-800/30 text-amber-400 font-bold text-sm hover:bg-amber-950/60 transition-colors"
             >
-              {t('skinShop.title')}
+              <span className="text-base">●</span> {shop.wallet}
             </button>
+            <ScoreBox label={t('game.best')} value={state.best} />
           </div>
-        </div>
 
-        {/* Personal best list */}
-        <ScoreboardPanel
-          gameId="snake"
-          scores={pb.scores}
-          lastInsertId={pb.lastInsertId}
-          isNewBest={pb.isNewBest}
-          onClear={pb.clear}
-        />
-      </div>
-    );
-  }
+          {/* Skin shop overlay */}
+          {shop.showShop && (
+            <div className="w-full max-w-[420px] relative" style={{ minHeight: 420 }}>
+              <SkinShopOverlay
+                skins={SNAKE_SKINS}
+                wallet={shop.wallet}
+                owned={shop.owned}
+                activeSkin={shop.activeSkin}
+                onBuy={shop.buy}
+                onEquip={shop.equip}
+                onClose={() => shop.setShowShop(false)}
+                renderPreview={renderSnakePreview}
+              />
+            </div>
+          )}
 
-  return (
-    <div className="flex flex-col items-center gap-3 py-2 px-4">
-      {/* Cosmic skin CSS animations */}
-      {isCosmicSkin && <style dangerouslySetInnerHTML={{ __html: COSMIC_STYLES }} />}
+          {/* Config card */}
+          <div className="w-full max-w-[420px] rounded-xl bg-zinc-800 border border-zinc-700/60 shadow-lg shadow-black/30 p-6 flex flex-col gap-6">
 
-      {/* ── Header ───────────────────────────────────────────────────── */}
-      <div className="w-full max-w-[420px] flex items-center gap-3">
-        <span className="text-4xl font-black text-zinc-100 tracking-tight mr-auto">{t('game.name.snake')}</span>
-        <ScoreBox label={t('game.score')} value={state.score} />
-        <ScoreBox label={t('game.best')}  value={state.best} />
-        <button
-          onClick={handleRestart}
-          className="px-4 py-2 rounded-lg bg-zinc-700 hover:bg-zinc-600 text-zinc-100 text-sm font-semibold transition-colors shrink-0"
-        >
-          {t('game.new')}
-        </button>
-      </div>
-
-      {/* ── Board ────────────────────────────────────────────────────── */}
-      <div className="relative w-full max-w-[420px] touch-none" {...swipeHandlers}>
-        <div
-          className="p-2 rounded-xl bg-zinc-800 border border-zinc-700/60 shadow-lg shadow-black/30"
-          style={{
-            display:             'grid',
-            gridTemplateColumns: `repeat(${gridSize}, 1fr)`,
-            gap:                 gridSize > 20 ? '0.5px' : '1px',
-          }}
-        >
-          {Array.from({ length: gridSize * gridSize }, (_, i) => {
-            const x      = i % gridSize;
-            const y      = Math.floor(i / gridSize);
-            const posKey = `${x},${y}`;
-            const data   = cellMap.get(posKey) ?? { kind: 'empty' as const };
-
-            const cs = cellStyle(data, skinColors, isCosmicSkin);
-            return (
-              <div
-                key={`${posKey}-${data.kind}`}
-                className={`aspect-square relative ${cs.className}`}
-                style={cs.style}
-              >
-                {data.kind === 'head' && <HeadEyes dir={state.direction} />}
-                {data.kind === 'food' && <FoodVisual color={skinColors.food} isCosmic={isCosmicSkin} />}
+            {/* Mode selector */}
+            <div className="flex flex-col gap-2">
+              <span className="text-sm font-semibold text-zinc-400 uppercase tracking-wider">{t('snake.mode')}</span>
+              <div className="grid grid-cols-3 gap-2">
+                {MODE_OPTIONS.map(m => (
+                  <button
+                    key={m}
+                    onClick={() => setSelectedMode(m)}
+                    className={`px-3 py-2.5 rounded-lg text-sm font-semibold transition-colors ${
+                      selectedMode === m
+                        ? 'bg-indigo-600 text-white'
+                        : 'bg-zinc-900 text-zinc-400 hover:bg-zinc-700 hover:text-zinc-200'
+                    }`}
+                  >
+                    {t(modeKeys[m])}
+                  </button>
+                ))}
               </div>
-            );
-          })}
-        </div>
+              <p className="text-xs text-zinc-500 min-h-[2rem]">
+                {selectedMode === 'classic' && t('snake.mode.classic.desc')}
+                {selectedMode === 'no_walls' && t('snake.mode.noWalls.desc')}
+                {selectedMode === 'speed' && t('snake.mode.speed.desc')}
+              </p>
+            </div>
 
-        {/* Countdown overlay */}
-        {phase === 'countdown' && (
-          <div className="absolute inset-0 rounded-xl bg-zinc-950/75 flex items-center justify-center z-20 cd-overlay backdrop-blur-[1px]">
-            <span
-              key={cdNum}
-              className={`cd-number font-black select-none ${
-                cdNum === 0 ? 'text-5xl text-emerald-400' : 'text-7xl text-zinc-100'
-              }`}
-            >
-              {cdNum === 0 ? t('game.go') : cdNum}
-            </span>
-          </div>
-        )}
-
-        {/* Pause overlay */}
-        {phase === 'paused' && (
-          <div className="absolute inset-0 rounded-xl bg-zinc-950/80 flex flex-col items-center justify-center gap-3 backdrop-blur-[2px] z-10">
-            <p className="text-2xl font-black text-zinc-100">{t('game.paused')}</p>
-            <p className="text-sm text-zinc-500">{t('tetris.pressP')}</p>
-            <button
-              onClick={togglePause}
-              className="mt-1 px-6 py-2 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white text-sm font-semibold transition-colors"
-            >
-              {t('game.resume')}
-            </button>
-          </div>
-        )}
-
-        {/* Game-over overlay */}
-        {phase === 'over' && (
-          <div className="absolute inset-0 rounded-xl bg-zinc-950/85 flex flex-col items-center justify-center gap-3 backdrop-blur-[2px] z-10">
-            <p className="text-2xl font-black text-zinc-100">{t('game.over')}</p>
-            <p className="text-sm text-zinc-400">{t('game.score')}: {state.score}</p>
-            {state.score > 0 && (
-              <div className="flex items-center gap-1.5 text-amber-400 font-bold text-sm">
-                <span className="text-base">●</span> +{state.score}
+            {/* Grid size selector */}
+            <div className="flex flex-col gap-2">
+              <span className="text-sm font-semibold text-zinc-400 uppercase tracking-wider">{t('snake.gridSize')}</span>
+              <div className="grid grid-cols-3 gap-2">
+                {GRID_OPTIONS.map(g => (
+                  <button
+                    key={g}
+                    onClick={() => setSelectedGrid(g)}
+                    className={`px-3 py-2.5 rounded-lg text-sm font-semibold transition-colors ${
+                      selectedGrid === g
+                        ? 'bg-indigo-600 text-white'
+                        : 'bg-zinc-900 text-zinc-400 hover:bg-zinc-700 hover:text-zinc-200'
+                    }`}
+                  >
+                    {t(gridKeys[g])}
+                  </button>
+                ))}
               </div>
-            )}
-            <div className="flex items-center gap-2 mt-1">
+            </div>
+
+            {/* Start + Shop buttons */}
+            <div className="flex gap-2">
               <button
-                onClick={handleRestart}
-                className="px-6 py-2 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white text-sm font-semibold transition-colors"
+                onClick={handleStart}
+                className="flex-1 py-3 rounded-lg text-white text-lg font-bold transition-opacity hover:opacity-90"
+                style={{ backgroundColor: skinColors.body }}
               >
-                {t('game.playAgain')}
+                {t('snake.start')}
               </button>
               <button
-                onClick={() => { handleRestart(); setTimeout(() => shop.setShowShop(true), 0); }}
-                className="px-4 py-2 rounded-lg bg-amber-950/60 border border-amber-800/30 text-amber-400 text-sm font-semibold hover:bg-amber-950/80 transition-colors"
+                onClick={() => shop.setShowShop(true)}
+                className="px-5 py-3 rounded-lg bg-amber-600 hover:bg-amber-500 text-white font-bold text-lg transition-colors"
               >
                 {t('skinShop.title')}
               </button>
             </div>
           </div>
-        )}
+
+          {/* Personal best list (mobile only) */}
+          <div className="lg:hidden">
+            <ScoreboardPanel
+              gameId="snake"
+              scores={pb.scores}
+              lastInsertId={pb.lastInsertId}
+              isNewBest={pb.isNewBest}
+              onClear={pb.clear}
+            />
+          </div>
+        </div>
+
+        {/* ── Sidebar scoreboard (desktop only) ──────────────────────── */}
+        <aside className="hidden lg:block absolute right-0 top-0 w-[240px]">
+          <div className="flex flex-col gap-3">
+            <ScoreboardPanel
+              gameId="snake"
+              scores={pb.scores}
+              lastInsertId={pb.lastInsertId}
+              isNewBest={pb.isNewBest}
+              onClear={pb.clear}
+            />
+          </div>
+        </aside>
+      </div>
+    );
+  }
+
+  return (
+    <div className="relative w-full flex-1 min-h-0">
+      <div className="flex flex-col items-center gap-3 py-2 px-4 flex-1 min-w-0">
+        {/* Cosmic skin CSS animations */}
+        {isCosmicSkin && <style dangerouslySetInnerHTML={{ __html: COSMIC_STYLES }} />}
+
+        {/* ── Header ───────────────────────────────────────────────────── */}
+        <div className="w-full max-w-[420px] flex items-center gap-3">
+          <span className="text-4xl font-black text-zinc-100 tracking-tight mr-auto">{t('game.name.snake')}</span>
+          <ScoreBox label={t('game.score')} value={state.score} />
+          <ScoreBox label={t('game.best')}  value={state.best} />
+          <button
+            onClick={handleRestart}
+            className="px-4 py-2 rounded-lg bg-zinc-700 hover:bg-zinc-600 text-zinc-100 text-sm font-semibold transition-colors shrink-0"
+          >
+            {t('game.new')}
+          </button>
+        </div>
+
+        {/* ── Board ────────────────────────────────────────────────────── */}
+        <div className="relative w-full max-w-[420px] touch-none" {...swipeHandlers}>
+          <div
+            className="p-2 rounded-xl bg-zinc-800 border border-zinc-700/60 shadow-lg shadow-black/30"
+            style={{
+              display:             'grid',
+              gridTemplateColumns: `repeat(${gridSize}, 1fr)`,
+              gap:                 gridSize > 20 ? '0.5px' : '1px',
+            }}
+          >
+            {Array.from({ length: gridSize * gridSize }, (_, i) => {
+              const x      = i % gridSize;
+              const y      = Math.floor(i / gridSize);
+              const posKey = `${x},${y}`;
+              const data   = cellMap.get(posKey) ?? { kind: 'empty' as const };
+
+              const cs = cellStyle(data, skinColors, isCosmicSkin);
+              return (
+                <div
+                  key={`${posKey}-${data.kind}`}
+                  className={`aspect-square relative ${cs.className}`}
+                  style={cs.style}
+                >
+                  {data.kind === 'head' && <HeadEyes dir={state.direction} />}
+                  {data.kind === 'food' && <FoodVisual color={skinColors.food} isCosmic={isCosmicSkin} />}
+                </div>
+              );
+            })}
+          </div>
+
+          {/* Countdown overlay */}
+          {phase === 'countdown' && (
+            <div className="absolute inset-0 rounded-xl bg-zinc-950/75 flex items-center justify-center z-20 cd-overlay backdrop-blur-[1px]">
+              <span
+                key={cdNum}
+                className={`cd-number font-black select-none ${
+                  cdNum === 0 ? 'text-5xl text-emerald-400' : 'text-7xl text-zinc-100'
+                }`}
+              >
+                {cdNum === 0 ? t('game.go') : cdNum}
+              </span>
+            </div>
+          )}
+
+          {/* Pause overlay */}
+          {phase === 'paused' && (
+            <div className="absolute inset-0 rounded-xl bg-zinc-950/80 flex flex-col items-center justify-center gap-3 backdrop-blur-[2px] z-10">
+              <p className="text-2xl font-black text-zinc-100">{t('game.paused')}</p>
+              <p className="text-sm text-zinc-500">{t('tetris.pressP')}</p>
+              <button
+                onClick={togglePause}
+                className="mt-1 px-6 py-2 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white text-sm font-semibold transition-colors"
+              >
+                {t('game.resume')}
+              </button>
+            </div>
+          )}
+
+          {/* Game-over overlay */}
+          {phase === 'over' && (
+            <div className="absolute inset-0 rounded-xl bg-zinc-950/85 flex flex-col items-center justify-center gap-3 backdrop-blur-[2px] z-10">
+              <p className="text-2xl font-black text-zinc-100">{t('game.over')}</p>
+              <p className="text-sm text-zinc-400">{t('game.score')}: {state.score}</p>
+              {state.score > 0 && (
+                <div className="flex items-center gap-1.5 text-amber-400 font-bold text-sm">
+                  <span className="text-base">●</span> +{state.score}
+                </div>
+              )}
+              <div className="flex items-center gap-2 mt-1">
+                <button
+                  onClick={handleRestart}
+                  className="px-6 py-2 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white text-sm font-semibold transition-colors"
+                >
+                  {t('game.playAgain')}
+                </button>
+                <button
+                  onClick={() => { handleRestart(); setTimeout(() => shop.setShowShop(true), 0); }}
+                  className="px-4 py-2 rounded-lg bg-amber-950/60 border border-amber-800/30 text-amber-400 text-sm font-semibold hover:bg-amber-950/80 transition-colors"
+                >
+                  {t('skinShop.title')}
+                </button>
+              </div>
+            </div>
+          )}
+        </div>
+
+        {/* ── Mode badge ─────────────────────────────────────────────── */}
+        <div className="flex items-center gap-2 text-xs text-zinc-500">
+          <span className="px-2 py-0.5 rounded bg-zinc-800 text-zinc-400 font-medium">{t(modeKeys[state.mode])}</span>
+          <span className="px-2 py-0.5 rounded bg-zinc-800 text-zinc-400 font-medium">{gridSize}&times;{gridSize}</span>
+        </div>
+
+        {/* ── Hint ─────────────────────────────────────────────────────── */}
+        <p className="text-xs text-zinc-600 text-center max-w-[320px]">
+          {t('snake.controls')}
+        </p>
+
+        {/* ── Personal best list (mobile only) ───────────────────────── */}
+        <div className="lg:hidden">
+          <ScoreboardPanel
+            gameId="snake"
+            scores={pb.scores}
+            lastInsertId={pb.lastInsertId}
+            isNewBest={pb.isNewBest}
+            onClear={pb.clear}
+          />
+        </div>
+
       </div>
 
-      {/* ── Mode badge ─────────────────────────────────────────────── */}
-      <div className="flex items-center gap-2 text-xs text-zinc-500">
-        <span className="px-2 py-0.5 rounded bg-zinc-800 text-zinc-400 font-medium">{t(modeKeys[state.mode])}</span>
-        <span className="px-2 py-0.5 rounded bg-zinc-800 text-zinc-400 font-medium">{gridSize}&times;{gridSize}</span>
-      </div>
-
-      {/* ── Hint ─────────────────────────────────────────────────────── */}
-      <p className="text-xs text-zinc-600 text-center max-w-[320px]">
-        {t('snake.controls')}
-      </p>
-
-      {/* ── Personal best list ───────────────────────────────────────── */}
-      <ScoreboardPanel
-        gameId="snake"
-        scores={pb.scores}
-        lastInsertId={pb.lastInsertId}
-        isNewBest={pb.isNewBest}
-        onClear={pb.clear}
-      />
-
+      {/* ── Sidebar scoreboard (desktop only) ──────────────────────── */}
+      <aside className="hidden lg:block absolute right-0 top-0 w-[240px]">
+        <div className="flex flex-col gap-3">
+          <ScoreboardPanel
+            gameId="snake"
+            scores={pb.scores}
+            lastInsertId={pb.lastInsertId}
+            isNewBest={pb.isNewBest}
+            onClear={pb.clear}
+          />
+        </div>
+      </aside>
     </div>
   );
 }

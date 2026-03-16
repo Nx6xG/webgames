@@ -14,6 +14,7 @@ import {
   saveCloudUnlockedCosmetics,
   saveCloudNickname,
   saveCloudProgression,
+  saveCloudRogueliteSave,
 } from '@/lib/cloudSync';
 
 const DEBOUNCE_MS = 1000;
@@ -95,5 +96,14 @@ export function useCloudSync() {
     [user, debounce],
   );
 
-  return { isActive, syncCosmetics, syncAchievements, syncStats, syncUnlockedCosmetics, syncNickname, syncProgression };
+  const syncRogueliteSave = useCallback(
+    (save: Record<string, unknown>) => {
+      const sb = getSupabase();
+      if (!sb || !user) return;
+      debounce('rogueliteSave', () => saveCloudRogueliteSave(sb, user.id, save));
+    },
+    [user, debounce],
+  );
+
+  return { isActive, syncCosmetics, syncAchievements, syncStats, syncUnlockedCosmetics, syncNickname, syncProgression, syncRogueliteSave };
 }

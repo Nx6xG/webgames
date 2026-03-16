@@ -557,7 +557,8 @@ export function FlappyGame() {
   }, [flap, togglePause, restart]);
 
   return (
-    <div className="flex flex-col items-center gap-2 sm:gap-3 w-full mx-auto select-none flex-1 min-h-0">
+    <div className="relative w-full flex-1 min-h-0">
+    <div className="flex flex-col items-center gap-2 sm:gap-3 w-full mx-auto select-none flex-1 min-w-0 min-h-0">
       {/* Score bar */}
       <div className="shrink-0 flex items-center justify-between w-full max-w-xl px-1">
         <div className="flex items-center gap-3">
@@ -936,8 +937,8 @@ export function FlappyGame() {
         <span>{t('flappy.controls.restart')}</span>
       </div>
 
-      {/* Personal best list */}
-      <div className="shrink-0 w-full flex justify-center pb-4">
+      {/* Personal best list (mobile) */}
+      <div className="shrink-0 w-full flex justify-center pb-4 lg:hidden">
         <ScoreboardPanel
           gameId="flappy"
           scores={pb.scores}
@@ -946,6 +947,20 @@ export function FlappyGame() {
           onClear={pb.clear}
         />
       </div>
+    </div>
+
+    {/* Sidebar scoreboard (desktop) */}
+    <aside className="hidden lg:block absolute right-0 top-0 w-[240px]">
+      <div className="flex flex-col gap-3">
+        <ScoreboardPanel
+          gameId="flappy"
+          scores={pb.scores}
+          lastInsertId={pb.lastInsertId}
+          isNewBest={pb.isNewBest}
+          onClear={pb.clear}
+        />
+      </div>
+    </aside>
     </div>
   );
 }

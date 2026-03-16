@@ -849,10 +849,10 @@ export function UnoGame({ wsUrl, gameId, initialRoomCode, quickPlay: isQuickPlay
         <div className={`relative min-w-0 flex flex-col items-center ${gapMain} max-w-3xl mx-auto w-full`}>
           <ReconnectBanner mp={mp} />
 
-          {/* ── UNO announcement overlay ──────────────────────────────── */}
+          {/* ── UNO announcement overlay (centered on game area, not viewport) ── */}
           {unoAnnouncement && (
             <div
-              className="fixed inset-0 z-50 flex items-center justify-center pointer-events-none"
+              className="absolute inset-0 z-50 flex items-center justify-center pointer-events-none"
               style={{
                 animation: unoAnnounceFading
                   ? 'uno-announce-out 0.5s ease-in forwards'
@@ -1364,22 +1364,37 @@ export function UnoGame({ wsUrl, gameId, initialRoomCode, quickPlay: isQuickPlay
                   </div>
 
                   {/* UNO call button */}
-                  {myHand.length <= 2 && gs.phase === 'playing' && !gs.players[myIdx]?.calledUno && (
-                    <button
-                      onClick={handleCallUno}
-                      className="font-black tracking-wide text-white cursor-pointer border-0 outline-none"
-                      style={{
-                        padding: compact ? '10px 28px' : '14px 40px',
-                        fontSize: compact ? 18 : 22,
-                        borderRadius: 16,
-                        background: 'linear-gradient(145deg, #dc2626, #b91c1c)',
-                        boxShadow: '0 0 24px rgba(239,68,68,0.35), 0 4px 16px rgba(0,0,0,0.3), inset 0 1px 0 rgba(255,255,255,0.1)',
-                        animation: 'uno-uno-throb 1.5s ease-in-out infinite',
-                      }}
-                    >
-                      UNO!
-                    </button>
-                  )}
+                  {myHand.length <= 2 && gs.phase === 'playing' && !gs.players[myIdx]?.calledUno && (() => {
+                    // Urgent: it's your turn and you have 2 cards (about to play one → must call before playing)
+                    // or you have 1 card and forgot to call (penalty imminent on next action)
+                    const urgent = isMyTurn && myHand.length <= 2;
+                    return (
+                      <button
+                        onClick={handleCallUno}
+                        className="font-black tracking-wide text-white cursor-pointer border-0 outline-none"
+                        style={{
+                          padding: compact ? '12px 32px' : '16px 44px',
+                          fontSize: compact ? 20 : 26,
+                          borderRadius: 18,
+                          background: urgent
+                            ? 'linear-gradient(145deg, #dc2626, #991b1b)'
+                            : 'linear-gradient(145deg, #b91c1c, #7f1d1d)',
+                          boxShadow: urgent
+                            ? '0 0 30px rgba(239,68,68,0.5), 0 0 60px rgba(239,68,68,0.2), 0 4px 16px rgba(0,0,0,0.3), inset 0 1px 0 rgba(255,255,255,0.15)'
+                            : '0 0 16px rgba(239,68,68,0.2), 0 4px 12px rgba(0,0,0,0.3), inset 0 1px 0 rgba(255,255,255,0.1)',
+                          animation: urgent ? 'uno-uno-throb 0.8s ease-in-out infinite' : 'uno-uno-throb 2s ease-in-out infinite',
+                          border: urgent ? '2px solid rgba(252,165,165,0.4)' : '2px solid transparent',
+                        }}
+                      >
+                        UNO!
+                        {urgent && (
+                          <span style={{ display: 'block', fontSize: compact ? 9 : 10, fontWeight: 600, opacity: 0.8, marginTop: 2, letterSpacing: '0.08em' }}>
+                            {t('uno.callNow') !== 'uno.callNow' ? t('uno.callNow') : 'JETZT!'}
+                          </span>
+                        )}
+                      </button>
+                    );
+                  })()}
                 </div>
               )}
 

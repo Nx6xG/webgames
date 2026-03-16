@@ -754,143 +754,175 @@ export function PacmanGame() {
   // ── Menu screen ─────────────────────────────────────────────────────────────
   if (phase === 'menu') {
     return (
-      <div className="flex flex-col items-center gap-3 py-2 px-4">
-        {/* Header */}
-        <div className="w-full max-w-[440px] flex items-center gap-3">
-          <span className="text-4xl font-black text-zinc-100 tracking-tight mr-auto">Pac-Man</span>
-          <ScoreBox label={t('game.best')} value={bestScore} />
-        </div>
-
-        {/* Config card */}
-        <div className="w-full max-w-[440px] rounded-xl bg-zinc-800 border border-zinc-700/60 shadow-lg shadow-black/30 p-6 flex flex-col gap-6">
-          {/* Difficulty */}
-          <div className="flex flex-col gap-2">
-            <span className="text-sm font-semibold text-zinc-400 uppercase tracking-wider">{t('pacman.difficulty')}</span>
-            <div className="grid grid-cols-3 gap-2">
-              {DIFFICULTIES.map(d => (
-                <button
-                  key={d}
-                  onClick={() => setDifficulty(d)}
-                  className={`px-3 py-2.5 rounded-lg text-sm font-semibold transition-colors ${
-                    difficulty === d
-                      ? 'bg-indigo-600 text-white'
-                      : 'bg-zinc-900 text-zinc-400 hover:bg-zinc-700 hover:text-zinc-200'
-                  }`}
-                >
-                  {t(diffKeys[d])}
-                </button>
-              ))}
-            </div>
+      <div className="relative w-full flex-1 min-h-0">
+        <div className="flex flex-col items-center gap-3 py-2 px-4 flex-1 min-w-0">
+          {/* Header */}
+          <div className="w-full max-w-[440px] flex items-center gap-3">
+            <span className="text-4xl font-black text-zinc-100 tracking-tight mr-auto">Pac-Man</span>
+            <ScoreBox label={t('game.best')} value={bestScore} />
           </div>
 
-          {/* Controls info */}
-          <p className="text-xs text-zinc-500 text-center">{t('pacman.controls')}</p>
+          {/* Config card */}
+          <div className="w-full max-w-[440px] rounded-xl bg-zinc-800 border border-zinc-700/60 shadow-lg shadow-black/30 p-6 flex flex-col gap-6">
+            {/* Difficulty */}
+            <div className="flex flex-col gap-2">
+              <span className="text-sm font-semibold text-zinc-400 uppercase tracking-wider">{t('pacman.difficulty')}</span>
+              <div className="grid grid-cols-3 gap-2">
+                {DIFFICULTIES.map(d => (
+                  <button
+                    key={d}
+                    onClick={() => setDifficulty(d)}
+                    className={`px-3 py-2.5 rounded-lg text-sm font-semibold transition-colors ${
+                      difficulty === d
+                        ? 'bg-indigo-600 text-white'
+                        : 'bg-zinc-900 text-zinc-400 hover:bg-zinc-700 hover:text-zinc-200'
+                    }`}
+                  >
+                    {t(diffKeys[d])}
+                  </button>
+                ))}
+              </div>
+            </div>
 
-          {/* Start button */}
-          <button
-            onClick={handleStart}
-            className="w-full py-3 rounded-lg bg-yellow-500 hover:bg-yellow-400 text-zinc-900 text-lg font-bold transition-colors"
-          >
-            {t('pacman.start')}
-          </button>
+            {/* Controls info */}
+            <p className="text-xs text-zinc-500 text-center">{t('pacman.controls')}</p>
+
+            {/* Start button */}
+            <button
+              onClick={handleStart}
+              className="w-full py-3 rounded-lg bg-yellow-500 hover:bg-yellow-400 text-zinc-900 text-lg font-bold transition-colors"
+            >
+              {t('pacman.start')}
+            </button>
+          </div>
+
+          {/* Scoreboard — mobile/tablet only */}
+          <div className="lg:hidden">
+            <ScoreboardPanel
+              gameId="pacman"
+              scores={pb.scores}
+              lastInsertId={pb.lastInsertId}
+              isNewBest={pb.isNewBest}
+              onClear={pb.clear}
+            />
+          </div>
         </div>
 
-        {/* Scoreboard */}
-        <ScoreboardPanel
-          gameId="pacman"
-          scores={pb.scores}
-          lastInsertId={pb.lastInsertId}
-          isNewBest={pb.isNewBest}
-          onClear={pb.clear}
-        />
+        <aside className="hidden lg:block absolute right-0 top-0 w-[240px]">
+          <div className="flex flex-col gap-3">
+            <ScoreboardPanel
+              gameId="pacman"
+              scores={pb.scores}
+              lastInsertId={pb.lastInsertId}
+              isNewBest={pb.isNewBest}
+              onClear={pb.clear}
+            />
+          </div>
+        </aside>
       </div>
     );
   }
 
   // ── Game screen ─────────────────────────────────────────────────────────────
   return (
-    <div className="flex flex-col items-center gap-3 py-2 px-4">
-      {/* Header */}
-      <div className="w-full max-w-[440px] flex items-center gap-3">
-        <span className="text-4xl font-black text-zinc-100 tracking-tight mr-auto">Pac-Man</span>
-        <ScoreBox label={t('pacman.score')} value={hudScore} />
-        <ScoreBox label={t('pacman.level')} value={hudLevel} />
-        <ScoreBox label={t('pacman.lives')} value={hudLives} />
-        <button
-          onClick={handleRestart}
-          className="px-4 py-2 rounded-lg bg-zinc-700 hover:bg-zinc-600 text-zinc-100 text-sm font-semibold transition-colors shrink-0"
-        >
-          {t('game.new')}
-        </button>
+    <div className="relative w-full flex-1 min-h-0">
+      <div className="flex flex-col items-center gap-3 py-2 px-4 flex-1 min-w-0">
+        {/* Header */}
+        <div className="w-full max-w-[440px] flex items-center gap-3">
+          <span className="text-4xl font-black text-zinc-100 tracking-tight mr-auto">Pac-Man</span>
+          <ScoreBox label={t('pacman.score')} value={hudScore} />
+          <ScoreBox label={t('pacman.level')} value={hudLevel} />
+          <ScoreBox label={t('pacman.lives')} value={hudLives} />
+          <button
+            onClick={handleRestart}
+            className="px-4 py-2 rounded-lg bg-zinc-700 hover:bg-zinc-600 text-zinc-100 text-sm font-semibold transition-colors shrink-0"
+          >
+            {t('game.new')}
+          </button>
+        </div>
+
+        {/* Canvas container */}
+        <div className="relative touch-none" {...swipeHandlers}>
+          <canvas
+            ref={canvasRef}
+            width={CANVAS_W}
+            height={CANVAS_H}
+            className="rounded-xl border border-zinc-700/60 shadow-lg shadow-black/30"
+            style={{ imageRendering: 'pixelated' }}
+          />
+
+          {/* Countdown overlay */}
+          {phase === 'countdown' && (
+            <div className="absolute inset-0 rounded-xl bg-zinc-950/75 flex items-center justify-center z-20 backdrop-blur-[1px]">
+              <span
+                key={cdNum}
+                className={`font-black select-none ${
+                  cdNum === 0 ? 'text-5xl text-emerald-400' : 'text-7xl text-zinc-100'
+                }`}
+              >
+                {cdNum === 0 ? t('game.go') : cdNum}
+              </span>
+            </div>
+          )}
+
+          {/* Pause overlay */}
+          {phase === 'paused' && (
+            <div className="absolute inset-0 rounded-xl bg-zinc-950/80 flex flex-col items-center justify-center gap-3 backdrop-blur-[2px] z-10">
+              <p className="text-2xl font-black text-zinc-100">{t('game.paused')}</p>
+              <p className="text-sm text-zinc-500">{t('pacman.controls')}</p>
+              <button
+                onClick={togglePause}
+                className="mt-1 px-6 py-2 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white text-sm font-semibold transition-colors"
+              >
+                {t('game.resume')}
+              </button>
+            </div>
+          )}
+
+          {/* Game over overlay */}
+          {phase === 'ended' && (
+            <div className="absolute inset-0 rounded-xl bg-zinc-950/85 flex flex-col items-center justify-center gap-3 backdrop-blur-[2px] z-10">
+              <p className="text-2xl font-black text-zinc-100">{t('game.over')}</p>
+              <p className="text-sm text-zinc-400">{t('pacman.score')}: {hudScore}</p>
+              <p className="text-sm text-zinc-500">{t('pacman.level')}: {hudLevel}</p>
+              <button
+                onClick={handleRestart}
+                className="px-6 py-2 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white text-sm font-semibold transition-colors"
+              >
+                {t('game.playAgain')}
+              </button>
+            </div>
+          )}
+        </div>
+
+        {/* Controls hint */}
+        <p className="text-xs text-zinc-600 text-center max-w-[320px]">
+          {t('pacman.controls')}
+        </p>
+
+        {/* Scoreboard — mobile/tablet only */}
+        <div className="lg:hidden">
+          <ScoreboardPanel
+            gameId="pacman"
+            scores={pb.scores}
+            lastInsertId={pb.lastInsertId}
+            isNewBest={pb.isNewBest}
+            onClear={pb.clear}
+          />
+        </div>
       </div>
 
-      {/* Canvas container */}
-      <div className="relative touch-none" {...swipeHandlers}>
-        <canvas
-          ref={canvasRef}
-          width={CANVAS_W}
-          height={CANVAS_H}
-          className="rounded-xl border border-zinc-700/60 shadow-lg shadow-black/30"
-          style={{ imageRendering: 'pixelated' }}
-        />
-
-        {/* Countdown overlay */}
-        {phase === 'countdown' && (
-          <div className="absolute inset-0 rounded-xl bg-zinc-950/75 flex items-center justify-center z-20 backdrop-blur-[1px]">
-            <span
-              key={cdNum}
-              className={`font-black select-none ${
-                cdNum === 0 ? 'text-5xl text-emerald-400' : 'text-7xl text-zinc-100'
-              }`}
-            >
-              {cdNum === 0 ? t('game.go') : cdNum}
-            </span>
-          </div>
-        )}
-
-        {/* Pause overlay */}
-        {phase === 'paused' && (
-          <div className="absolute inset-0 rounded-xl bg-zinc-950/80 flex flex-col items-center justify-center gap-3 backdrop-blur-[2px] z-10">
-            <p className="text-2xl font-black text-zinc-100">{t('game.paused')}</p>
-            <p className="text-sm text-zinc-500">{t('pacman.controls')}</p>
-            <button
-              onClick={togglePause}
-              className="mt-1 px-6 py-2 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white text-sm font-semibold transition-colors"
-            >
-              {t('game.resume')}
-            </button>
-          </div>
-        )}
-
-        {/* Game over overlay */}
-        {phase === 'ended' && (
-          <div className="absolute inset-0 rounded-xl bg-zinc-950/85 flex flex-col items-center justify-center gap-3 backdrop-blur-[2px] z-10">
-            <p className="text-2xl font-black text-zinc-100">{t('game.over')}</p>
-            <p className="text-sm text-zinc-400">{t('pacman.score')}: {hudScore}</p>
-            <p className="text-sm text-zinc-500">{t('pacman.level')}: {hudLevel}</p>
-            <button
-              onClick={handleRestart}
-              className="px-6 py-2 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white text-sm font-semibold transition-colors"
-            >
-              {t('game.playAgain')}
-            </button>
-          </div>
-        )}
-      </div>
-
-      {/* Controls hint */}
-      <p className="text-xs text-zinc-600 text-center max-w-[320px]">
-        {t('pacman.controls')}
-      </p>
-
-      {/* Scoreboard */}
-      <ScoreboardPanel
-        gameId="pacman"
-        scores={pb.scores}
-        lastInsertId={pb.lastInsertId}
-        isNewBest={pb.isNewBest}
-        onClear={pb.clear}
-      />
+      <aside className="hidden lg:block absolute right-0 top-0 w-[240px]">
+        <div className="flex flex-col gap-3">
+          <ScoreboardPanel
+            gameId="pacman"
+            scores={pb.scores}
+            lastInsertId={pb.lastInsertId}
+            isNewBest={pb.isNewBest}
+            onClear={pb.clear}
+          />
+        </div>
+      </aside>
     </div>
   );
 }

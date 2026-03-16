@@ -1436,7 +1436,8 @@ export function BreakoutGame() {
   const diffConfig = DIFF_CONFIG[difficulty];
 
   return (
-    <div className="flex flex-col items-center gap-2 flex-1 min-h-0" ref={wrapperRef}>
+    <div className="relative w-full flex-1 min-h-0">
+    <div className="flex flex-col items-center gap-2 flex-1 min-w-0 min-h-0" ref={wrapperRef}>
       {/* Stats bar */}
       {stats && (
         <div className="flex gap-6 text-xs text-zinc-500 tabular-nums">
@@ -1590,14 +1591,30 @@ export function BreakoutGame() {
         </button>
       </div>
 
-      {/* Personal best list */}
-      <ScoreboardPanel
-        gameId="breakout"
-        scores={pb.scores}
-        lastInsertId={pb.lastInsertId}
-        isNewBest={pb.isNewBest}
-        onClear={pb.clear}
-      />
+      {/* Personal best list (mobile) */}
+      <div className="lg:hidden">
+        <ScoreboardPanel
+          gameId="breakout"
+          scores={pb.scores}
+          lastInsertId={pb.lastInsertId}
+          isNewBest={pb.isNewBest}
+          onClear={pb.clear}
+        />
+      </div>
+    </div>
+
+    {/* Sidebar scoreboard (desktop) */}
+    <aside className="hidden lg:block absolute right-0 top-0 w-[240px]">
+      <div className="flex flex-col gap-3">
+        <ScoreboardPanel
+          gameId="breakout"
+          scores={pb.scores}
+          lastInsertId={pb.lastInsertId}
+          isNewBest={pb.isNewBest}
+          onClear={pb.clear}
+        />
+      </div>
+    </aside>
     </div>
   );
 }

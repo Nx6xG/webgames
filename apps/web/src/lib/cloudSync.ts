@@ -184,6 +184,27 @@ export async function saveCloudGameProgress(
     .upsert({ user_id: userId, data: progress }, { onConflict: 'user_id' });
 }
 
+// ── Roguelite save (stored in game progress) ─────────────────────────────────
+
+export async function fetchCloudRogueliteSave(
+  sb: SupabaseClient,
+  userId: string,
+): Promise<Record<string, unknown> | null> {
+  const progress = await fetchCloudGameProgress(sb, userId);
+  if (!progress) return null;
+  return (progress.asteroids_roguelite as Record<string, unknown>) ?? null;
+}
+
+export async function saveCloudRogueliteSave(
+  sb: SupabaseClient,
+  userId: string,
+  save: Record<string, unknown>,
+): Promise<void> {
+  const existing = await fetchCloudGameProgress(sb, userId) ?? {};
+  const merged = { ...existing, asteroids_roguelite: save };
+  await saveCloudGameProgress(sb, userId, merged);
+}
+
 // ── Merge helpers ────────────────────────────────────────────────────────────
 
 /** For each key, take the max of a and b. */
@@ -209,6 +230,71 @@ export function mergeUnlockedCosmetics(
     result[slot] = [...new Set([...(local[slot] ?? []), ...(cloud[slot] ?? [])])];
   }
   return result;
+}
+
+/** Merge two roguelite saves — takes the best of both. */
+export function mergeRogueliteSaves(
+  local: Record<string, unknown> | null,
+  cloud: Record<string, unknown> | null,
+): Record<string, unknown> {
+  if (!local) return cloud ?? {};
+  if (!cloud) return local;
+
+  // Numeric fields: take max
+  const numMax = (key: string) => Math.max(
+    (local[key] as number) ?? 0,
+    (cloud[key] as number) ?? 0,
+  );
+
+  // Array fields: union
+  const arrayUnion = (key: string) => [
+    ...new Set([
+      ...((local[key] as string[]) ?? []),
+      ...((cloud[key] as string[]) ?? []),
+    ]),
+  ];
+
+  // Upgrades: take max per upgrade
+  const localUpg = (local.upgrades as Record<string, number>) ?? {};
+  const cloudUpg = (cloud.upgrades as Record<string, number>) ?? {};
+  const mergedUpg: Record<string, number> = { ...cloudUpg };
+  for (const [k, v] of Object.entries(localUpg)) {
+    mergedUpg[k] = Math.max(mergedUpg[k] ?? 0, v);
+  }
+
+  // Bestiary: union, take max count per entry
+  const localBest = (local.bestiary as Record<string, { seen: boolean; count: number; firstWave?: number }>) ?? {};
+  const cloudBest = (cloud.bestiary as Record<string, { seen: boolean; count: number; firstWave?: number }>) ?? {};
+  const mergedBest: Record<string, { seen: boolean; count: number; firstWave?: number }> = {};
+  const allKeys = new Set([...Object.keys(localBest), ...Object.keys(cloudBest)]);
+  for (const key of allKeys) {
+    const l = localBest[key];
+    const c = cloudBest[key];
+    if (!l) { mergedBest[key] = c; continue; }
+    if (!c) { mergedBest[key] = l; continue; }
+    mergedBest[key] = {
+      seen: l.seen || c.seen,
+      count: Math.max(l.count, c.count),
+      firstWave: Math.min(l.firstWave ?? Infinity, c.firstWave ?? Infinity) === Infinity
+        ? undefined
+        : Math.min(l.firstWave ?? Infinity, c.firstWave ?? Infinity),
+    };
+  }
+
+  return {
+    scrap: numMax('scrap'),
+    upgrades: mergedUpg,
+    totalRuns: numMax('totalRuns'),
+    bestWave: numMax('bestWave'),
+    bestScore: numMax('bestScore'),
+    ascensionLevel: numMax('ascensionLevel'),
+    selectedShip: (cloud.selectedShip as string) ?? (local.selectedShip as string) ?? 'vanguard',
+    unlockedMilestones: arrayUnion('unlockedMilestones'),
+    bestiary: mergedBest,
+    totalBossesKilled: numMax('totalBossesKilled'),
+    totalAsteroidsKilled: numMax('totalAsteroidsKilled'),
+    bestRunScrap: numMax('bestRunScrap'),
+  };
 }
 
 // ── Profile bootstrap ────────────────────────────────────────────────────
@@ -421,6 +507,18 @@ export async function runInitialSync(
   // Merge game progress (union of arrays per game key)
   const mergedGameProgress = mergeGameProgress(localGameProgress, cloudGameProgress ?? {});
 
+  // Merge roguelite save (special handling — not array-based)
+  const localRlRaw = typeof window !== 'undefined' ? localStorage.getItem('webgames.asteroids.roguelite') : null;
+  const localRl = localRlRaw ? JSON.parse(localRlRaw) as Record<string, unknown> : null;
+  const cloudRl = (mergedGameProgress.asteroids_roguelite as Record<string, unknown>) ?? null;
+  if (localRl || cloudRl) {
+    const mergedRl = mergeRogueliteSaves(localRl, cloudRl);
+    if (typeof window !== 'undefined') {
+      localStorage.setItem('webgames.asteroids.roguelite', JSON.stringify(mergedRl));
+    }
+    mergedGameProgress.asteroids_roguelite = mergedRl;
+  }
+
   // Save merged → local
   saveCosmetics(mergedCosmetics);
   saveUnlocked(new Set(mergedUnlocked));
@@ -463,5 +561,12 @@ export async function loadCloudToLocal(
   if (cloudStats) saveStats(cloudStats);
   if (cloudUnlockedCosmetics) saveUnlockedCosmetics(cloudUnlockedCosmetics);
   if (cloudProgression) saveProgression(cloudProgression);
-  if (cloudGameProgress) saveGameProgress(cloudGameProgress);
+  if (cloudGameProgress) {
+    saveGameProgress(cloudGameProgress);
+    // Restore roguelite save from cloud
+    const cloudRl = (cloudGameProgress as Record<string, unknown>).asteroids_roguelite;
+    if (cloudRl && typeof window !== 'undefined') {
+      localStorage.setItem('webgames.asteroids.roguelite', JSON.stringify(cloudRl));
+    }
+  }
 }

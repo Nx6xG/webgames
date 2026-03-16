@@ -281,6 +281,9 @@ export function CurveFeverGame({ wsUrl, gameId, initialRoomCode, quickPlay: auto
     if (!gs || gs.phase !== 'playing') return;
     if (mp.isSpectator || replayMode) return;
 
+    // Reset steer ref so held keys re-send after round transitions
+    lastSteerRef.current = 'none';
+
     const pressed = new Set<string>();
 
     const onKeyDown = (e: KeyboardEvent) => {
@@ -308,7 +311,7 @@ export function CurveFeverGame({ wsUrl, gameId, initialRoomCode, quickPlay: auto
       window.removeEventListener('keydown', onKeyDown);
       window.removeEventListener('keyup', onKeyUp);
     };
-  }, [gs?.phase, mp.isSpectator, sendSteer]);
+  }, [gs?.phase, mp.isSpectator, sendSteer, gs?.round]);
 
   // ── Process death events → particles ──────────────────────────────────
   useEffect(() => {
@@ -1065,7 +1068,7 @@ export function CurveFeverGame({ wsUrl, gameId, initialRoomCode, quickPlay: auto
   }, [mp.roomMessages?.length, mp.globalMessages?.length, chatOpen]);
 
   // ── Lobby UI ─────────────────────────────────────────────────────────────
-  const showLobby = mp.phase === 'lobby' || (gs?.phase === 'lobby');
+  const showLobby = mp.phase === 'lobby' || (gs?.phase === 'lobby') || (mp.phase === 'waiting' && !gs);
   if (showLobby) {
     const inRoom = !!mp.roomCode;
 
@@ -1817,7 +1820,7 @@ export function CurveFeverGame({ wsUrl, gameId, initialRoomCode, quickPlay: auto
             )}
             <button
               onClick={mp.leaveRoom}
-              className="text-[11px] text-zinc-600 hover:text-zinc-400 transition-colors cursor-pointer"
+              className="px-4 py-1.5 rounded-lg border border-zinc-700/50 hover:bg-zinc-800 text-zinc-500 hover:text-zinc-300 text-xs transition-colors cursor-pointer"
             >
               {t('game.actions.leaveRoom')}
             </button>

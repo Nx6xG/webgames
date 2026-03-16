@@ -142,10 +142,7 @@ function useLineClearFlash(state: TetrisState) {
 
   useEffect(() => {
     if (!state.lastClear) return;
-    const cleared = new Set<number>();
-    const n = state.lastClear.linesCleared;
-    for (let i = 0; i < n; i++) cleared.add(i);
-    setFlashRows(cleared);
+    setFlashRows(new Set(state.lastClear.clearedRows));
     const timer = setTimeout(() => setFlashRows(new Set()), 200);
     return () => clearTimeout(timer);
   }, [state.lastClear]);
@@ -421,7 +418,8 @@ export function TetrisGame() {
   }, []);
 
   return (
-    <div className="flex flex-col items-center gap-3 flex-1 min-h-0">
+    <div className="relative w-full flex-1 min-h-0">
+      <div className="flex flex-col items-center gap-3 flex-1 min-h-0">
       {/* ── Game area — viewport-fitted ─────────────────────────────── */}
       <div className="flex flex-col items-center gap-2 sm:gap-3 w-full flex-1 min-h-0">
         {/* Board row: sidebars + board — fills available height */}
@@ -664,8 +662,8 @@ export function TetrisGame() {
         </div>
       </div>
 
-      {/* ── Personal best list — below the viewport-fitted game area ── */}
-      <div className="w-full flex justify-center">
+      {/* ── Personal best list — below the viewport-fitted game area (mobile only) ── */}
+      <div className="w-full flex justify-center lg:hidden">
         <ScoreboardPanel
           gameId="tetris"
           scores={pb.scores}
@@ -674,6 +672,20 @@ export function TetrisGame() {
           onClear={pb.clear}
         />
       </div>
+      </div>
+
+      {/* ── Sidebar — scoreboard (desktop only) ── */}
+      <aside className="hidden lg:block absolute right-0 top-0 w-[240px]">
+        <div className="flex flex-col gap-3">
+          <ScoreboardPanel
+            gameId="tetris"
+            scores={pb.scores}
+            lastInsertId={pb.lastInsertId}
+            isNewBest={pb.isNewBest}
+            onClear={pb.clear}
+          />
+        </div>
+      </aside>
     </div>
   );
 }

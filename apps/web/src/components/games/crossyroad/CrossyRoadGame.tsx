@@ -1722,7 +1722,8 @@ export function CrossyRoadGame() {
 
   // ── JSX ────────────────────────────────────────────────────────────
   return (
-    <div className="flex flex-col items-center gap-2 w-full mx-auto select-none flex-1 min-h-0">
+    <div className="relative w-full flex-1 min-h-0">
+    <div className="flex flex-col items-center gap-2 w-full mx-auto select-none flex-1 min-w-0 min-h-0">
       {/* Game area */}
       <div className="flex-1 min-h-0 w-full flex justify-center">
         <div
@@ -1900,9 +1901,9 @@ export function CrossyRoadGame() {
         </div>
       </div>
 
-      {/* Scoreboard — below the game, always readable */}
+      {/* Scoreboard — below the game, mobile/tablet only */}
       {phase === 'over' && (
-        <div className="shrink-0 w-full max-w-md pb-4">
+        <div className="shrink-0 w-full max-w-md pb-4 lg:hidden">
           <ScoreboardPanel
             gameId="crossyroad"
             scores={pb.scores}
@@ -1912,6 +1913,19 @@ export function CrossyRoadGame() {
           />
         </div>
       )}
+    </div>
+
+    <aside className="hidden lg:block absolute right-0 top-0 w-[240px]">
+      <div className="flex flex-col gap-3">
+        <ScoreboardPanel
+          gameId="crossyroad"
+          scores={pb.scores}
+          lastInsertId={pb.lastInsertId}
+          isNewBest={pb.isNewBest}
+          onClear={pb.clear}
+        />
+      </div>
+    </aside>
     </div>
   );
 }

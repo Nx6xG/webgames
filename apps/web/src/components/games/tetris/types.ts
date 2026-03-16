@@ -28,6 +28,8 @@ export type GameStatus = 'menu' | 'countdown' | 'running' | 'paused' | 'gameover
 export interface ClearInfo {
   linesCleared: number;
   scoreGained: number;
+  /** Original row indices (before removal) that were cleared. */
+  clearedRows: number[];
 }
 
 /** Complete game state — everything the UI needs to render one frame. */

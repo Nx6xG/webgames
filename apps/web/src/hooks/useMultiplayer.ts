@@ -424,7 +424,7 @@ export function useMultiplayer<TState extends AnyGameState = AnyGameState>(
       set((prev) => ({
         ...prev,
         phase: 'waiting',
-        gameState: null,
+        // Don't clear gameState — server re-creates initial state and sends game_state event
         rematchVotes: 0,
         myVotedRematch: false,
         rematchError: null,

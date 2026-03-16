@@ -463,248 +463,268 @@ export function MinesweeperGame() {
   // ── Render ──────────────────────────────────────────────────────────────────
 
   return (
-    <div className="flex flex-col items-center gap-3">
-      {/* Stats bar */}
-      {stats && stats.games > 0 && (
-        <div className="flex gap-6 text-xs text-zinc-500 tabular-nums">
-          <span>{t('minesweeper.stats.games')}: <b className="text-zinc-300">{stats.games}</b></span>
-          <span>{t('minesweeper.stats.wins')}: <b className="text-emerald-400">{stats.wins}</b></span>
-          <span>{t('minesweeper.stats.losses')}: <b className="text-rose-400">{stats.losses}</b></span>
-          {bestTime !== null && (
-            <span>{t('minesweeper.stats.bestTime')}: <b className="text-amber-400">{formatTime(bestTime)}</b></span>
-          )}
-        </div>
-      )}
-
-      {/* Menu */}
-      {phase === 'menu' && (
-        <div className="flex flex-col items-center gap-6 py-8">
-          <h2 className="text-4xl font-black text-white">Minesweeper</h2>
-          <p className="text-zinc-400 text-sm">{t('minesweeper.subtitle')}</p>
-
-          <div className="flex flex-col gap-3 w-64">
-            {(['easy', 'medium', 'hard'] as const).map((d) => {
-              const cfg = DIFF_CONFIG[d];
-              const easyWins = stats?.winsEasy ?? 0;
-              const mediumWins = stats?.winsMedium ?? 0;
-              const cloudUnlocks = (loadGameProgress().minesweeper as { unlockedDifficulties?: string[] } | undefined)?.unlockedDifficulties ?? [];
-              const locked =
-                (d === 'medium' && easyWins < 2 && !cloudUnlocks.includes('medium')) ||
-                (d === 'hard' && mediumWins < 5 && !cloudUnlocks.includes('hard'));
-              const unlockLabel =
-                d === 'medium' ? `🔒 ${easyWins}/2 Easy` :
-                d === 'hard' ? `🔒 ${mediumWins}/5 Medium` : null;
-              return (
-                <button
-                  key={d}
-                  onClick={() => !locked && startGame(d)}
-                  disabled={locked}
-                  className={`flex items-center justify-between px-5 py-3 rounded-lg border transition-colors ${
-                    locked
-                      ? 'bg-zinc-900/40 border-zinc-800/40 cursor-not-allowed opacity-60'
-                      : 'bg-zinc-800/80 hover:bg-zinc-700/80 border-zinc-700 hover:border-zinc-600'
-                  }`}
-                >
-                  <span className={`font-semibold ${locked ? 'text-zinc-500' : 'text-zinc-100'}`}>
-                    {t(`minesweeper.diff.${d}`)}
-                  </span>
-                  {locked && unlockLabel
-                    ? <span className="text-[10px] text-zinc-500">{unlockLabel}</span>
-                    : <span className="text-xs text-zinc-500 tabular-nums">
-                        {cfg.rows}×{cfg.cols} · {cfg.mines} {t('minesweeper.mines')}
-                      </span>}
-                </button>
-              );
-            })}
-
-            <button
-              onClick={() => startGame('medium', `minesweeper_daily_${getTodayStr()}`)}
-              className="flex items-center justify-center gap-2 px-5 py-3 rounded-lg border border-amber-800/50 bg-amber-950/30 hover:bg-amber-950/50 text-amber-300 text-sm font-semibold transition-colors"
-            >
-              <span>📅</span> {t('daily.puzzle')} <span className="text-xs text-amber-500/70">({t('daily.puzzleHint')})</span>
-            </button>
-
-            {hasSaved && (
-              <button
-                onClick={handleContinue}
-                className="flex items-center justify-center px-5 py-3 rounded-lg border border-emerald-700/60 bg-emerald-950/40 hover:bg-emerald-950/60 text-emerald-300 text-sm font-semibold transition-colors"
-              >
-                {t('game.continue')}
-              </button>
+    <div className="relative w-full flex-1 min-h-0">
+      {/* ── Game column ──────────────────────────────────────────────── */}
+      <div className="flex flex-col items-center gap-3 flex-1 min-w-0">
+        {/* Stats bar */}
+        {stats && stats.games > 0 && (
+          <div className="flex gap-6 text-xs text-zinc-500 tabular-nums">
+            <span>{t('minesweeper.stats.games')}: <b className="text-zinc-300">{stats.games}</b></span>
+            <span>{t('minesweeper.stats.wins')}: <b className="text-emerald-400">{stats.wins}</b></span>
+            <span>{t('minesweeper.stats.losses')}: <b className="text-rose-400">{stats.losses}</b></span>
+            {bestTime !== null && (
+              <span>{t('minesweeper.stats.bestTime')}: <b className="text-amber-400">{formatTime(bestTime)}</b></span>
             )}
           </div>
-        </div>
-      )}
+        )}
 
-      {/* Game area */}
-      {phase !== 'menu' && (
-        <div className="flex flex-col items-center gap-3">
-          {/* HUD */}
-          <div className="flex items-center gap-6 text-sm tabular-nums">
-            <div className="flex items-center gap-1.5 text-rose-400">
-              <span>💣</span>
-              <span className="font-bold">{minesRemaining}</span>
-            </div>
-            <div className="px-3 py-1 rounded bg-zinc-800 text-zinc-200 font-mono text-lg font-bold min-w-[72px] text-center">
-              {formatTime(elapsed)}
-            </div>
-            <button
-              onClick={() => setFlagMode(!flagMode)}
-              className={`px-3 py-1 rounded text-sm font-medium transition-colors border ${
-                flagMode
-                  ? 'bg-amber-900/40 border-amber-700/60 text-amber-300'
-                  : 'bg-zinc-800 border-zinc-700 text-zinc-400 hover:bg-zinc-700'
-              }`}
-              title={t('minesweeper.flagMode')}
-            >
-              🚩
-            </button>
-            <button
-              onClick={() => startGame(difficulty)}
-              className="px-3 py-1 rounded bg-zinc-800 hover:bg-zinc-700 text-zinc-300 text-xs font-medium transition-colors border border-zinc-700"
-            >
-              {t('minesweeper.restart')}
-            </button>
-          </div>
+        {/* Menu */}
+        {phase === 'menu' && (
+          <div className="flex flex-col items-center gap-6 py-8">
+            <h2 className="text-4xl font-black text-white">Minesweeper</h2>
+            <p className="text-zinc-400 text-sm">{t('minesweeper.subtitle')}</p>
 
-          {/* Grid */}
-          <div
-            className="inline-grid border border-zinc-700 rounded-lg overflow-hidden bg-zinc-900"
-            style={{
-              gridTemplateColumns: `repeat(${config.cols}, ${cellSize}px)`,
-              gap: '1px',
-              backgroundColor: 'var(--color-zinc-800)',
-            }}
-            onContextMenu={(e) => e.preventDefault()}
-          >
-            {grid.map((row, r) =>
-              row.map((cell, c) => {
-                const isClickedMine = clickedMine && clickedMine[0] === r && clickedMine[1] === c;
-
-                let bgClass = 'bg-zinc-800 hover:bg-zinc-700 cursor-pointer';
-                let content: React.ReactNode = null;
-
-                if (cell.state === 'revealed') {
-                  if (cell.mine) {
-                    bgClass = isClickedMine
-                      ? 'bg-red-900/80'
-                      : 'bg-zinc-900/80';
-                    content = <span className="text-base">💣</span>;
-                  } else {
-                    bgClass = 'bg-zinc-900/60 cursor-default';
-                    if (cell.adjacent > 0) {
-                      content = (
-                        <span className={`font-bold text-sm ${NUM_COLORS[cell.adjacent] ?? 'text-zinc-400'}`}>
-                          {cell.adjacent}
-                        </span>
-                      );
-                    }
-                  }
-                } else if (cell.state === 'flagged') {
-                  bgClass = 'bg-zinc-800 cursor-pointer';
-                  content = <span className="text-sm">🚩</span>;
-                }
-
-                const gameOver = phase === 'won' || phase === 'lost' || phase === 'paused';
-
-                // Staggered pop animation for flood-revealed cells (max 300ms total delay)
-                const revealAnim = cell.state === 'revealed' && !cell.mine && cell.revealOrder >= 0
-                  ? { animation: `ms-pop 120ms ease-out ${Math.min(cell.revealOrder * 8, 300)}ms both` }
-                  : undefined;
-
+            <div className="flex flex-col gap-3 w-64">
+              {(['easy', 'medium', 'hard'] as const).map((d) => {
+                const cfg = DIFF_CONFIG[d];
+                const easyWins = stats?.winsEasy ?? 0;
+                const mediumWins = stats?.winsMedium ?? 0;
+                const cloudUnlocks = (loadGameProgress().minesweeper as { unlockedDifficulties?: string[] } | undefined)?.unlockedDifficulties ?? [];
+                const locked =
+                  (d === 'medium' && easyWins < 2 && !cloudUnlocks.includes('medium')) ||
+                  (d === 'hard' && mediumWins < 5 && !cloudUnlocks.includes('hard'));
+                const unlockLabel =
+                  d === 'medium' ? `🔒 ${easyWins}/2 Easy` :
+                  d === 'hard' ? `🔒 ${mediumWins}/5 Medium` : null;
                 return (
                   <button
-                    key={`${r}-${c}`}
-                    className={`flex items-center justify-center transition-colors select-none ${bgClass} ${gameOver ? 'pointer-events-none' : ''}`}
-                    style={{ width: cellSize, height: cellSize, fontSize: cellSize * 0.4, ...revealAnim }}
-                    onClick={() => handleCellClick(r, c)}
-                    onContextMenu={(e) => handleCellRightClick(e, r, c)}
-                    disabled={gameOver}
+                    key={d}
+                    onClick={() => !locked && startGame(d)}
+                    disabled={locked}
+                    className={`flex items-center justify-between px-5 py-3 rounded-lg border transition-colors ${
+                      locked
+                        ? 'bg-zinc-900/40 border-zinc-800/40 cursor-not-allowed opacity-60'
+                        : 'bg-zinc-800/80 hover:bg-zinc-700/80 border-zinc-700 hover:border-zinc-600'
+                    }`}
                   >
-                    {content}
+                    <span className={`font-semibold ${locked ? 'text-zinc-500' : 'text-zinc-100'}`}>
+                      {t(`minesweeper.diff.${d}`)}
+                    </span>
+                    {locked && unlockLabel
+                      ? <span className="text-[10px] text-zinc-500">{unlockLabel}</span>
+                      : <span className="text-xs text-zinc-500 tabular-nums">
+                          {cfg.rows}×{cfg.cols} · {cfg.mines} {t('minesweeper.mines')}
+                        </span>}
                   </button>
                 );
-              }),
-            )}
-          </div>
+              })}
 
-          {/* Paused overlay */}
-          {phase === 'paused' && (
-            <div className="flex flex-col items-center gap-2 py-4">
-              <h3 className="text-2xl font-black text-zinc-100">{t('game.paused')}</h3>
               <button
-                onClick={() => setPhase('playing')}
-                className="px-6 py-2.5 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-white font-bold transition-colors"
+                onClick={() => startGame('medium', `minesweeper_daily_${getTodayStr()}`)}
+                className="flex items-center justify-center gap-2 px-5 py-3 rounded-lg border border-amber-800/50 bg-amber-950/30 hover:bg-amber-950/50 text-amber-300 text-sm font-semibold transition-colors"
               >
-                {t('game.resume')}
+                <span>📅</span> {t('daily.puzzle')} <span className="text-xs text-amber-500/70">({t('daily.puzzleHint')})</span>
+              </button>
+
+              {hasSaved && (
+                <button
+                  onClick={handleContinue}
+                  className="flex items-center justify-center px-5 py-3 rounded-lg border border-emerald-700/60 bg-emerald-950/40 hover:bg-emerald-950/60 text-emerald-300 text-sm font-semibold transition-colors"
+                >
+                  {t('game.continue')}
+                </button>
+              )}
+            </div>
+          </div>
+        )}
+
+        {/* Game area */}
+        {phase !== 'menu' && (
+          <div className="flex flex-col items-center gap-3">
+            {/* HUD */}
+            <div className="flex items-center gap-6 text-sm tabular-nums">
+              <div className="flex items-center gap-1.5 text-rose-400">
+                <span>💣</span>
+                <span className="font-bold">{minesRemaining}</span>
+              </div>
+              <div className="px-3 py-1 rounded bg-zinc-800 text-zinc-200 font-mono text-lg font-bold min-w-[72px] text-center">
+                {formatTime(elapsed)}
+              </div>
+              <button
+                onClick={() => setFlagMode(!flagMode)}
+                className={`px-3 py-1 rounded text-sm font-medium transition-colors border ${
+                  flagMode
+                    ? 'bg-amber-900/40 border-amber-700/60 text-amber-300'
+                    : 'bg-zinc-800 border-zinc-700 text-zinc-400 hover:bg-zinc-700'
+                }`}
+                title={t('minesweeper.flagMode')}
+              >
+                🚩
+              </button>
+              <button
+                onClick={() => startGame(difficulty)}
+                className="px-3 py-1 rounded bg-zinc-800 hover:bg-zinc-700 text-zinc-300 text-xs font-medium transition-colors border border-zinc-700"
+              >
+                {t('minesweeper.restart')}
               </button>
             </div>
-          )}
 
-          {/* Win overlay */}
-          {phase === 'won' && (
-            <div className="flex flex-col items-center gap-2 py-4">
-              <h3 className="text-2xl font-black text-emerald-400">{t('minesweeper.win')}</h3>
-              <div className="flex flex-col items-center gap-1 text-zinc-300">
-                <span>{t('minesweeper.time')}: <b>{formatTime(elapsed)}</b></span>
-                <span className="text-sm text-zinc-500">
-                  {t(`minesweeper.diff.${difficulty}`)}
-                  {perfectFlags && <span className="text-amber-400 ml-2">{t('minesweeper.perfectFlags')}</span>}
-                </span>
-              </div>
-              <div className="flex gap-2 mt-3">
+            {/* Grid */}
+            <div
+              className="inline-grid border border-zinc-700 rounded-lg overflow-hidden bg-zinc-900"
+              style={{
+                gridTemplateColumns: `repeat(${config.cols}, ${cellSize}px)`,
+                gap: '1px',
+                backgroundColor: 'var(--color-zinc-800)',
+              }}
+              onContextMenu={(e) => e.preventDefault()}
+            >
+              {grid.map((row, r) =>
+                row.map((cell, c) => {
+                  const isClickedMine = clickedMine && clickedMine[0] === r && clickedMine[1] === c;
+
+                  let bgClass = 'bg-zinc-800 hover:bg-zinc-700 cursor-pointer';
+                  let content: React.ReactNode = null;
+
+                  if (cell.state === 'revealed') {
+                    if (cell.mine) {
+                      bgClass = isClickedMine
+                        ? 'bg-red-900/80'
+                        : 'bg-zinc-900/80';
+                      content = <span className="text-base">💣</span>;
+                    } else {
+                      bgClass = 'bg-zinc-900/60 cursor-default';
+                      if (cell.adjacent > 0) {
+                        content = (
+                          <span className={`font-bold text-sm ${NUM_COLORS[cell.adjacent] ?? 'text-zinc-400'}`}>
+                            {cell.adjacent}
+                          </span>
+                        );
+                      }
+                    }
+                  } else if (cell.state === 'flagged') {
+                    bgClass = 'bg-zinc-800 cursor-pointer';
+                    content = <span className="text-sm">🚩</span>;
+                  }
+
+                  const gameOver = phase === 'won' || phase === 'lost' || phase === 'paused';
+
+                  // Staggered pop animation for flood-revealed cells (max 300ms total delay)
+                  const revealAnim = cell.state === 'revealed' && !cell.mine && cell.revealOrder >= 0
+                    ? { animation: `ms-pop 120ms ease-out ${Math.min(cell.revealOrder * 8, 300)}ms both` }
+                    : undefined;
+
+                  return (
+                    <button
+                      key={`${r}-${c}`}
+                      className={`flex items-center justify-center transition-colors select-none ${bgClass} ${gameOver ? 'pointer-events-none' : ''}`}
+                      style={{ width: cellSize, height: cellSize, fontSize: cellSize * 0.4, ...revealAnim }}
+                      onClick={() => handleCellClick(r, c)}
+                      onContextMenu={(e) => handleCellRightClick(e, r, c)}
+                      disabled={gameOver}
+                    >
+                      {content}
+                    </button>
+                  );
+                }),
+              )}
+            </div>
+
+            {/* Paused overlay */}
+            {phase === 'paused' && (
+              <div className="flex flex-col items-center gap-2 py-4">
+                <h3 className="text-2xl font-black text-zinc-100">{t('game.paused')}</h3>
                 <button
-                  onClick={() => startGame(difficulty)}
+                  onClick={() => setPhase('playing')}
                   className="px-6 py-2.5 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-white font-bold transition-colors"
                 >
-                  {t('minesweeper.playAgain')}
-                </button>
-                <button
-                  onClick={() => setPhase('menu')}
-                  className="px-4 py-2.5 rounded-lg text-zinc-400 hover:text-zinc-200 transition-colors text-sm"
-                >
-                  {t('minesweeper.backToMenu')}
+                  {t('game.resume')}
                 </button>
               </div>
-            </div>
-          )}
+            )}
 
-          {/* Loss overlay */}
-          {phase === 'lost' && (
-            <div className="flex flex-col items-center gap-2 py-4">
-              <h3 className="text-2xl font-black text-rose-400">{t('minesweeper.lose')}</h3>
-              <span className="text-sm text-zinc-500">{t(`minesweeper.diff.${difficulty}`)}</span>
-              <div className="flex gap-2 mt-3">
-                <button
-                  onClick={() => startGame(difficulty)}
-                  className="px-6 py-2.5 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-white font-bold transition-colors"
-                >
-                  {t('minesweeper.playAgain')}
-                </button>
-                <button
-                  onClick={() => setPhase('menu')}
-                  className="px-4 py-2.5 rounded-lg text-zinc-400 hover:text-zinc-200 transition-colors text-sm"
-                >
-                  {t('minesweeper.backToMenu')}
-                </button>
+            {/* Win overlay */}
+            {phase === 'won' && (
+              <div className="flex flex-col items-center gap-2 py-4">
+                <h3 className="text-2xl font-black text-emerald-400">{t('minesweeper.win')}</h3>
+                <div className="flex flex-col items-center gap-1 text-zinc-300">
+                  <span>{t('minesweeper.time')}: <b>{formatTime(elapsed)}</b></span>
+                  <span className="text-sm text-zinc-500">
+                    {t(`minesweeper.diff.${difficulty}`)}
+                    {perfectFlags && <span className="text-amber-400 ml-2">{t('minesweeper.perfectFlags')}</span>}
+                  </span>
+                </div>
+                <div className="flex gap-2 mt-3">
+                  <button
+                    onClick={() => startGame(difficulty)}
+                    className="px-6 py-2.5 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-white font-bold transition-colors"
+                  >
+                    {t('minesweeper.playAgain')}
+                  </button>
+                  <button
+                    onClick={() => setPhase('menu')}
+                    className="px-4 py-2.5 rounded-lg text-zinc-400 hover:text-zinc-200 transition-colors text-sm"
+                  >
+                    {t('minesweeper.backToMenu')}
+                  </button>
+                </div>
               </div>
-            </div>
-          )}
+            )}
 
-          {/* Controls hint */}
-          <div className="text-xs text-zinc-600">
-            {t('minesweeper.controlsHint')}
+            {/* Loss overlay */}
+            {phase === 'lost' && (
+              <div className="flex flex-col items-center gap-2 py-4">
+                <h3 className="text-2xl font-black text-rose-400">{t('minesweeper.lose')}</h3>
+                <span className="text-sm text-zinc-500">{t(`minesweeper.diff.${difficulty}`)}</span>
+                <div className="flex gap-2 mt-3">
+                  <button
+                    onClick={() => startGame(difficulty)}
+                    className="px-6 py-2.5 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-white font-bold transition-colors"
+                  >
+                    {t('minesweeper.playAgain')}
+                  </button>
+                  <button
+                    onClick={() => setPhase('menu')}
+                    className="px-4 py-2.5 rounded-lg text-zinc-400 hover:text-zinc-200 transition-colors text-sm"
+                  >
+                    {t('minesweeper.backToMenu')}
+                  </button>
+                </div>
+              </div>
+            )}
+
+            {/* Controls hint */}
+            <div className="text-xs text-zinc-600">
+              {t('minesweeper.controlsHint')}
+            </div>
+
+            {/* Personal best list for current difficulty (mobile only) */}
+            <div className="lg:hidden">
+              <ScoreboardPanel
+                gameId={`minesweeper-${difficulty}`}
+                scores={pbMap[difficulty].scores}
+                lastInsertId={pbMap[difficulty].lastInsertId}
+                isNewBest={pbMap[difficulty].isNewBest}
+                onClear={pbMap[difficulty].clear}
+              />
+            </div>
           </div>
+        )}
+      </div>
 
-          {/* Personal best list for current difficulty */}
-          <ScoreboardPanel
-            gameId={`minesweeper-${difficulty}`}
-            scores={pbMap[difficulty].scores}
-            lastInsertId={pbMap[difficulty].lastInsertId}
-            isNewBest={pbMap[difficulty].isNewBest}
-            onClear={pbMap[difficulty].clear}
-          />
-        </div>
+      {/* ── Sidebar (desktop) ────────────────────────────────────────── */}
+      {phase !== 'menu' && (
+        <aside className="hidden lg:block absolute right-0 top-0 w-[240px]">
+          <div className="flex flex-col gap-3">
+            <ScoreboardPanel
+              gameId={`minesweeper-${difficulty}`}
+              scores={pbMap[difficulty].scores}
+              lastInsertId={pbMap[difficulty].lastInsertId}
+              isNewBest={pbMap[difficulty].isNewBest}
+              onClear={pbMap[difficulty].clear}
+            />
+          </div>
+        </aside>
       )}
     </div>
   );
