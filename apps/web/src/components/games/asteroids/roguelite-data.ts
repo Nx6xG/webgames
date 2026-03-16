@@ -9,6 +9,7 @@ import type {
   ArtifactDef,
   EliteModifier,
   WaveEventType,
+  MidWaveEventType,
   RunStats,
   ShipId,
   ShipDef,
@@ -112,6 +113,14 @@ export const PERMANENT_UPGRADES: PermanentUpgrade[] = [
     icon: '\u{1F6D1}',
     maxTier: 1,
     costs: [150],
+  },
+  {
+    id: 'range',
+    nameKey: 'asteroids.rl.upg.range',
+    descKey: 'asteroids.rl.upg.range.desc',
+    icon: '\u{1F4CF}',
+    maxTier: 5,
+    costs: [80, 250, 650, 1500, 3000],
   },
 ];
 
@@ -338,6 +347,7 @@ export interface AppliedStats {
   shieldRechargeMs: number;
   critChance: number;
   hasBrake: boolean;
+  bulletLifeMult: number;
 }
 
 export function getAppliedStats(
@@ -359,6 +369,7 @@ export function getAppliedStats(
     shieldRechargeMs: [Infinity, 45000, 30000, 20000][tier('shieldGen')] * (ship?.shieldRechargeMod ?? 1),
     critChance: [0, 0.08, 0.15, 0.22][tier('critStrike')],
     hasBrake: tier('retroThruster') >= 1,
+    bulletLifeMult: 1 + tier('range') * 0.15,
   };
 
   return base;
@@ -444,15 +455,47 @@ export const WAVE_EVENT_CONFIG: Record<WaveEventType, WaveEventConfig> = {
   scrapBonus:     { duration: 15000, nameKey: 'asteroids.rl.event.scrapBonus',     descKey: 'asteroids.rl.event.scrapBonus.desc' },
   asteroidSprint: { duration: 20000, nameKey: 'asteroids.rl.event.asteroidSprint', descKey: 'asteroids.rl.event.asteroidSprint.desc' },
   miniBossRush:   { duration: 30000, nameKey: 'asteroids.rl.event.miniBossRush',   descKey: 'asteroids.rl.event.miniBossRush.desc' },
+  meteorShower:   { duration: 12000, nameKey: 'asteroids.rl.event.meteorShower',   descKey: 'asteroids.rl.event.meteorShower.desc' },
+  repairStation:  { duration: 0,     nameKey: 'asteroids.rl.event.repairStation',  descKey: 'asteroids.rl.event.repairStation.desc' },
 };
 
 export function rollWaveEvent(wave: number): WaveEventType | null {
   if (wave < 5) return null;
-  if (Math.random() > 0.20) return null;
+  if (Math.random() > 0.25) return null;
   const roll = Math.random();
-  if (roll < 0.40) return 'scrapBonus';
-  if (roll < 0.75) return 'asteroidSprint';
-  return 'miniBossRush';
+  if (roll < 0.25) return 'scrapBonus';
+  if (roll < 0.45) return 'asteroidSprint';
+  if (roll < 0.60) return 'miniBossRush';
+  if (roll < 0.85) return 'meteorShower';
+  return 'repairStation';
+}
+
+// ---------------------------------------------------------------------------
+// Mid-wave events (occur during active waves)
+// ---------------------------------------------------------------------------
+
+export interface MidWaveEventConfig {
+  duration: number; // ms
+  nameKey: string;
+  color: string;
+}
+
+export const MID_WAVE_EVENT_CONFIG: Record<MidWaveEventType, MidWaveEventConfig> = {
+  solarFlare:    { duration: 6000,  nameKey: 'asteroids.rl.mid.solarFlare',    color: '#fbbf24' },
+  gravityWell:   { duration: 8000,  nameKey: 'asteroids.rl.mid.gravityWell',   color: '#a78bfa' },
+  powerSurge:    { duration: 5000,  nameKey: 'asteroids.rl.mid.powerSurge',    color: '#4ade80' },
+  asteroidSwarm: { duration: 1,     nameKey: 'asteroids.rl.mid.asteroidSwarm', color: '#ef4444' },
+};
+
+export function rollMidWaveEvent(wave: number): MidWaveEventType | null {
+  if (wave < 8) return null;
+  // 15% chance per roll
+  if (Math.random() > 0.15) return null;
+  const roll = Math.random();
+  if (roll < 0.30) return 'solarFlare';
+  if (roll < 0.55) return 'gravityWell';
+  if (roll < 0.80) return 'powerSurge';
+  return 'asteroidSwarm';
 }
 
 // ---------------------------------------------------------------------------
@@ -556,7 +599,7 @@ export const CURSES: CurseDef[] = [
   { id: 'famine', nameKey: 'asteroids.rl.curse.famine', descKey: 'asteroids.rl.curse.famine.desc', icon: '\u{1F6AB}', scrapMultiplier: 1.4, color: '#a1a1aa' },
   { id: 'darkness', nameKey: 'asteroids.rl.curse.darkness', descKey: 'asteroids.rl.curse.darkness.desc', icon: '\u{1F319}', scrapMultiplier: 1.5, color: '#1e1b4b' },
   { id: 'berserker', nameKey: 'asteroids.rl.curse.berserker', descKey: 'asteroids.rl.curse.berserker.desc', icon: '\u{1F525}', scrapMultiplier: 1.6, color: '#dc2626' },
-  { id: 'pilot', nameKey: 'asteroids.rl.curse.pilot', descKey: 'asteroids.rl.curse.pilot.desc', icon: '\u{1F3AE}', scrapMultiplier: 0.6, color: '#22d3ee' },
+  { id: 'pilot', nameKey: 'asteroids.rl.curse.pilot', descKey: 'asteroids.rl.curse.pilot.desc', icon: '\u{1F3AE}', scrapMultiplier: 0.35, color: '#22d3ee' },
 ];
 
 export function getCurseScrapMultiplier(curses: CurseId[]): number {

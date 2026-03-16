@@ -9,7 +9,7 @@ export type PermanentUpgradeId =
   | 'hull' | 'engine' | 'gyroscope' | 'caliber'
   | 'fireRate' | 'bulletSpeed' | 'magnet'
   | 'scrapBonus' | 'shieldGen' | 'critStrike'
-  | 'retroThruster';
+  | 'retroThruster' | 'range';
 
 // Temporary buff IDs
 export type TempBuffId =
@@ -111,7 +111,18 @@ export interface ArtifactDef {
 export type EliteModifier = 'fast' | 'tiny' | 'teleporter' | 'reflective' | 'shielded' | 'magnetic';
 
 // Between-wave events
-export type WaveEventType = 'scrapBonus' | 'asteroidSprint' | 'miniBossRush';
+export type WaveEventType = 'scrapBonus' | 'asteroidSprint' | 'miniBossRush' | 'meteorShower' | 'repairStation';
+
+// Mid-wave events (occur during gameplay)
+export type MidWaveEventType = 'solarFlare' | 'gravityWell' | 'powerSurge' | 'asteroidSwarm';
+
+export interface MidWaveEvent {
+  type: MidWaveEventType;
+  timer: number; // ms remaining
+  x?: number; // for gravityWell center
+  y?: number;
+  spawned?: boolean; // for asteroidSwarm one-shot spawn
+}
 
 export interface WaveEvent {
   type: WaveEventType;

@@ -10,7 +10,7 @@ import type { AsteroidsStats } from './stats';
 import * as sfx from './sound';
 
 // Roguelite imports
-import type { AsteroidVariant, BossVariant, ScrapDrop, ActiveBuff, Drone, TempBuffDef, ArtifactId, EliteModifier, WaveEvent, RunStats, ShipId, CurseId, MilestoneId, MegaBossData, MegaBossPhase, DailyModifierId } from './roguelite-types';
+import type { AsteroidVariant, BossVariant, ScrapDrop, ActiveBuff, Drone, TempBuffDef, ArtifactId, EliteModifier, WaveEvent, MidWaveEvent, MidWaveEventType, RunStats, ShipId, CurseId, MilestoneId, MegaBossData, MegaBossPhase, DailyModifierId } from './roguelite-types';
 import type { PermanentUpgradeId, MilestoneDef } from './roguelite-types';
 import {
   PERMANENT_UPGRADES,
@@ -29,6 +29,8 @@ import {
   pickEliteModifier,
   WAVE_EVENT_CONFIG,
   rollWaveEvent,
+  MID_WAVE_EVENT_CONFIG,
+  rollMidWaveEvent,
   getAscensionScrapBonus,
   defaultRunStats,
   SHIPS,
@@ -184,6 +186,8 @@ interface GameState {
   rlBestiaryEncounters?: Set<string>;
   rlIsDaily?: boolean;
   rlDailyModifiers?: DailyModifierId[];
+  rlMidWaveEvent?: MidWaveEvent | null;
+  rlMidWaveTimer?: number; // ms until next mid-wave event roll
 }
 
 // ── Constants ────────────────────────────────────────────────────────────────
@@ -465,6 +469,8 @@ export function AsteroidsGame() {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const gameRef = useRef<GameState | null>(null);
   const keysRef = useRef<Set<string>>(new Set());
+  const mouseRef = useRef<{ x: number; y: number } | null>(null);
+  const mouseDownRef = useRef(false);
   const rafRef = useRef<number>(0);
   const lastTimeRef = useRef<number>(0);
   const starsRef = useRef<ReturnType<typeof generateStars>>([]);
@@ -605,11 +611,32 @@ export function AsteroidsGame() {
     function onKeyUp(e: KeyboardEvent) {
       keysRef.current.delete(e.key);
     }
+    function onMouseMove(e: MouseEvent) {
+      const canvas = canvasRef.current;
+      if (!canvas) return;
+      const rect = canvas.getBoundingClientRect();
+      mouseRef.current = {
+        x: ((e.clientX - rect.left) / rect.width) * W,
+        y: ((e.clientY - rect.top) / rect.height) * H,
+      };
+    }
+    function onMouseDown(e: MouseEvent) {
+      if (e.button === 0) mouseDownRef.current = true;
+    }
+    function onMouseUp(e: MouseEvent) {
+      if (e.button === 0) mouseDownRef.current = false;
+    }
     window.addEventListener('keydown', onKeyDown);
     window.addEventListener('keyup', onKeyUp);
+    window.addEventListener('mousemove', onMouseMove);
+    window.addEventListener('mousedown', onMouseDown);
+    window.addEventListener('mouseup', onMouseUp);
     return () => {
       window.removeEventListener('keydown', onKeyDown);
       window.removeEventListener('keyup', onKeyUp);
+      window.removeEventListener('mousemove', onMouseMove);
+      window.removeEventListener('mousedown', onMouseDown);
+      window.removeEventListener('mouseup', onMouseUp);
     };
   }, []);
 
@@ -636,8 +663,7 @@ export function AsteroidsGame() {
           return true;
         });
       } else if (chosen.id === 'extraLife') {
-        const maxLives = rlSave ? getAppliedStats(rlSave.upgrades).maxLives : 3;
-        game.lives = Math.min(game.lives + 1, maxLives + 2); // can go 2 over max
+        game.lives += 1; // can exceed max lives
       }
     } else {
       // Add to active buffs
@@ -708,7 +734,7 @@ export function AsteroidsGame() {
       const bulletSpd = rlStats ? rlStats.bulletSpeed : BULLET_SPEED;
       let fireCool = rlStats ? rlStats.fireCooldown : 150;
       let bulletDmgMult = 1;
-      let bulletLifeMult = 1;
+      let bulletLifeMult = rlStats ? rlStats.bulletLifeMult : 1;
       let dailyScrapMult = 1;
       let shipHitboxMult = 1;
       if (hasDM('speedDemon')) shipAccel *= 1.5;
@@ -736,11 +762,69 @@ export function AsteroidsGame() {
         }
       }
 
+      // ── Mid-wave events (roguelite, wave 8+) ──
+      if (isRL && !game.rlWaveEvent && !game.rlMegaBoss) {
+        // Roll timer: check every ~5s
+        game.rlMidWaveTimer = (game.rlMidWaveTimer ?? 5000) - dt;
+        if (game.rlMidWaveTimer <= 0) {
+          game.rlMidWaveTimer = 4000 + Math.random() * 3000;
+          if (!game.rlMidWaveEvent) {
+            const midEvt = rollMidWaveEvent(game.wave);
+            if (midEvt) {
+              const cfg = MID_WAVE_EVENT_CONFIG[midEvt];
+              game.rlMidWaveEvent = {
+                type: midEvt,
+                timer: cfg.duration,
+                ...(midEvt === 'gravityWell' ? { x: Math.random() * W * 0.6 + W * 0.2, y: Math.random() * H * 0.6 + H * 0.2 } : {}),
+              };
+            }
+          }
+        }
+
+        // Process active mid-wave event
+        if (game.rlMidWaveEvent) {
+          const mwe = game.rlMidWaveEvent;
+          mwe.timer -= dt;
+
+          if (mwe.type === 'gravityWell' && mwe.x != null && mwe.y != null) {
+            const gx = mwe.x, gy = mwe.y;
+            const pull = 0.02;
+            // Pull asteroids toward center
+            for (const a of game.asteroids) {
+              const dx = gx - a.pos.x, dy = gy - a.pos.y;
+              const d = Math.sqrt(dx * dx + dy * dy) || 1;
+              a.vel.x += (dx / d) * pull;
+              a.vel.y += (dy / d) * pull;
+            }
+            // Pull ship slightly
+            const sdx = gx - game.ship.pos.x, sdy = gy - game.ship.pos.y;
+            const sd = Math.sqrt(sdx * sdx + sdy * sdy) || 1;
+            game.ship.vel.x += (sdx / sd) * pull * 0.3;
+            game.ship.vel.y += (sdy / sd) * pull * 0.3;
+          }
+
+          if (mwe.type === 'asteroidSwarm' && !mwe.spawned) {
+            mwe.spawned = true;
+            const swarmCount = Math.ceil(5 + game.wave * 0.5);
+            const swarmAsteroids = spawnWaveAsteroids(swarmCount, game.ship.pos, config.speedMult * 1.3);
+            for (const a of swarmAsteroids) {
+              assignRogueliteAsteroidData(a, game.wave, game.rlDailyModifiers);
+            }
+            game.asteroids.push(...swarmAsteroids);
+          }
+
+          if (mwe.timer <= 0) {
+            game.rlMidWaveEvent = null;
+          }
+        }
+      }
+
       // ── Ship rotation ──
       const pilotCurse = isRL && game.rlCurses?.includes('pilot');
 
       if (pilotCurse) {
-        // ── Pilot curse: WASD directly controls movement direction ──
+        // ── Pilot curse: WASD direct movement, ship faces mouse, slower speed ──
+        const pilotAccel = shipAccel * 0.7;
         let mx = 0, my = 0;
         if (keys.has('ArrowLeft') || keys.has('a') || keys.has('A')) mx -= 1;
         if (keys.has('ArrowRight') || keys.has('d') || keys.has('D')) mx += 1;
@@ -749,10 +833,16 @@ export function AsteroidsGame() {
         game.ship.thrusting = mx !== 0 || my !== 0;
         if (game.ship.thrusting) {
           const moveAngle = Math.atan2(my, mx);
-          game.ship.angle = moveAngle;
-          game.ship.vel.x += Math.cos(moveAngle) * shipAccel;
-          game.ship.vel.y += Math.sin(moveAngle) * shipAccel;
+          game.ship.vel.x += Math.cos(moveAngle) * pilotAccel;
+          game.ship.vel.y += Math.sin(moveAngle) * pilotAccel;
           if (Math.random() < 0.3) sfx.thrustSound();
+        }
+        // Ship always faces mouse cursor
+        if (mouseRef.current) {
+          game.ship.angle = Math.atan2(
+            mouseRef.current.y - game.ship.pos.y,
+            mouseRef.current.x - game.ship.pos.x,
+          );
         }
       } else {
         // ── Normal rotation controls ──
@@ -801,10 +891,12 @@ export function AsteroidsGame() {
       // ── Shooting ──
       const isRapid = hasPower(game.activePowers, 'rapid');
       const hasOverdrive = isRL && game.rlActiveBuffs?.some(b => b.id === 'overdrive');
-      const cooldown = (isRapid || hasOverdrive) ? Math.min(fireCool * 0.5, 60) : fireCool;
+      const hasPowerSurge = game.rlMidWaveEvent?.type === 'powerSurge';
+      const cooldown = (isRapid || hasOverdrive || hasPowerSurge) ? Math.min(fireCool * 0.5, 60) : fireCool;
       const maxBullets = isRapid ? 10 : MAX_BULLETS;
       shootCooldownRef.current -= dt;
-      if (keys.has(' ') && game.bullets.length < maxBullets && shootCooldownRef.current <= 0) {
+      const shooting = keys.has(' ') || mouseDownRef.current;
+      if (shooting && game.bullets.length < maxBullets && shootCooldownRef.current <= 0) {
         shootCooldownRef.current = cooldown;
         const baseAngle = game.ship.angle;
         const shipVelFactor = 0.5;
@@ -862,7 +954,7 @@ export function AsteroidsGame() {
 
         // Rear gun buff: also fire backward
         if (isRL && game.rlActiveBuffs?.some(b => b.id === 'rearGun')) {
-          const rearAngle = game.ship.angle + Math.PI;
+          const rearAngle = baseAngle + Math.PI;
           game.bullets.push({
             pos: { ...game.ship.pos },
             vel: {
@@ -2194,6 +2286,24 @@ export function AsteroidsGame() {
               game.asteroids.push(bigAst);
             }
           }
+        } else if (evtType === 'meteorShower') {
+          // Fast asteroids rain from the top
+          const count = Math.ceil(20 * evtScale);
+          for (let i = 0; i < count; i++) {
+            const x = Math.random() * W;
+            const ast = createAsteroid(Math.random() < 0.5 ? 1 : 2, { x, y: -20 }, config.speedMult * 2);
+            ast.vel.y = Math.abs(ast.vel.y) + 2; // force downward
+            ast.vel.x *= 0.3; // mostly vertical
+            assignRogueliteAsteroidData(ast, game.wave, game.rlDailyModifiers);
+            ast.rlScrapValue = Math.ceil((ast.rlScrapValue ?? 5) * 2);
+            ast.rlEventAsteroid = true;
+            game.asteroids.push(ast);
+          }
+        } else if (evtType === 'repairStation') {
+          // Instant: heal 1 life + grant shield
+          game.lives += 1;
+          game.hasShield = true;
+          game.rlWaveEvent = null; // instant, no timer
         }
       }
       setPhase('playing');
@@ -3135,9 +3245,79 @@ function drawGame(
     const barY = H - 12;
     ctx.fillStyle = 'rgba(255,255,255,0.15)';
     ctx.fillRect(barX, barY, barW, barH);
-    const evtColor = game.rlWaveEvent.type === 'scrapBonus' ? '#fbbf24' : game.rlWaveEvent.type === 'asteroidSprint' ? '#ef4444' : '#a78bfa';
+    const evtColorMap: Record<string, string> = { scrapBonus: '#fbbf24', asteroidSprint: '#ef4444', miniBossRush: '#a78bfa', meteorShower: '#f97316' };
+    const evtColor = evtColorMap[game.rlWaveEvent.type] ?? '#a78bfa';
     ctx.fillStyle = evtColor;
     ctx.fillRect(barX, barY, barW * fraction, barH);
+  }
+
+  // Mid-wave event rendering (roguelite)
+  if (isRL && game.rlMidWaveEvent) {
+    const mwe = game.rlMidWaveEvent;
+    const mweCfg = MID_WAVE_EVENT_CONFIG[mwe.type];
+
+    if (mwe.type === 'solarFlare') {
+      // Bright overlay that flickers
+      const intensity = 0.15 + Math.sin(Date.now() * 0.005) * 0.08;
+      ctx.fillStyle = `rgba(255, 200, 50, ${intensity})`;
+      ctx.fillRect(0, 0, W, H);
+    }
+
+    if (mwe.type === 'gravityWell' && mwe.x != null && mwe.y != null) {
+      // Swirling vortex
+      ctx.save();
+      ctx.translate(mwe.x, mwe.y);
+      const pulse = 30 + Math.sin(Date.now() * 0.003) * 10;
+      const grad = ctx.createRadialGradient(0, 0, 0, 0, 0, pulse * 3);
+      grad.addColorStop(0, 'rgba(167, 139, 250, 0.4)');
+      grad.addColorStop(0.5, 'rgba(167, 139, 250, 0.15)');
+      grad.addColorStop(1, 'rgba(167, 139, 250, 0)');
+      ctx.fillStyle = grad;
+      ctx.beginPath();
+      ctx.arc(0, 0, pulse * 3, 0, Math.PI * 2);
+      ctx.fill();
+      // Spiral lines
+      ctx.strokeStyle = 'rgba(167, 139, 250, 0.5)';
+      ctx.lineWidth = 1.5;
+      for (let arm = 0; arm < 3; arm++) {
+        ctx.beginPath();
+        const baseAngle = Date.now() * 0.002 + (arm * Math.PI * 2 / 3);
+        for (let r = 5; r < pulse * 2.5; r += 2) {
+          const a = baseAngle + r * 0.08;
+          ctx.lineTo(Math.cos(a) * r, Math.sin(a) * r);
+        }
+        ctx.stroke();
+      }
+      ctx.restore();
+    }
+
+    if (mwe.type === 'powerSurge') {
+      // Green border glow
+      ctx.save();
+      ctx.strokeStyle = `rgba(74, 222, 128, ${0.3 + Math.sin(Date.now() * 0.006) * 0.15})`;
+      ctx.lineWidth = 4;
+      ctx.strokeRect(2, 2, W - 4, H - 4);
+      ctx.restore();
+    }
+
+    // Event name + timer bar at top
+    if (mweCfg.duration > 1) {
+      const fraction = mwe.timer / mweCfg.duration;
+      const midNames: Record<string, string> = { solarFlare: 'SOLAR FLARE', gravityWell: 'GRAVITY WELL', powerSurge: 'POWER SURGE', asteroidSwarm: 'ASTEROID SWARM' };
+      ctx.save();
+      ctx.fillStyle = mweCfg.color + 'cc';
+      ctx.font = 'bold 11px monospace';
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'top';
+      ctx.fillText(midNames[mwe.type] ?? mwe.type, W / 2, 6);
+      // Timer bar
+      const bw = 120, bh = 3, bx = W / 2 - bw / 2, by = 20;
+      ctx.fillStyle = 'rgba(255,255,255,0.15)';
+      ctx.fillRect(bx, by, bw, bh);
+      ctx.fillStyle = mweCfg.color;
+      ctx.fillRect(bx, by, bw * fraction, bh);
+      ctx.restore();
+    }
   }
 
   // Mega-boss drawing (roguelite)
