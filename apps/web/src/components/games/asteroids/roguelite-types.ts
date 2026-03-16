@@ -8,7 +8,8 @@ export type BossVariant = 'standard' | 'twin' | 'shield' | 'carrier';
 export type PermanentUpgradeId =
   | 'hull' | 'engine' | 'gyroscope' | 'caliber'
   | 'fireRate' | 'bulletSpeed' | 'magnet'
-  | 'scrapBonus' | 'shieldGen' | 'critStrike';
+  | 'scrapBonus' | 'shieldGen' | 'critStrike'
+  | 'retroThruster';
 
 // Temporary buff IDs
 export type TempBuffId =
@@ -180,7 +181,7 @@ export interface BestiaryEntry {
 }
 
 // Curse IDs
-export type CurseId = 'glassCannon' | 'swarm' | 'velocity' | 'famine' | 'darkness' | 'berserker';
+export type CurseId = 'glassCannon' | 'swarm' | 'velocity' | 'famine' | 'darkness' | 'berserker' | 'pilot';
 
 export interface CurseDef {
   id: CurseId;

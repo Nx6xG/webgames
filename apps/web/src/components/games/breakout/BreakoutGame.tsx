@@ -1437,7 +1437,7 @@ export function BreakoutGame() {
   const diffConfig = DIFF_CONFIG[difficulty];
 
   return (
-    <div className="relative w-full flex-1 min-h-0">
+    <div className="relative w-full flex-1 min-h-0 flex flex-col">
     <div className="flex flex-col items-center gap-2 flex-1 min-w-0 min-h-0" ref={wrapperRef}>
       {/* Stats bar */}
       {stats && (

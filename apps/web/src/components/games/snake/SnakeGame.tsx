@@ -487,7 +487,7 @@ export function SnakeGame() {
   // Config screen
   if (phase === 'config') {
     return (
-      <div className="relative w-full flex-1 min-h-0">
+      <div className="relative w-full flex-1 min-h-0 flex flex-col">
         <div className="flex flex-col items-center gap-3 py-2 px-4 flex-1 min-w-0">
           {/* Header */}
           <div className="w-full max-w-[420px] flex items-center gap-3">
@@ -612,7 +612,7 @@ export function SnakeGame() {
   }
 
   return (
-    <div className="relative w-full flex-1 min-h-0">
+    <div className="relative w-full flex-1 min-h-0 flex flex-col">
       <div className="flex flex-col items-center gap-3 py-2 px-4 flex-1 min-w-0">
         {/* Cosmic skin CSS animations */}
         {isCosmicSkin && <style dangerouslySetInnerHTML={{ __html: COSMIC_STYLES }} />}

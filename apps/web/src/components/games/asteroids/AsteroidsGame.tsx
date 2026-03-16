@@ -737,23 +737,44 @@ export function AsteroidsGame() {
       }
 
       // ── Ship rotation ──
-      if (keys.has('ArrowLeft') || keys.has('a') || keys.has('A')) {
-        game.ship.angle -= turnSpeed;
-      }
-      if (keys.has('ArrowRight') || keys.has('d') || keys.has('D')) {
-        game.ship.angle += turnSpeed;
+      const pilotCurse = isRL && game.rlCurses?.includes('pilot');
+
+      if (pilotCurse) {
+        // ── Pilot curse: WASD directly controls movement direction ──
+        let mx = 0, my = 0;
+        if (keys.has('ArrowLeft') || keys.has('a') || keys.has('A')) mx -= 1;
+        if (keys.has('ArrowRight') || keys.has('d') || keys.has('D')) mx += 1;
+        if (keys.has('ArrowUp') || keys.has('w') || keys.has('W')) my -= 1;
+        if (keys.has('ArrowDown') || keys.has('s') || keys.has('S')) my += 1;
+        game.ship.thrusting = mx !== 0 || my !== 0;
+        if (game.ship.thrusting) {
+          const moveAngle = Math.atan2(my, mx);
+          game.ship.angle = moveAngle;
+          game.ship.vel.x += Math.cos(moveAngle) * shipAccel;
+          game.ship.vel.y += Math.sin(moveAngle) * shipAccel;
+          if (Math.random() < 0.3) sfx.thrustSound();
+        }
+      } else {
+        // ── Normal rotation controls ──
+        if (keys.has('ArrowLeft') || keys.has('a') || keys.has('A')) {
+          game.ship.angle -= turnSpeed;
+        }
+        if (keys.has('ArrowRight') || keys.has('d') || keys.has('D')) {
+          game.ship.angle += turnSpeed;
+        }
+
+        // ── Ship thrust ──
+        game.ship.thrusting = keys.has('ArrowUp') || keys.has('w') || keys.has('W');
+        if (game.ship.thrusting) {
+          game.ship.vel.x += Math.cos(game.ship.angle) * shipAccel;
+          game.ship.vel.y += Math.sin(game.ship.angle) * shipAccel;
+          if (Math.random() < 0.3) sfx.thrustSound();
+        }
       }
 
-      // ── Ship thrust ──
-      game.ship.thrusting = keys.has('ArrowUp') || keys.has('w') || keys.has('W');
-      if (game.ship.thrusting) {
-        game.ship.vel.x += Math.cos(game.ship.angle) * shipAccel;
-        game.ship.vel.y += Math.sin(game.ship.angle) * shipAccel;
-        if (Math.random() < 0.3) sfx.thrustSound();
-      }
-
-      // ── Ship brake (S / ArrowDown) ──
-      const braking = keys.has('ArrowDown') || keys.has('s') || keys.has('S');
+      // ── Ship brake (S / ArrowDown) — requires retroThruster upgrade in roguelite, always in classic ──
+      const canBrake = !isRL || (rlStats?.hasBrake ?? false);
+      const braking = canBrake && !pilotCurse && (keys.has('ArrowDown') || keys.has('s') || keys.has('S'));
       const brakeFriction = braking ? 0.93 : SHIP_FRICTION;
 
       // ── Ship movement ──
@@ -2593,7 +2614,9 @@ export function AsteroidsGame() {
             <div className="flex gap-1.5 justify-center">
               <MobileBtn label="<" onPress={() => keysRef.current.add('ArrowLeft')} onRelease={() => keysRef.current.delete('ArrowLeft')} />
               <MobileBtn label="^" onPress={() => keysRef.current.add('ArrowUp')} onRelease={() => keysRef.current.delete('ArrowUp')} />
-              <MobileBtn label="v" onPress={() => keysRef.current.add('ArrowDown')} onRelease={() => keysRef.current.delete('ArrowDown')} />
+              {(mode !== 'roguelite' || (rlSave && getAppliedStats(rlSave.upgrades, rlSave.selectedShip).hasBrake)) && (
+                <MobileBtn label="v" onPress={() => keysRef.current.add('ArrowDown')} onRelease={() => keysRef.current.delete('ArrowDown')} />
+              )}
               <MobileBtn label=">" onPress={() => keysRef.current.add('ArrowRight')} onRelease={() => keysRef.current.delete('ArrowRight')} />
             </div>
             <div className="flex gap-1.5 justify-center">
@@ -2619,7 +2642,9 @@ export function AsteroidsGame() {
           {/* Controls hint */}
           <div className="shrink-0 hidden sm:block text-center text-[11px] space-x-3" style={{ color: 'var(--muted)' }}>
             <span>Arrow/WASD: {t('asteroids.move')}</span>
-            <span>S/↓: {t('asteroids.brake')}</span>
+            {(mode !== 'roguelite' || (rlSave && getAppliedStats(rlSave.upgrades, rlSave.selectedShip).hasBrake)) && (
+              <span>S/↓: {t('asteroids.brake')}</span>
+            )}
             <span>Space: {t('asteroids.fire')}</span>
             <span>P/Esc: {t('game.paused')}</span>
           </div>

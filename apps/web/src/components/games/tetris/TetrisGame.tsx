@@ -418,7 +418,7 @@ export function TetrisGame() {
   }, []);
 
   return (
-    <div className="relative w-full flex-1 min-h-0">
+    <div className="relative w-full flex-1 min-h-0 flex flex-col">
       <div className="flex flex-col items-center gap-3 flex-1 min-h-0">
       {/* ── Game area — viewport-fitted ─────────────────────────────── */}
       <div className="flex flex-col items-center gap-2 sm:gap-3 w-full flex-1 min-h-0">

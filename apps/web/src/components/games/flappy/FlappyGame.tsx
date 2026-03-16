@@ -557,7 +557,7 @@ export function FlappyGame() {
   }, [flap, togglePause, restart]);
 
   return (
-    <div className="relative w-full flex-1 min-h-0">
+    <div className="relative w-full flex-1 min-h-0 flex flex-col">
     <div className="flex flex-col items-center gap-2 sm:gap-3 w-full mx-auto select-none flex-1 min-w-0 min-h-0">
       {/* Score bar */}
       <div className="shrink-0 flex items-center justify-between w-full max-w-xl px-1">

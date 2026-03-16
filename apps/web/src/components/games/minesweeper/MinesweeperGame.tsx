@@ -463,7 +463,7 @@ export function MinesweeperGame() {
   // ── Render ──────────────────────────────────────────────────────────────────
 
   return (
-    <div className="relative w-full flex-1 min-h-0">
+    <div className="relative w-full flex-1 min-h-0 flex flex-col">
       {/* ── Game column ──────────────────────────────────────────────── */}
       <div className="flex flex-col items-center gap-3 flex-1 min-w-0">
         {/* Stats bar */}

@@ -813,6 +813,8 @@ export const messages: Record<Lang, Record<string, string>> = {
     'asteroids.rl.upg.scrapBonus.desc':     '+20% Scrap-Ertrag pro Stufe',
     'asteroids.rl.upg.shieldGen.desc':      'Auto-Schild alle X Sekunden',
     'asteroids.rl.upg.critStrike.desc':     'Chance auf 3x Schaden',
+    'asteroids.rl.upg.retroThruster':       'Bremsraketen',
+    'asteroids.rl.upg.retroThruster.desc':  'S/↓ zum Bremsen — verlangsamt dein Schiff schnell',
     // Temp buff names
     'asteroids.rl.buff.piercing':           'Durchschlag',
     'asteroids.rl.buff.drone':              'Kampfdrohne',
@@ -1008,6 +1010,8 @@ export const messages: Record<Lang, Record<string, string>> = {
     'asteroids.rl.curse.darkness.desc':        'Eingeschränkte Sicht — nur Bereich um dein Schiff.',
     'asteroids.rl.curse.berserker':            'Berserker',
     'asteroids.rl.curse.berserker.desc':       'Bosse haben +50% HP und schießen 30% schneller.',
+    'asteroids.rl.curse.pilot':                'Pilot',
+    'asteroids.rl.curse.pilot.desc':           'WASD-Direktsteuerung statt Rotation. -40% Scrap.',
 
     // Daily Run
     'asteroids.rl.daily':                      'Täglicher Run',
@@ -3274,6 +3278,8 @@ export const messages: Record<Lang, Record<string, string>> = {
     'asteroids.rl.upg.scrapBonus.desc':     '+20% scrap per tier',
     'asteroids.rl.upg.shieldGen.desc':      'Auto-shield every X seconds',
     'asteroids.rl.upg.critStrike.desc':     'Chance for 3x damage',
+    'asteroids.rl.upg.retroThruster':       'Retro Thruster',
+    'asteroids.rl.upg.retroThruster.desc':  'S/↓ to brake — rapidly slows your ship',
     // Temp buff names
     'asteroids.rl.buff.piercing':           'Piercing Rounds',
     'asteroids.rl.buff.drone':              'Combat Drone',
@@ -3469,6 +3475,8 @@ export const messages: Record<Lang, Record<string, string>> = {
     'asteroids.rl.curse.darkness.desc':        'Limited vision — only area around your ship.',
     'asteroids.rl.curse.berserker':            'Berserker',
     'asteroids.rl.curse.berserker.desc':       'Bosses have +50% HP and shoot 30% faster.',
+    'asteroids.rl.curse.pilot':                'Pilot',
+    'asteroids.rl.curse.pilot.desc':           'WASD direct controls instead of rotation. -40% scrap.',
 
     // Daily Run
     'asteroids.rl.daily':                      'Daily Run',

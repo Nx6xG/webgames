@@ -105,6 +105,14 @@ export const PERMANENT_UPGRADES: PermanentUpgrade[] = [
     maxTier: 3,
     costs: [250, 800, 2000],
   },
+  {
+    id: 'retroThruster',
+    nameKey: 'asteroids.rl.upg.retroThruster',
+    descKey: 'asteroids.rl.upg.retroThruster.desc',
+    icon: '\u{1F6D1}',
+    maxTier: 1,
+    costs: [150],
+  },
 ];
 
 // ---------------------------------------------------------------------------
@@ -329,6 +337,7 @@ export interface AppliedStats {
   scrapMultiplier: number;
   shieldRechargeMs: number;
   critChance: number;
+  hasBrake: boolean;
 }
 
 export function getAppliedStats(
@@ -349,6 +358,7 @@ export function getAppliedStats(
     scrapMultiplier: (1 + tier('scrapBonus') * 0.20) * (ship?.scrapMultMod ?? 1),
     shieldRechargeMs: [Infinity, 45000, 30000, 20000][tier('shieldGen')] * (ship?.shieldRechargeMod ?? 1),
     critChance: [0, 0.08, 0.15, 0.22][tier('critStrike')],
+    hasBrake: tier('retroThruster') >= 1,
   };
 
   return base;
@@ -546,6 +556,7 @@ export const CURSES: CurseDef[] = [
   { id: 'famine', nameKey: 'asteroids.rl.curse.famine', descKey: 'asteroids.rl.curse.famine.desc', icon: '\u{1F6AB}', scrapMultiplier: 1.4, color: '#a1a1aa' },
   { id: 'darkness', nameKey: 'asteroids.rl.curse.darkness', descKey: 'asteroids.rl.curse.darkness.desc', icon: '\u{1F319}', scrapMultiplier: 1.5, color: '#1e1b4b' },
   { id: 'berserker', nameKey: 'asteroids.rl.curse.berserker', descKey: 'asteroids.rl.curse.berserker.desc', icon: '\u{1F525}', scrapMultiplier: 1.6, color: '#dc2626' },
+  { id: 'pilot', nameKey: 'asteroids.rl.curse.pilot', descKey: 'asteroids.rl.curse.pilot.desc', icon: '\u{1F3AE}', scrapMultiplier: 0.6, color: '#22d3ee' },
 ];
 
 export function getCurseScrapMultiplier(curses: CurseId[]): number {

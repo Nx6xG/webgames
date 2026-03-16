@@ -755,7 +755,7 @@ export function PacmanGame() {
   // ── Menu screen ─────────────────────────────────────────────────────────────
   if (phase === 'menu') {
     return (
-      <div className="relative w-full flex-1 min-h-0">
+      <div className="relative w-full flex-1 min-h-0 flex flex-col">
         <div className="flex flex-col items-center gap-3 py-2 px-4 flex-1 min-w-0">
           {/* Header */}
           <div className="w-full max-w-[440px] flex items-center gap-3">
@@ -826,7 +826,7 @@ export function PacmanGame() {
 
   // ── Game screen ─────────────────────────────────────────────────────────────
   return (
-    <div className="relative w-full flex-1 min-h-0">
+    <div className="relative w-full flex-1 min-h-0 flex flex-col">
       <div className="flex flex-col items-center gap-3 py-2 px-4 flex-1 min-w-0">
         {/* Header */}
         <div className="w-full max-w-[440px] flex items-center gap-3">
