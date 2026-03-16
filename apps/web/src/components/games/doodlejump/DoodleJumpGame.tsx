@@ -35,7 +35,8 @@ const ROCKET_W = 18;
 const ROCKET_H = 26;
 const ROCKET_VEL = 20;
 const ROCKET_FLIGHT_DURATION = 90;
-const ROCKET_SCORE_INTERVAL = 50; // award 1 point per this many pixels of height during rocket/spring flight
+const SPRING_SCORE_INTERVAL = 20; // award 1 point per this many pixels of height during spring flight
+const ROCKET_SCORE_INTERVAL = 40; // award 1 point per this many pixels of height during rocket flight
 const MAX_FALL_VEL = 10;
 
 const MOVE_SPEED = 3.5;
@@ -1129,11 +1130,12 @@ export function DoodleJumpGame() {
     // ── Flight scoring (rocket / spring height counts as points) ────
     if (gs.velY > JUMP_VEL && gs.doodlerY > 0) {
       if (gs.flightScoreY === 0) gs.flightScoreY = gs.doodlerY; // mark start
+      const interval = gs.rocketActive > 0 ? ROCKET_SCORE_INTERVAL : SPRING_SCORE_INTERVAL;
       const heightGained = gs.doodlerY - gs.flightScoreY;
-      const bonusPoints = Math.floor(heightGained / ROCKET_SCORE_INTERVAL);
+      const bonusPoints = Math.floor(heightGained / interval);
       if (bonusPoints > 0) {
         gs.score += bonusPoints;
-        gs.flightScoreY += bonusPoints * ROCKET_SCORE_INTERVAL;
+        gs.flightScoreY += bonusPoints * interval;
         gs.lastScoredY = Math.max(gs.lastScoredY, gs.doodlerY);
       }
     } else if (gs.velY <= JUMP_VEL && gs.flightScoreY > 0) {
