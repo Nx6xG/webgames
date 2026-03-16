@@ -2,7 +2,7 @@
 export type AsteroidVariant = 'normal' | 'armored' | 'explosive' | 'homing' | 'splitting';
 
 // Boss variants
-export type BossVariant = 'standard' | 'twin' | 'shield' | 'carrier';
+export type BossVariant = 'standard' | 'twin' | 'shield' | 'carrier' | 'bomber' | 'sniper' | 'berserker' | 'splitter';
 
 // Permanent upgrade IDs
 export type PermanentUpgradeId =
@@ -17,7 +17,8 @@ export type TempBuffId =
   | 'extraLife' | 'scrapMagnet' | 'timeSlow'
   | 'homingBullets' | 'explosiveBullets' | 'doubleScrap'
   | 'rearGun' | 'regeneration'
-  | 'orbitalStrike' | 'chainLightning' | 'voidShield';
+  | 'orbitalStrike' | 'chainLightning' | 'voidShield'
+  | 'plasmaField' | 'scrapFrenzy';
 
 export interface PermanentUpgrade {
   id: PermanentUpgradeId;
@@ -97,7 +98,8 @@ export type ArtifactId =
   | 'bouncingBullets' | 'explosionHeal' | 'killSpawnPowerup'
   | 'shrapnelBurst' | 'scrapVampire' | 'asteroidFear'
   | 'ghostShip' | 'overcharge'
-  | 'voidArmor' | 'bossSlayer';
+  | 'voidArmor' | 'bossSlayer'
+  | 'stellarForge' | 'timeCrystal';
 
 export interface ArtifactDef {
   id: ArtifactId;
@@ -111,10 +113,10 @@ export interface ArtifactDef {
 export type EliteModifier = 'fast' | 'tiny' | 'teleporter' | 'reflective' | 'shielded' | 'magnetic';
 
 // Between-wave events
-export type WaveEventType = 'scrapBonus' | 'asteroidSprint' | 'miniBossRush' | 'meteorShower' | 'repairStation';
+export type WaveEventType = 'scrapBonus' | 'asteroidSprint' | 'miniBossRush' | 'meteorShower' | 'repairStation' | 'blackout' | 'scrapStorm' | 'eliteArena' | 'warpZone';
 
 // Mid-wave events (occur during gameplay)
-export type MidWaveEventType = 'solarFlare' | 'gravityWell' | 'powerSurge' | 'asteroidSwarm';
+export type MidWaveEventType = 'solarFlare' | 'gravityWell' | 'powerSurge' | 'asteroidSwarm' | 'raid' | 'empBurst' | 'magneticStorm' | 'cloakField' | 'overdrivePulse';
 
 export interface MidWaveEvent {
   type: MidWaveEventType;
@@ -143,7 +145,7 @@ export interface RunStats {
 }
 
 // Ship/Pilot IDs
-export type ShipId = 'vanguard' | 'phantom' | 'harvester' | 'striker' | 'sentinel';
+export type ShipId = 'vanguard' | 'phantom' | 'harvester' | 'striker' | 'sentinel' | 'ascendant';
 
 export interface ShipDef {
   id: ShipId;
@@ -167,9 +169,10 @@ export interface ShipDef {
 export type MilestoneId =
   | 'reach_wave_10' | 'reach_wave_20' | 'reach_wave_30'
   | 'kill_500_asteroids' | 'kill_50_bosses'
-  | 'collect_5000_scrap' | 'ascend_once'
+  | 'collect_20000_run_scrap' | 'ascend_once'
   | 'defeat_megaboss' | 'no_damage_boss'
-  | 'all_buffs_run' | 'max_all_upgrades' | 'reach_wave_50';
+  | 'all_buffs_run' | 'max_all_upgrades' | 'reach_wave_50'
+  | 'prestige_plasma' | 'prestige_frenzy' | 'prestige_stellar' | 'prestige_crystal';
 
 export interface MilestoneDef {
   id: MilestoneId;

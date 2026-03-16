@@ -668,11 +668,18 @@ export function CurveFeverGame({ wsUrl, gameId, initialRoomCode, quickPlay: auto
         const hasSpeed = p.effects.some(e => e.type === 'speed');
         const hasSlow = p.effects.some(e => e.type === 'slow');
         const hasReverse = p.effects.some(e => e.type === 'reverse');
+        const hasThin = p.effects.some(e => e.type === 'thin');
+        const hasBig = p.effects.some(e => e.type === 'big');
+
+        // Effective head size
+        let headRadius = PLAYER_RADIUS + 2;
+        if (hasThin) headRadius = Math.max(2, headRadius * 0.5);
+        if (hasBig) headRadius *= 1.8;
 
         // Shield ring
         if (hasShield) {
           ctx.beginPath();
-          ctx.arc(px, py, PLAYER_RADIUS + 6, 0, Math.PI * 2);
+          ctx.arc(px, py, headRadius + 4, 0, Math.PI * 2);
           ctx.strokeStyle = POWERUP_COLORS.shield + '80';
           ctx.lineWidth = 2;
           ctx.shadowColor = POWERUP_COLORS.shield;
@@ -684,15 +691,16 @@ export function CurveFeverGame({ wsUrl, gameId, initialRoomCode, quickPlay: auto
         // Phase: ghostly transparency
         ctx.globalAlpha = hasPhase ? 0.5 : 1;
 
-        // Head color: priority speed > slow > reverse > normal
+        // Head color: priority speed > slow > reverse > thin > normal
         const headColor = hasSpeed ? POWERUP_COLORS.speed
           : hasSlow ? POWERUP_COLORS.slow
           : hasReverse ? POWERUP_COLORS.reverse
+          : hasThin ? POWERUP_COLORS.thin
           : p.color;
-        const headGlow = (hasSpeed || hasSlow || hasReverse) ? 20 : 14;
+        const headGlow = (hasSpeed || hasSlow || hasReverse || hasThin) ? 20 : 14;
 
         ctx.beginPath();
-        ctx.arc(px, py, PLAYER_RADIUS + 2, 0, Math.PI * 2);
+        ctx.arc(px, py, headRadius, 0, Math.PI * 2);
         ctx.fillStyle = headColor;
         ctx.shadowColor = headColor;
         ctx.shadowBlur = headGlow;
@@ -1055,7 +1063,7 @@ export function CurveFeverGame({ wsUrl, gameId, initialRoomCode, quickPlay: auto
   };
 
   const isHost = mp.playerIndex === 0;
-  const winsNeeded = gs ? gs.winsNeeded : Math.ceil(bestOf / 2);
+  const winsNeeded = gs ? gs.winsNeeded : bestOf;
 
   // Chat state
   const { chatOpen, setChatOpen, unread } = useUnreadMessages(mp);
@@ -1125,7 +1133,7 @@ export function CurveFeverGame({ wsUrl, gameId, initialRoomCode, quickPlay: auto
                     ))}
                   </div>
                   <span className="text-[10px] text-zinc-600 ml-1">
-                    {t('curvefever.firstTo')} {Math.ceil(bestOf / 2)}
+                    {t('curvefever.firstTo')} {bestOf}
                   </span>
                 </div>
 
@@ -1788,30 +1796,36 @@ export function CurveFeverGame({ wsUrl, gameId, initialRoomCode, quickPlay: auto
           />
 
           {/* Bottom bar: controls hint + rematch + leave */}
-          <div className="flex items-center justify-center gap-4 mt-1">
-            <p className="text-xs text-zinc-600">{t('curvefever.controls')}</p>
-            {gs?.phase === 'finished' && !replay.isReplaying && (
-              <>
-                <button
-                  onClick={() => mp.requestRematch()}
-                  className="px-6 py-2 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-white font-semibold transition-colors cursor-pointer"
-                >
-                  Rematch
-                </button>
-                <button
-                  onClick={() => mp.returnToLobby()}
-                  className="px-4 py-2 rounded-lg bg-zinc-700 hover:bg-zinc-600 text-zinc-200 font-semibold text-sm transition-colors cursor-pointer"
-                >
-                  {t('game.lobby.title') !== 'game.lobby.title' ? t('game.lobby.title') : 'Lobby'}
-                </button>
-              </>
+          <div className="flex flex-col items-center gap-1 mt-1">
+            <div className="flex items-center justify-center gap-4">
+              <p className="text-xs text-zinc-600">{t('curvefever.controls')}</p>
+              {(gs?.phase === 'finished' || mp.phase === 'ended') && !replay.isReplaying && (
+                <>
+                  <button
+                    onClick={() => mp.requestRematch()}
+                    disabled={mp.myVotedRematch}
+                    className={`px-6 py-2 rounded-lg font-semibold transition-colors cursor-pointer ${mp.myVotedRematch ? 'bg-indigo-800 text-indigo-300' : 'bg-indigo-600 hover:bg-indigo-500 text-white'}`}
+                  >
+                    {mp.myVotedRematch ? `Rematch (${mp.rematchVotes}/${mp.playerCount})` : 'Rematch'}
+                  </button>
+                  <button
+                    onClick={() => mp.returnToLobby()}
+                    className="px-4 py-2 rounded-lg bg-zinc-700 hover:bg-zinc-600 text-zinc-200 font-semibold text-sm transition-colors cursor-pointer"
+                  >
+                    Lobby
+                  </button>
+                </>
+              )}
+              <button
+                onClick={mp.leaveRoom}
+                className="px-4 py-1.5 rounded-lg border border-zinc-700/50 hover:bg-zinc-800 text-zinc-500 hover:text-zinc-300 text-xs transition-colors cursor-pointer"
+              >
+                {t('game.actions.leaveRoom')}
+              </button>
+            </div>
+            {mp.rematchError && (
+              <p className="text-xs text-red-400">{mp.rematchError}</p>
             )}
-            <button
-              onClick={mp.leaveRoom}
-              className="px-4 py-1.5 rounded-lg border border-zinc-700/50 hover:bg-zinc-800 text-zinc-500 hover:text-zinc-300 text-xs transition-colors cursor-pointer"
-            >
-              {t('game.actions.leaveRoom')}
-            </button>
           </div>
         </div>
 

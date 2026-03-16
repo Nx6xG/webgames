@@ -228,6 +228,9 @@ export const TEMP_BUFFS: TempBuffDef[] = [
   { id: 'orbitalStrike' as TempBuffId, nameKey: 'asteroids.rl.buff.orbitalStrike', descKey: 'asteroids.rl.buff.orbitalStrike.desc', icon: '\u{1F4A2}', duration: 2, color: '#f97316' },
   { id: 'chainLightning' as TempBuffId, nameKey: 'asteroids.rl.buff.chainLightning', descKey: 'asteroids.rl.buff.chainLightning.desc', icon: '\u26A1', duration: 3, color: '#60a5fa' },
   { id: 'voidShield' as TempBuffId, nameKey: 'asteroids.rl.buff.voidShield', descKey: 'asteroids.rl.buff.voidShield.desc', icon: '\u{1F300}', duration: 0, color: '#7c3aed' },
+  // Prestige buffs (ascension 2+/3+)
+  { id: 'plasmaField' as TempBuffId, nameKey: 'asteroids.rl.buff.plasmaField', descKey: 'asteroids.rl.buff.plasmaField.desc', icon: '\u{1F7E1}', duration: 3, color: '#facc15' },
+  { id: 'scrapFrenzy' as TempBuffId, nameKey: 'asteroids.rl.buff.scrapFrenzy', descKey: 'asteroids.rl.buff.scrapFrenzy.desc', icon: '\u{1F4B0}', duration: 3, color: '#fbbf24' },
 ];
 
 export const TEMP_BUFF_MAP: Record<TempBuffId, TempBuffDef> = Object.fromEntries(
@@ -264,13 +267,23 @@ export interface BossVariantConfig {
   shieldHp?: number;
   shieldRegenRate?: number; // per tick
   spawnInterval?: number;   // ticks between minion spawns (carrier)
+  /** Number of bullets per burst */
+  burstCount?: number;
+  /** Spread angle (radians) for multi-shot */
+  spreadAngle?: number;
+  /** Unique color for this boss variant */
+  color: string;
 }
 
 export const BOSS_VARIANT_CONFIG: Record<BossVariant, BossVariantConfig> = {
-  standard: { hp: 10, fireInterval: 120, speed: 0.3 },
-  twin:     { hp: 7,  fireInterval: 150, speed: 0.4 },
-  shield:   { hp: 12, fireInterval: 100, speed: 0.25, shieldHp: 5, shieldRegenRate: 0.02 },
-  carrier:  { hp: 15, fireInterval: 140, speed: 0.2,  spawnInterval: 180 },
+  standard:  { hp: 15, fireInterval: 90,  speed: 0.35, burstCount: 1, color: '#ef4444' },
+  twin:      { hp: 12, fireInterval: 100, speed: 0.45, burstCount: 2, spreadAngle: 0.35, color: '#f97316' },
+  shield:    { hp: 18, fireInterval: 80,  speed: 0.28, shieldHp: 8, shieldRegenRate: 0.02, burstCount: 1, color: '#06b6d4' },
+  carrier:   { hp: 22, fireInterval: 120, speed: 0.22, spawnInterval: 140, burstCount: 1, color: '#a78bfa' },
+  bomber:    { hp: 14, fireInterval: 60,  speed: 0.3,  burstCount: 1, color: '#fbbf24' },
+  sniper:    { hp: 10, fireInterval: 200, speed: 0.15, burstCount: 1, color: '#22d3ee' },
+  berserker: { hp: 25, fireInterval: 100, speed: 0.35, burstCount: 1, color: '#dc2626' },
+  splitter:  { hp: 12, fireInterval: 110, speed: 0.35, burstCount: 2, spreadAngle: 0.5, color: '#4ade80' },
 };
 
 // ---------------------------------------------------------------------------
@@ -278,20 +291,40 @@ export const BOSS_VARIANT_CONFIG: Record<BossVariant, BossVariantConfig> = {
 // ---------------------------------------------------------------------------
 
 export function getBossVariantForWave(wave: number): BossVariant {
+  // Early waves: introduce variants gradually
   if (wave <= 5) return 'standard';
   if (wave <= 10) return 'twin';
-  if (wave <= 15) return 'shield';
-  if (wave <= 20) return 'carrier';
-  // wave 25+: random
-  const variants: BossVariant[] = ['standard', 'twin', 'shield', 'carrier'];
-  return variants[Math.floor(Math.random() * variants.length)];
+  if (wave <= 15) return Math.random() < 0.5 ? 'shield' : 'bomber';
+  if (wave <= 20) return Math.random() < 0.5 ? 'carrier' : 'sniper';
+  // Wave 25+: weighted random from full pool
+  const pool: Array<{ variant: BossVariant; weight: number }> = [
+    { variant: 'standard',  weight: 8 },
+    { variant: 'twin',      weight: 10 },
+    { variant: 'shield',    weight: 10 },
+    { variant: 'carrier',   weight: 8 },
+    { variant: 'bomber',    weight: 12 },
+    { variant: 'sniper',    weight: 10 },
+    { variant: 'berserker', weight: wave >= 30 ? 12 : 0 },
+    { variant: 'splitter',  weight: wave >= 35 ? 10 : 0 },
+  ];
+  const eligible = pool.filter(p => p.weight > 0);
+  const total = eligible.reduce((s, p) => s + p.weight, 0);
+  let roll = Math.random() * total;
+  for (const p of eligible) {
+    roll -= p.weight;
+    if (roll <= 0) return p.variant;
+  }
+  return 'standard';
 }
 
 /** Wave-based HP scaling for bosses — they get stronger in late game */
 export function getBossWaveHpScale(wave: number): number {
   if (wave <= 5) return 1;
-  // +15% HP per 5 waves after wave 5
-  return 1 + Math.floor((wave - 5) / 5) * 0.15;
+  // +20% HP per 5 waves after wave 5, accelerating in late game
+  const base = 1 + Math.floor((wave - 5) / 5) * 0.20;
+  // Extra scaling after wave 30
+  const late = wave > 30 ? (wave - 30) * 0.02 : 0;
+  return base + late;
 }
 
 /** Wave-based scaling for event rounds */
@@ -325,10 +358,10 @@ export function pickSpecialVariant(): AsteroidVariant {
 // ---------------------------------------------------------------------------
 
 export const BASE_SCRAP_VALUES = {
-  large: 15,
-  medium: 10,
-  small: 5,
-  boss: 200,
+  large: 8,
+  medium: 5,
+  small: 3,
+  boss: 120,
 } as const;
 
 // ---------------------------------------------------------------------------
@@ -390,15 +423,18 @@ export const ARTIFACTS: ArtifactDef[] = [
   { id: 'overcharge', nameKey: 'asteroids.rl.artifact.overcharge', descKey: 'asteroids.rl.artifact.overcharge.desc', icon: '\u26A1', color: '#facc15' },
   { id: 'voidArmor' as ArtifactId, nameKey: 'asteroids.rl.artifact.voidArmor', descKey: 'asteroids.rl.artifact.voidArmor.desc', icon: '\u{1F300}', color: '#7c3aed' },
   { id: 'bossSlayer' as ArtifactId, nameKey: 'asteroids.rl.artifact.bossSlayer', descKey: 'asteroids.rl.artifact.bossSlayer.desc', icon: '\u{1F5E1}\uFE0F', color: '#ef4444' },
+  // Prestige artifacts (ascension 1+/2+)
+  { id: 'stellarForge' as ArtifactId, nameKey: 'asteroids.rl.artifact.stellarForge', descKey: 'asteroids.rl.artifact.stellarForge.desc', icon: '\u2B50', color: '#facc15' },
+  { id: 'timeCrystal' as ArtifactId, nameKey: 'asteroids.rl.artifact.timeCrystal', descKey: 'asteroids.rl.artifact.timeCrystal.desc', icon: '\u{1F48E}', color: '#c084fc' },
 ];
 
 export const ARTIFACT_MAP: Record<ArtifactId, ArtifactDef> = Object.fromEntries(
   ARTIFACTS.map((a) => [a.id, a]),
 ) as Record<ArtifactId, ArtifactDef>;
 
-export function pickRandomArtifacts(count: number, collected: ArtifactId[]): ArtifactDef[] {
+export function pickRandomArtifacts(count: number, collected: ArtifactId[], ascensionLevel: number = 0): ArtifactDef[] {
   const collectedSet = new Set(collected);
-  const eligible = ARTIFACTS.filter((a) => !collectedSet.has(a.id));
+  const eligible = ARTIFACTS.filter((a) => !collectedSet.has(a.id) && isPrestigeUnlocked(a.id, ascensionLevel));
   const shuffled = [...eligible];
   for (let i = shuffled.length - 1; i > 0; i--) {
     const j = Math.floor(Math.random() * (i + 1));
@@ -457,17 +493,34 @@ export const WAVE_EVENT_CONFIG: Record<WaveEventType, WaveEventConfig> = {
   miniBossRush:   { duration: 30000, nameKey: 'asteroids.rl.event.miniBossRush',   descKey: 'asteroids.rl.event.miniBossRush.desc' },
   meteorShower:   { duration: 12000, nameKey: 'asteroids.rl.event.meteorShower',   descKey: 'asteroids.rl.event.meteorShower.desc' },
   repairStation:  { duration: 0,     nameKey: 'asteroids.rl.event.repairStation',  descKey: 'asteroids.rl.event.repairStation.desc' },
+  blackout:       { duration: 18000, nameKey: 'asteroids.rl.event.blackout',       descKey: 'asteroids.rl.event.blackout.desc' },
+  scrapStorm:     { duration: 10000, nameKey: 'asteroids.rl.event.scrapStorm',     descKey: 'asteroids.rl.event.scrapStorm.desc' },
+  eliteArena:     { duration: 25000, nameKey: 'asteroids.rl.event.eliteArena',     descKey: 'asteroids.rl.event.eliteArena.desc' },
+  warpZone:       { duration: 15000, nameKey: 'asteroids.rl.event.warpZone',       descKey: 'asteroids.rl.event.warpZone.desc' },
 };
 
 export function rollWaveEvent(wave: number): WaveEventType | null {
   if (wave < 5) return null;
-  if (Math.random() > 0.25) return null;
-  const roll = Math.random();
-  if (roll < 0.25) return 'scrapBonus';
-  if (roll < 0.45) return 'asteroidSprint';
-  if (roll < 0.60) return 'miniBossRush';
-  if (roll < 0.85) return 'meteorShower';
-  return 'repairStation';
+  if (Math.random() > 0.30) return null; // 30% chance
+  const pool: Array<{ type: WaveEventType; weight: number; minWave: number }> = [
+    { type: 'scrapBonus',     weight: 15, minWave: 5 },
+    { type: 'asteroidSprint', weight: 12, minWave: 5 },
+    { type: 'miniBossRush',   weight: 10, minWave: 8 },
+    { type: 'meteorShower',   weight: 14, minWave: 5 },
+    { type: 'repairStation',  weight: 8,  minWave: 5 },
+    { type: 'scrapStorm',     weight: 10, minWave: 5 },
+    { type: 'blackout',       weight: 10, minWave: 10 },
+    { type: 'eliteArena',     weight: 8,  minWave: 12 },
+    { type: 'warpZone',       weight: 8,  minWave: 15 },
+  ];
+  const eligible = pool.filter(e => wave >= e.minWave);
+  const totalWeight = eligible.reduce((s, e) => s + e.weight, 0);
+  let roll = Math.random() * totalWeight;
+  for (const e of eligible) {
+    roll -= e.weight;
+    if (roll <= 0) return e.type;
+  }
+  return eligible[eligible.length - 1].type;
 }
 
 // ---------------------------------------------------------------------------
@@ -477,25 +530,44 @@ export function rollWaveEvent(wave: number): WaveEventType | null {
 export interface MidWaveEventConfig {
   duration: number; // ms
   nameKey: string;
+  descKey: string;
   color: string;
 }
 
 export const MID_WAVE_EVENT_CONFIG: Record<MidWaveEventType, MidWaveEventConfig> = {
-  solarFlare:    { duration: 6000,  nameKey: 'asteroids.rl.mid.solarFlare',    color: '#fbbf24' },
-  gravityWell:   { duration: 8000,  nameKey: 'asteroids.rl.mid.gravityWell',   color: '#a78bfa' },
-  powerSurge:    { duration: 5000,  nameKey: 'asteroids.rl.mid.powerSurge',    color: '#4ade80' },
-  asteroidSwarm: { duration: 1,     nameKey: 'asteroids.rl.mid.asteroidSwarm', color: '#ef4444' },
+  solarFlare:     { duration: 6000,  nameKey: 'asteroids.rl.mid.solarFlare',     descKey: 'asteroids.rl.mid.solarFlare.desc',     color: '#fbbf24' },
+  gravityWell:    { duration: 8000,  nameKey: 'asteroids.rl.mid.gravityWell',    descKey: 'asteroids.rl.mid.gravityWell.desc',    color: '#a78bfa' },
+  powerSurge:     { duration: 5000,  nameKey: 'asteroids.rl.mid.powerSurge',     descKey: 'asteroids.rl.mid.powerSurge.desc',     color: '#4ade80' },
+  asteroidSwarm:  { duration: 1,     nameKey: 'asteroids.rl.mid.asteroidSwarm',  descKey: 'asteroids.rl.mid.asteroidSwarm.desc',  color: '#ef4444' },
+  raid:           { duration: 20000, nameKey: 'asteroids.rl.mid.raid',           descKey: 'asteroids.rl.mid.raid.desc',           color: '#f97316' },
+  empBurst:       { duration: 4000,  nameKey: 'asteroids.rl.mid.empBurst',       descKey: 'asteroids.rl.mid.empBurst.desc',       color: '#60a5fa' },
+  magneticStorm:  { duration: 7000,  nameKey: 'asteroids.rl.mid.magneticStorm',  descKey: 'asteroids.rl.mid.magneticStorm.desc',  color: '#e879f9' },
+  cloakField:     { duration: 5000,  nameKey: 'asteroids.rl.mid.cloakField',     descKey: 'asteroids.rl.mid.cloakField.desc',     color: '#22d3ee' },
+  overdrivePulse: { duration: 4000,  nameKey: 'asteroids.rl.mid.overdrivePulse', descKey: 'asteroids.rl.mid.overdrivePulse.desc', color: '#facc15' },
 };
 
 export function rollMidWaveEvent(wave: number): MidWaveEventType | null {
   if (wave < 8) return null;
-  // 15% chance per roll
-  if (Math.random() > 0.15) return null;
-  const roll = Math.random();
-  if (roll < 0.30) return 'solarFlare';
-  if (roll < 0.55) return 'gravityWell';
-  if (roll < 0.80) return 'powerSurge';
-  return 'asteroidSwarm';
+  if (Math.random() > 0.18) return null; // 18% chance
+  const pool: Array<{ type: MidWaveEventType; weight: number; minWave: number }> = [
+    { type: 'solarFlare',     weight: 12, minWave: 8 },
+    { type: 'gravityWell',    weight: 10, minWave: 8 },
+    { type: 'powerSurge',     weight: 12, minWave: 8 },
+    { type: 'asteroidSwarm',  weight: 10, minWave: 8 },
+    { type: 'empBurst',       weight: 10, minWave: 8 },
+    { type: 'overdrivePulse', weight: 10, minWave: 8 },
+    { type: 'magneticStorm',  weight: 8,  minWave: 10 },
+    { type: 'cloakField',     weight: 8,  minWave: 10 },
+    { type: 'raid',           weight: 8,  minWave: 12 },
+  ];
+  const eligible = pool.filter(e => wave >= e.minWave);
+  const totalWeight = eligible.reduce((s, e) => s + e.weight, 0);
+  let roll = Math.random() * totalWeight;
+  for (const e of eligible) {
+    roll -= e.weight;
+    if (roll <= 0) return e.type;
+  }
+  return eligible[eligible.length - 1].type;
 }
 
 // ---------------------------------------------------------------------------
@@ -504,6 +576,29 @@ export function rollMidWaveEvent(wave: number): MidWaveEventType | null {
 
 export function getAscensionScrapBonus(ascensionLevel: number): number {
   return 1 + ascensionLevel * 0.05;
+}
+
+// ---------------------------------------------------------------------------
+// Prestige unlock requirements (ascension level needed)
+// ---------------------------------------------------------------------------
+
+/** Items gated behind prestige — must reach this ascension level to appear in buff/artifact pools */
+export const PRESTIGE_REQUIREMENTS: Record<string, number> = {
+  // Ship
+  ascendant: 1,
+  // Buffs
+  plasmaField: 2,
+  scrapFrenzy: 3,
+  // Artifacts
+  stellarForge: 1,
+  timeCrystal: 2,
+};
+
+/** Check if a prestige-gated item is unlocked */
+export function isPrestigeUnlocked(id: string, ascensionLevel: number): boolean {
+  const req = PRESTIGE_REQUIREMENTS[id];
+  if (req == null) return true; // not prestige-gated
+  return ascensionLevel >= req;
 }
 
 /** Power-up drop rate multiplier — decreases in late game to prevent oversaturation */
@@ -566,6 +661,12 @@ export const SHIPS: ShipDef[] = [
     hpMod: 1, accelMod: 0.95, turnSpeedMod: 0.85, fireRateMod: 1, bulletDamageMod: 1,
     scrapRadiusMod: 1, scrapMultMod: 1, shieldRechargeMod: 0.5, phaseChance: 0,
   },
+  {
+    id: 'ascendant', nameKey: 'asteroids.rl.ship.ascendant', descKey: 'asteroids.rl.ship.ascendant.desc',
+    passiveKey: 'asteroids.rl.ship.ascendant.passive', icon: '\u{1F31F}', color: '#facc15',
+    hpMod: 0, accelMod: 1.1, turnSpeedMod: 1.1, fireRateMod: 0.85, bulletDamageMod: 1.1,
+    scrapRadiusMod: 1.15, scrapMultMod: 1.1, shieldRechargeMod: 0.8, phaseChance: 0.05,
+  },
 ];
 
 export const SHIP_MAP: Record<ShipId, ShipDef> = Object.fromEntries(
@@ -582,10 +683,15 @@ export const MILESTONES: MilestoneDef[] = [
   { id: 'reach_wave_30', nameKey: 'asteroids.rl.ms.reachWave30', descKey: 'asteroids.rl.ms.reachWave30.desc', icon: '\u{1F3C6}', unlock: { type: 'artifact', artifactId: 'voidArmor' as ArtifactId } },
   { id: 'kill_500_asteroids', nameKey: 'asteroids.rl.ms.kill500', descKey: 'asteroids.rl.ms.kill500.desc', icon: '\u2604\uFE0F', unlock: { type: 'buff', buffId: 'orbitalStrike' as TempBuffId } },
   { id: 'kill_50_bosses', nameKey: 'asteroids.rl.ms.kill50Bosses', descKey: 'asteroids.rl.ms.kill50Bosses.desc', icon: '\u{1F47E}', unlock: { type: 'ship', shipId: 'sentinel' } },
-  { id: 'collect_5000_scrap', nameKey: 'asteroids.rl.ms.collect5000', descKey: 'asteroids.rl.ms.collect5000.desc', icon: '\u{1F4B0}', unlock: { type: 'ship', shipId: 'harvester' } },
+  { id: 'collect_20000_run_scrap', nameKey: 'asteroids.rl.ms.collect20000run', descKey: 'asteroids.rl.ms.collect20000run.desc', icon: '\u{1F4B0}', unlock: { type: 'ship', shipId: 'harvester' } },
   { id: 'ascend_once', nameKey: 'asteroids.rl.ms.ascend', descKey: 'asteroids.rl.ms.ascend.desc', icon: '\u2B50', unlock: { type: 'buff', buffId: 'chainLightning' as TempBuffId } },
   { id: 'defeat_megaboss', nameKey: 'asteroids.rl.ms.megaboss', descKey: 'asteroids.rl.ms.megaboss.desc', icon: '\u{1F451}', unlock: { type: 'artifact', artifactId: 'bossSlayer' as ArtifactId } },
   { id: 'reach_wave_50', nameKey: 'asteroids.rl.ms.reachWave50', descKey: 'asteroids.rl.ms.reachWave50.desc', icon: '\u{1F525}', unlock: { type: 'buff', buffId: 'voidShield' as TempBuffId } },
+  // Prestige milestones
+  { id: 'prestige_stellar', nameKey: 'asteroids.rl.ms.prestigeStellar', descKey: 'asteroids.rl.ms.prestigeStellar.desc', icon: '\u2B50', unlock: { type: 'artifact', artifactId: 'stellarForge' as ArtifactId } },
+  { id: 'prestige_crystal', nameKey: 'asteroids.rl.ms.prestigeCrystal', descKey: 'asteroids.rl.ms.prestigeCrystal.desc', icon: '\u{1F48E}', unlock: { type: 'artifact', artifactId: 'timeCrystal' as ArtifactId } },
+  { id: 'prestige_plasma', nameKey: 'asteroids.rl.ms.prestigePlasma', descKey: 'asteroids.rl.ms.prestigePlasma.desc', icon: '\u{1F7E1}', unlock: { type: 'buff', buffId: 'plasmaField' as TempBuffId } },
+  { id: 'prestige_frenzy', nameKey: 'asteroids.rl.ms.prestigeFrenzy', descKey: 'asteroids.rl.ms.prestigeFrenzy.desc', icon: '\u{1F4B0}', unlock: { type: 'buff', buffId: 'scrapFrenzy' as TempBuffId } },
 ];
 
 // ---------------------------------------------------------------------------

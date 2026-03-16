@@ -8,7 +8,7 @@ import type {
   RunStats,
   DailyRunResult,
 } from './roguelite-types';
-import { PERMANENT_UPGRADES, TEMP_BUFFS, MILESTONES } from './roguelite-data';
+import { PERMANENT_UPGRADES, TEMP_BUFFS, MILESTONES, isPrestigeUnlocked } from './roguelite-data';
 
 // ---------------------------------------------------------------------------
 // LocalStorage persistence
@@ -134,6 +134,7 @@ export function addScrap(
 export function pickRandomBuffs(
   count: number,
   activeBuffs: ActiveBuff[],
+  ascensionLevel: number = 0,
 ): TempBuffDef[] {
   // Exclude buffs that are already active with wavesRemaining === 0 (rest-of-run)
   const permanentActiveIds = new Set(
@@ -142,7 +143,9 @@ export function pickRandomBuffs(
       .map((b) => b.id),
   );
 
-  const eligible = TEMP_BUFFS.filter((b) => !permanentActiveIds.has(b.id));
+  const eligible = TEMP_BUFFS.filter(
+    (b) => !permanentActiveIds.has(b.id) && isPrestigeUnlocked(b.id, ascensionLevel),
+  );
 
   // Fisher-Yates shuffle on a copy
   const shuffled = [...eligible];
@@ -181,6 +184,11 @@ export function selectShip(save: RogueliteSave, shipId: ShipId): RogueliteSave {
 
 export function isShipUnlocked(save: RogueliteSave, shipId: ShipId): boolean {
   if (shipId === 'vanguard') return true;
+  // Prestige ship check
+  if (isPrestigeUnlocked(shipId, -1) === false) {
+    // It's prestige-gated — check ascension level
+    return isPrestigeUnlocked(shipId, save.ascensionLevel ?? 0);
+  }
   return MILESTONES.some(
     (m) =>
       m.unlock.type === 'ship' &&
@@ -210,12 +218,17 @@ export function checkMilestones(
   if (!has('reach_wave_50') && wave >= 50) newMs.push('reach_wave_50');
   if (!has('kill_500_asteroids') && (save.totalAsteroidsKilled + runStats.asteroidsDestroyed) >= 500) newMs.push('kill_500_asteroids');
   if (!has('kill_50_bosses') && (save.totalBossesKilled + runStats.bossesKilled) >= 50) newMs.push('kill_50_bosses');
-  if (!has('collect_5000_scrap') && (save.bestRunScrap + runStats.scrapEarned) >= 5000) newMs.push('collect_5000_scrap');
+  if (!has('collect_20000_run_scrap') && runStats.scrapEarned >= 20000) newMs.push('collect_20000_run_scrap');
   if (!has('ascend_once') && save.ascensionLevel >= 1) newMs.push('ascend_once');
   if (!has('defeat_megaboss') && defeatedMegaBoss) newMs.push('defeat_megaboss');
   if (!has('no_damage_boss') && noDamageBoss) newMs.push('no_damage_boss');
   if (!has('all_buffs_run') && allBuffsRun) newMs.push('all_buffs_run');
   if (!has('max_all_upgrades') && PERMANENT_UPGRADES.every((u) => (save.upgrades[u.id] ?? 0) >= u.maxTier)) newMs.push('max_all_upgrades');
+  // Prestige milestones — unlock at specific ascension levels
+  if (!has('prestige_stellar') && save.ascensionLevel >= 1) newMs.push('prestige_stellar');
+  if (!has('prestige_crystal') && save.ascensionLevel >= 2) newMs.push('prestige_crystal');
+  if (!has('prestige_plasma') && save.ascensionLevel >= 2) newMs.push('prestige_plasma');
+  if (!has('prestige_frenzy') && save.ascensionLevel >= 3) newMs.push('prestige_frenzy');
 
   return newMs;
 }

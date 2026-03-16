@@ -684,7 +684,7 @@ export const curveFeverEngine: GameEngine<CurveFeverState, CurveFeverAction> & {
     const cfg = (config ?? {}) as CurveFeverConfig;
     const suddenDeath = cfg.suddenDeath ?? false;
     const bestOf = suddenDeath ? 1 : (cfg.bestOf ?? 5);
-    const winsNeeded = suddenDeath ? 1 : Math.ceil(bestOf / 2);
+    const winsNeeded = suddenDeath ? 1 : bestOf;
     const cfMapSize: CfMapSize = (['small', 'normal', 'large', 'huge'] as const).includes(cfg.mapSize as CfMapSize)
       ? (cfg.mapSize as CfMapSize) : 'normal';
     const mapDims = MAP_SIZE_PRESETS[cfMapSize];
@@ -1103,7 +1103,8 @@ export const curveFeverEngine: GameEngine<CurveFeverState, CurveFeverAction> & {
 
       // Trail collision (skip last 5 own segments for self-collision grace)
       // Phase effect: skip trail collision entirely
-      if (!p.inGap && !hasEffect(p, 'phase')) {
+      // Note: inGap only controls trail drawing, NOT collision immunity
+      if (!hasEffect(p, 'phase')) {
         const hitTrailIdx = collidesWithTrailsDetailed(newX, newY, newTrails, i, 5, pCollDistSq, teamSkipLists[i]);
         if (hitTrailIdx !== -1) {
           // Shield absorbs one trail collision

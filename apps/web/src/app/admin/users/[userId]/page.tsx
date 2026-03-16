@@ -26,6 +26,33 @@ interface CrossyProgress {
   activeSkin: string;
 }
 
+type PermanentUpgradeId = 'hull' | 'engine' | 'gyroscope' | 'caliber' | 'fireRate' | 'bulletSpeed' | 'magnet' | 'scrapBonus' | 'shieldGen' | 'critStrike' | 'retroThruster' | 'range';
+
+interface RogueliteSave {
+  scrap: number;
+  upgrades: Partial<Record<PermanentUpgradeId, number>>;
+  totalRuns: number;
+  bestWave: number;
+  bestScore: number;
+  ascensionLevel: number;
+  selectedShip: string;
+  unlockedMilestones: string[];
+  bestiary: Record<string, unknown>;
+  totalBossesKilled: number;
+  totalAsteroidsKilled: number;
+  bestRunScrap: number;
+}
+
+const UPGRADE_MAX_TIERS: Record<PermanentUpgradeId, number> = {
+  hull: 5, engine: 5, gyroscope: 5, caliber: 5, fireRate: 5, bulletSpeed: 5,
+  magnet: 3, scrapBonus: 3, shieldGen: 3, critStrike: 3, retroThruster: 1, range: 5,
+};
+
+const ALL_UPGRADE_IDS: PermanentUpgradeId[] = [
+  'hull', 'engine', 'gyroscope', 'caliber', 'fireRate', 'bulletSpeed',
+  'magnet', 'scrapBonus', 'shieldGen', 'critStrike', 'retroThruster', 'range',
+];
+
 interface UserDetail {
   profile: { id: string; nickname: string | null; role: string; created_at: string; suspended_at: string | null };
   email: string | null;
@@ -271,6 +298,19 @@ export default function AdminUserDetailPage() {
           t={t}
           onSetProgress={(game, data) => quickAction({ action: 'set_game_progress', game, data }, `set_gp_${game}`)}
           onResetProgress={(game) => doAction({ action: 'reset_game_progress', game }, `reset_gp_${game}`)}
+          onCancelConfirm={() => setConfirm(null)}
+        />
+      </Section>
+
+      {/* Asteroids Roguelite */}
+      <Section title={t('admin.roguelite.title')}>
+        <RogueliteManager
+          roguelite={(user.gameProgress?.asteroids_roguelite ?? null) as RogueliteSave | null}
+          actionLoading={actionLoading}
+          confirm={confirm}
+          t={t}
+          onSave={(data) => quickAction({ action: 'set_game_progress', game: 'asteroids_roguelite', data }, 'set_gp_asteroids_roguelite')}
+          onReset={() => doAction({ action: 'reset_game_progress', game: 'asteroids_roguelite' }, 'reset_gp_asteroids_roguelite')}
           onCancelConfirm={() => setConfirm(null)}
         />
       </Section>
@@ -1330,6 +1370,231 @@ function GameProgressManager({
           </div>
         );
       })()}
+    </div>
+  );
+}
+
+// ── Roguelite Manager ─────────────────────────────────────────────────────────
+
+function RogueliteManager({
+  roguelite, actionLoading, confirm, t, onSave, onReset, onCancelConfirm,
+}: {
+  roguelite: RogueliteSave | null;
+  actionLoading: string | null;
+  confirm: string | null;
+  t: (key: string) => string;
+  onSave: (data: RogueliteSave) => void;
+  onReset: () => void;
+  onCancelConfirm: () => void;
+}) {
+  const [scrapInput, setScrapInput] = useState('');
+  const [addScrapInput, setAddScrapInput] = useState('');
+
+  if (!roguelite) {
+    return <p className="text-[11px] text-zinc-600 italic">{t('admin.roguelite.noData')}</p>;
+  }
+
+  const save = roguelite;
+
+  function updateSave(patch: Partial<RogueliteSave>) {
+    onSave({ ...save, ...patch });
+  }
+
+  function handleSetScrap() {
+    const val = parseInt(scrapInput, 10);
+    if (isNaN(val) || val < 0) return;
+    updateSave({ scrap: val });
+    setScrapInput('');
+  }
+
+  function handleAddScrap() {
+    const val = parseInt(addScrapInput, 10);
+    if (isNaN(val) || val === 0) return;
+    updateSave({ scrap: Math.max(0, save.scrap + val) });
+    setAddScrapInput('');
+  }
+
+  function setUpgradeTier(id: PermanentUpgradeId, tier: number) {
+    const clamped = Math.max(0, Math.min(tier, UPGRADE_MAX_TIERS[id]));
+    const newUpgrades = { ...save.upgrades, [id]: clamped };
+    if (clamped === 0) delete newUpgrades[id];
+    updateSave({ upgrades: newUpgrades });
+  }
+
+  function maxAllUpgrades() {
+    const maxed: Partial<Record<PermanentUpgradeId, number>> = {};
+    for (const id of ALL_UPGRADE_IDS) {
+      maxed[id] = UPGRADE_MAX_TIERS[id];
+    }
+    updateSave({ upgrades: maxed });
+  }
+
+  function setAscension(delta: number) {
+    updateSave({ ascensionLevel: Math.max(0, save.ascensionLevel + delta) });
+  }
+
+  return (
+    <div className="space-y-4">
+      {/* Scrap + Ascension row */}
+      <div className="grid grid-cols-2 gap-3">
+        {/* Scrap */}
+        <div className="rounded-lg bg-amber-950/20 border border-amber-900/30 p-3 space-y-2">
+          <div>
+            <p className="text-[10px] text-zinc-500">{t('admin.roguelite.scrap')}</p>
+            <p className="text-amber-400 font-bold text-lg tabular-nums">{save.scrap.toLocaleString()}</p>
+          </div>
+          <div className="flex gap-1.5 items-center">
+            <input
+              type="number"
+              value={scrapInput}
+              onChange={(e) => setScrapInput(e.target.value)}
+              placeholder={String(save.scrap)}
+              min="0"
+              className="w-24 bg-zinc-800/50 border border-zinc-700/50 rounded-md px-2.5 py-1 text-[11px] text-zinc-200 placeholder-zinc-600 focus:outline-none focus:border-amber-500/50"
+              onKeyDown={(e) => { if (e.key === 'Enter') handleSetScrap(); }}
+            />
+            <button onClick={handleSetScrap}
+              disabled={actionLoading === 'set_gp_asteroids_roguelite'}
+              className="px-2.5 py-1 rounded-md text-[10px] font-medium border border-amber-800/60 text-amber-400 hover:bg-amber-900/30 transition-colors disabled:opacity-40">
+              {t('admin.roguelite.setScrap')}
+            </button>
+          </div>
+          <div className="flex gap-1.5 items-center">
+            <input
+              type="number"
+              value={addScrapInput}
+              onChange={(e) => setAddScrapInput(e.target.value)}
+              placeholder="+/-"
+              className="w-24 bg-zinc-800/50 border border-zinc-700/50 rounded-md px-2.5 py-1 text-[11px] text-zinc-200 placeholder-zinc-600 focus:outline-none focus:border-amber-500/50"
+              onKeyDown={(e) => { if (e.key === 'Enter') handleAddScrap(); }}
+            />
+            <button onClick={handleAddScrap}
+              disabled={actionLoading === 'set_gp_asteroids_roguelite'}
+              className="px-2.5 py-1 rounded-md text-[10px] font-medium border border-amber-800/60 text-amber-400 hover:bg-amber-900/30 transition-colors disabled:opacity-40">
+              {t('admin.roguelite.addScrap')}
+            </button>
+          </div>
+          <div className="flex gap-1 flex-wrap">
+            {[100, 500, 1000, 5000].map((amount) => (
+              <button key={amount}
+                onClick={() => updateSave({ scrap: save.scrap + amount })}
+                disabled={actionLoading === 'set_gp_asteroids_roguelite'}
+                className="px-2 py-0.5 rounded text-[10px] font-medium border border-amber-800/40 text-amber-400/70 hover:bg-amber-900/20 transition-colors disabled:opacity-40">
+                +{amount}
+              </button>
+            ))}
+          </div>
+        </div>
+
+        {/* Ascension */}
+        <div className="rounded-lg bg-indigo-950/20 border border-indigo-900/30 p-3">
+          <p className="text-[10px] text-zinc-500">{t('admin.roguelite.ascension')}</p>
+          <p className="text-indigo-400 font-bold text-2xl tabular-nums mb-2">{save.ascensionLevel}</p>
+          <div className="flex gap-1.5">
+            <button onClick={() => setAscension(-1)}
+              disabled={save.ascensionLevel <= 0 || actionLoading === 'set_gp_asteroids_roguelite'}
+              className="px-2.5 py-1 rounded-md text-[11px] font-medium border border-indigo-800/60 text-indigo-400 hover:bg-indigo-900/30 transition-colors disabled:opacity-40">
+              -1
+            </button>
+            <button onClick={() => setAscension(1)}
+              disabled={actionLoading === 'set_gp_asteroids_roguelite'}
+              className="px-2.5 py-1 rounded-md text-[11px] font-medium border border-indigo-800/60 text-indigo-400 hover:bg-indigo-900/30 transition-colors disabled:opacity-40">
+              +1
+            </button>
+            <button onClick={() => setAscension(5)}
+              disabled={actionLoading === 'set_gp_asteroids_roguelite'}
+              className="px-2.5 py-1 rounded-md text-[11px] font-medium border border-indigo-800/60 text-indigo-400 hover:bg-indigo-900/30 transition-colors disabled:opacity-40">
+              +5
+            </button>
+          </div>
+        </div>
+      </div>
+
+      {/* Upgrades */}
+      <div>
+        <p className="text-[10px] uppercase tracking-wider text-zinc-500 mb-2">{t('admin.roguelite.upgrades')}</p>
+        <div className="grid grid-cols-2 sm:grid-cols-3 gap-1.5">
+          {ALL_UPGRADE_IDS.map((id) => {
+            const currentTier = save.upgrades[id] ?? 0;
+            const maxTier = UPGRADE_MAX_TIERS[id];
+            const isMaxed = currentTier >= maxTier;
+            return (
+              <div key={id}
+                className={`rounded-md px-2.5 py-2 transition-colors ${
+                  isMaxed
+                    ? 'bg-emerald-950/30 border border-emerald-800/40'
+                    : currentTier > 0
+                      ? 'bg-indigo-950/20 border border-indigo-800/30'
+                      : 'bg-zinc-900/50 border border-zinc-800/50'
+                }`}
+              >
+                <div className="flex items-center justify-between mb-1">
+                  <p className="text-[11px] text-zinc-200 font-medium truncate">{t(`admin.roguelite.upgrade.${id}`)}</p>
+                  <span className={`text-[10px] font-mono tabular-nums ${
+                    isMaxed ? 'text-emerald-400' : currentTier > 0 ? 'text-indigo-400' : 'text-zinc-500'
+                  }`}>
+                    {currentTier}/{maxTier}
+                  </span>
+                </div>
+                <div className="flex gap-1">
+                  <button onClick={() => setUpgradeTier(id, currentTier - 1)}
+                    disabled={currentTier <= 0 || actionLoading === 'set_gp_asteroids_roguelite'}
+                    className="px-2 py-0.5 rounded text-[10px] font-medium border border-zinc-700/60 text-zinc-400 hover:bg-zinc-800/50 transition-colors disabled:opacity-30">
+                    -
+                  </button>
+                  <button onClick={() => setUpgradeTier(id, currentTier + 1)}
+                    disabled={isMaxed || actionLoading === 'set_gp_asteroids_roguelite'}
+                    className="px-2 py-0.5 rounded text-[10px] font-medium border border-indigo-800/60 text-indigo-400 hover:bg-indigo-900/30 transition-colors disabled:opacity-30">
+                    +
+                  </button>
+                  {!isMaxed && (
+                    <button onClick={() => setUpgradeTier(id, maxTier)}
+                      disabled={actionLoading === 'set_gp_asteroids_roguelite'}
+                      className="px-2 py-0.5 rounded text-[10px] font-medium border border-emerald-800/60 text-emerald-400 hover:bg-emerald-900/30 transition-colors disabled:opacity-30">
+                      MAX
+                    </button>
+                  )}
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      </div>
+
+      {/* Stats */}
+      <div>
+        <p className="text-[10px] uppercase tracking-wider text-zinc-500 mb-2">{t('admin.roguelite.stats')}</p>
+        <div className="grid grid-cols-3 sm:grid-cols-6 gap-2 text-xs">
+          {([
+            ['totalRuns', save.totalRuns],
+            ['bestWave', save.bestWave],
+            ['bestScore', save.bestScore],
+            ['totalBossesKilled', save.totalBossesKilled],
+            ['totalAsteroidsKilled', save.totalAsteroidsKilled],
+            ['bestRunScrap', save.bestRunScrap],
+          ] as [string, number][]).map(([key, val]) => (
+            <div key={key} className="rounded-md bg-zinc-800/30 border border-zinc-700/30 px-2.5 py-2 text-center">
+              <p className="text-[9px] text-zinc-500 truncate">{t(`admin.roguelite.${key}`)}</p>
+              <p className="text-zinc-200 font-semibold tabular-nums">{(val ?? 0).toLocaleString()}</p>
+            </div>
+          ))}
+        </div>
+      </div>
+
+      {/* Bulk actions */}
+      <div className="flex items-center gap-2 flex-wrap pt-1 border-t border-zinc-800">
+        <button onClick={maxAllUpgrades}
+          disabled={actionLoading === 'set_gp_asteroids_roguelite'}
+          className="px-3 py-1 rounded-md text-[11px] font-medium border border-emerald-800/60 text-emerald-400 hover:bg-emerald-900/30 transition-colors disabled:opacity-40">
+          {t('admin.roguelite.maxAll')}
+        </button>
+        <ActionButton
+          label={t('admin.roguelite.resetAll')} variant="danger"
+          loading={actionLoading === 'reset_gp_asteroids_roguelite'} confirming={confirm === 'reset_gp_asteroids_roguelite'}
+          onClick={onReset}
+          onCancel={onCancelConfirm}
+        />
+      </div>
     </div>
   );
 }

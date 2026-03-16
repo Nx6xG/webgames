@@ -1276,7 +1276,11 @@ io.on('connection', (socket) => {
       socket.emit('rematch_error', { code: 'GAME_NOT_OVER', message: 'The game is still in progress.' });
       return;
     }
-    if (room.players.length < room.minPlayers) {
+    // Count bots (if any) toward the player total for minPlayers check
+    const botCount = (room.gameConfig as Record<string, unknown> | undefined)?.bots
+      ? (((room.gameConfig as Record<string, unknown>).bots) as unknown[]).length
+      : 0;
+    if (room.players.length + botCount < room.minPlayers) {
       socket.emit('rematch_error', { code: 'OPPONENT_DISCONNECTED', message: 'Not enough players connected.' });
       return;
     }
@@ -1285,6 +1289,7 @@ io.on('connection', (socket) => {
       return;
     }
 
+    // With bots, a single human player's vote is enough for rematch
     const result = roomManager.voteRematch(socket.id);
     if (!result) return;
 

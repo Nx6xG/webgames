@@ -15,6 +15,7 @@ import {
   BOSS_VARIANT_CONFIG,
   ELITE_MODIFIER_CONFIG,
   WAVE_EVENT_CONFIG,
+  MID_WAVE_EVENT_CONFIG,
   MEGA_BOSS_CONFIG,
   TEMP_BUFF_MAP,
   ARTIFACT_MAP,
@@ -27,7 +28,7 @@ interface ContentGuideProps {
   onClose: () => void;
 }
 
-type Tab = 'overview' | 'ships' | 'upgrades' | 'buffs' | 'artifacts' | 'curses' | 'enemies' | 'milestones';
+type Tab = 'overview' | 'ships' | 'upgrades' | 'buffs' | 'artifacts' | 'curses' | 'enemies' | 'events' | 'milestones';
 
 const TABS: { id: Tab; icon: string; labelKey: string }[] = [
   { id: 'overview', icon: '📋', labelKey: 'asteroids.rl.content' },
@@ -37,6 +38,7 @@ const TABS: { id: Tab; icon: string; labelKey: string }[] = [
   { id: 'artifacts', icon: '💎', labelKey: 'asteroids.rl.content.artifacts' },
   { id: 'curses', icon: '🔥', labelKey: 'asteroids.rl.content.curses' },
   { id: 'enemies', icon: '👾', labelKey: 'asteroids.rl.content.bosses' },
+  { id: 'events', icon: '🌀', labelKey: 'asteroids.rl.content.events' },
   { id: 'milestones', icon: '🏆', labelKey: 'asteroids.rl.content.milestones' },
 ];
 
@@ -95,6 +97,7 @@ export default function ContentGuide({ save, onClose }: ContentGuideProps) {
                   { label: t('asteroids.rl.content.buffs'), value: String(TEMP_BUFFS.length), color: '#60a5fa', tab: 'buffs' as Tab },
                   { label: t('asteroids.rl.content.artifacts'), value: String(ARTIFACTS.length), color: '#c084fc', tab: 'artifacts' as Tab },
                   { label: t('asteroids.rl.content.curses'), value: String(CURSES.length), color: '#f87171', tab: 'curses' as Tab },
+                  { label: t('asteroids.rl.content.events'), value: `${Object.keys(WAVE_EVENT_CONFIG).length + Object.keys(MID_WAVE_EVENT_CONFIG).length}`, color: '#a78bfa', tab: 'events' as Tab },
                   { label: t('asteroids.rl.content.milestones'), value: `${save.unlockedMilestones.length}/${MILESTONES.length}`, color: '#f59e0b', tab: 'milestones' as Tab },
                 ].map((item) => (
                   <button key={item.label} onClick={() => setTab(item.tab)} className="rounded-xl bg-[var(--card)] border border-[var(--border)] p-4 text-left cursor-pointer hover:border-zinc-600 transition-colors">
@@ -114,19 +117,6 @@ export default function ContentGuide({ save, onClose }: ContentGuideProps) {
                     </div>
                   </div>
                 ))}
-              </div>
-              <Section title={t('asteroids.rl.guide.waveEvents')} desc={t('asteroids.rl.guide.waveEvents.desc')} />
-              <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
-                {(Object.keys(WAVE_EVENT_CONFIG) as Array<keyof typeof WAVE_EVENT_CONFIG>).map((key) => {
-                  const cfg = WAVE_EVENT_CONFIG[key];
-                  return (
-                    <div key={key} className="rounded-lg bg-[var(--card)] border border-[var(--border)] p-3">
-                      <div className="text-sm font-bold text-amber-300">{t(cfg.nameKey)}</div>
-                      <div className="text-xs text-[var(--muted)] mt-1">{t(cfg.descKey)}</div>
-                      <div className="text-[10px] text-zinc-500 mt-1">{Math.round(cfg.duration / 1000)}s</div>
-                    </div>
-                  );
-                })}
               </div>
               <Section title={t('asteroids.rl.content.ascension')} desc={t('asteroids.rl.guide.ascension.desc')} />
               <Section title={t('asteroids.rl.content.megaboss')} desc={t('asteroids.rl.guide.megaboss.desc')} />
@@ -312,6 +302,43 @@ export default function ContentGuide({ save, onClose }: ContentGuideProps) {
                     <div key={phase} className="rounded-lg border border-[var(--border)] bg-[var(--card)] p-3 text-center">
                       <div className="text-sm font-bold capitalize" style={{ color: colors[phase] }}>{t(`asteroids.rl.megaboss.phase.${phase}`)}</div>
                       <div className="text-xs text-zinc-500 mt-1">HP {cfg.hp}</div>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          )}
+
+          {/* ── Events ── */}
+          {tab === 'events' && (
+            <div className="space-y-6">
+              <Section title={t('asteroids.rl.content.waveEvents')} desc={t('asteroids.rl.guide.waveEvents.desc')} />
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                {(Object.keys(WAVE_EVENT_CONFIG) as Array<keyof typeof WAVE_EVENT_CONFIG>).map((key) => {
+                  const cfg = WAVE_EVENT_CONFIG[key];
+                  return (
+                    <div key={key} className="rounded-xl border border-[var(--border)] bg-[var(--card)] p-4">
+                      <div className="flex items-center justify-between">
+                        <div className="text-sm font-bold text-amber-300">{t(cfg.nameKey)}</div>
+                        <span className="text-[10px] text-zinc-500 tabular-nums">{Math.round(cfg.duration / 1000)}s</span>
+                      </div>
+                      <div className="text-xs text-[var(--muted)] mt-1">{t(cfg.descKey)}</div>
+                    </div>
+                  );
+                })}
+              </div>
+
+              <Section title={t('asteroids.rl.content.midWaveEvents')} desc={t('asteroids.rl.guide.midWaveEvents.desc')} />
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                {(Object.keys(MID_WAVE_EVENT_CONFIG) as Array<keyof typeof MID_WAVE_EVENT_CONFIG>).map((key) => {
+                  const cfg = MID_WAVE_EVENT_CONFIG[key];
+                  return (
+                    <div key={key} className="rounded-xl border border-[var(--border)] bg-[var(--card)] p-4" style={{ borderLeftWidth: '3px', borderLeftColor: cfg.color }}>
+                      <div className="flex items-center justify-between">
+                        <div className="text-sm font-bold" style={{ color: cfg.color }}>{t(cfg.nameKey)}</div>
+                        <span className="text-[10px] text-zinc-500 tabular-nums">{cfg.duration > 1 ? `${Math.round(cfg.duration / 1000)}s` : 'instant'}</span>
+                      </div>
+                      <div className="text-xs text-[var(--muted)] mt-1">{t(cfg.descKey)}</div>
                     </div>
                   );
                 })}

@@ -100,6 +100,7 @@ interface Asteroid {
   rlEliteShieldHit?: boolean;
   rlTeleportTimer?: number;
   rlEventAsteroid?: boolean; // wave event asteroid (non-damaging in scrap bonus)
+  rlGolden?: boolean; // golden scrap asteroid (visual + high scrap value)
 }
 
 interface Particle {
@@ -136,6 +137,12 @@ interface BossBullet {
   life: number;
 }
 
+interface BossMine {
+  x: number; y: number;
+  timer: number; // ms until explosion
+  exploded: boolean;
+}
+
 interface Boss {
   x: number; y: number;
   vx: number; vy: number;
@@ -148,6 +155,19 @@ interface Boss {
   rlShieldMaxHp?: number;
   rlShieldRegenTimer?: number;
   rlSpawnTimer?: number;
+  rlMines?: BossMine[];
+  rlSplitSpawned?: boolean; // splitter: already spawned mini-bosses
+}
+
+interface Raider {
+  pos: Vec2;
+  vel: Vec2;
+  angle: number;
+  hp: number;
+  maxHp: number;
+  fireTimer: number;
+  alive: boolean;
+  bullets: BossBullet[];
 }
 
 interface GameState {
@@ -188,6 +208,8 @@ interface GameState {
   rlDailyModifiers?: DailyModifierId[];
   rlMidWaveEvent?: MidWaveEvent | null;
   rlMidWaveTimer?: number; // ms until next mid-wave event roll
+  rlRaider?: Raider | null;
+  rlMiniBosses?: Boss[];
 }
 
 // ── Constants ────────────────────────────────────────────────────────────────
@@ -755,6 +777,26 @@ export function AsteroidsGame() {
         const eventEnemiesDead = game.rlWaveEvent.type === 'miniBossRush'
           && !game.boss
           && game.asteroids.filter(a => a.rlEventAsteroid).length === 0;
+        // Warp Zone: random teleportation of asteroids
+        if (game.rlWaveEvent.type === 'warpZone' && Math.random() < 0.02) {
+          const idx = Math.floor(Math.random() * game.asteroids.length);
+          if (game.asteroids[idx]) {
+            game.asteroids[idx].pos.x = Math.random() * W;
+            game.asteroids[idx].pos.y = Math.random() * H;
+            game.particles.push(...makeParticles(game.asteroids[idx].pos, 5, '#c084fc'));
+          }
+        }
+        // Scrap Storm: continuously rain scrap drops
+        if (game.rlWaveEvent.type === 'scrapStorm' && game.rlScrapDrops && Math.random() < 0.15) {
+          game.rlScrapDrops.push({
+            x: Math.random() * W,
+            y: -10,
+            vx: (Math.random() - 0.5) * 0.5,
+            vy: 1.5 + Math.random() * 2,
+            value: Math.ceil(3 + game.wave * 0.3),
+            life: 8000,
+          });
+        }
         if (game.rlWaveEvent.timer <= 0 || eventEnemiesDead) {
           // Event expired or completed — clear event asteroids
           game.asteroids = game.asteroids.filter(a => !a.rlEventAsteroid);
@@ -813,9 +855,201 @@ export function AsteroidsGame() {
             game.asteroids.push(...swarmAsteroids);
           }
 
+          // EMP Burst: freeze all asteroids
+          if (mwe.type === 'empBurst') {
+            for (const a of game.asteroids) {
+              a.vel.x *= 0.92;
+              a.vel.y *= 0.92;
+            }
+          }
+
+          // Magnetic Storm: curve player bullets slightly
+          if (mwe.type === 'magneticStorm') {
+            const curvature = 0.03;
+            for (const b of game.bullets) {
+              b.vel.x += Math.sin(now * 0.003 + b.pos.y * 0.01) * curvature;
+              b.vel.y += Math.cos(now * 0.003 + b.pos.x * 0.01) * curvature;
+            }
+          }
+
+          // Overdrive Pulse: handled below where fireCooldown is computed (check hasPowerSurge)
+
+          // Raid: spawn enemy ship
+          if (mwe.type === 'raid' && !game.rlRaider) {
+            const edge = Math.floor(Math.random() * 4);
+            let rx = 0, ry = 0;
+            if (edge === 0) { rx = Math.random() * W; ry = -20; }
+            else if (edge === 1) { rx = W + 20; ry = Math.random() * H; }
+            else if (edge === 2) { rx = Math.random() * W; ry = H + 20; }
+            else { rx = -20; ry = Math.random() * H; }
+            game.rlRaider = {
+              pos: { x: rx, y: ry },
+              vel: { x: 0, y: 0 },
+              angle: 0,
+              hp: 3 + Math.floor(game.wave / 10),
+              maxHp: 3 + Math.floor(game.wave / 10),
+              fireTimer: 0,
+              alive: true,
+              bullets: [],
+            };
+          }
+
           if (mwe.timer <= 0) {
             game.rlMidWaveEvent = null;
+            // Kill raider if event expired and it's still alive
+            if (game.rlRaider?.alive) {
+              game.rlRaider.alive = false;
+            }
           }
+        }
+      }
+
+      // ── Raider AI update ──
+      if (game.rlRaider?.alive) {
+        const raider = game.rlRaider;
+        const dtSec = dt / 1000;
+        // Aim at player
+        const rdx = game.ship.pos.x - raider.pos.x;
+        const rdy = game.ship.pos.y - raider.pos.y;
+        const targetAngle = Math.atan2(rdy, rdx);
+        // Smooth rotation
+        let angleDiff = targetAngle - raider.angle;
+        while (angleDiff > Math.PI) angleDiff -= Math.PI * 2;
+        while (angleDiff < -Math.PI) angleDiff += Math.PI * 2;
+        raider.angle += Math.sign(angleDiff) * Math.min(Math.abs(angleDiff), 3.5 * dtSec);
+        // Thrust toward player (maintain distance 150-250px)
+        const dist = Math.sqrt(rdx * rdx + rdy * rdy) || 1;
+        const accel = dist > 250 ? 0.08 : dist < 150 ? -0.04 : 0;
+        raider.vel.x += Math.cos(raider.angle) * accel;
+        raider.vel.y += Math.sin(raider.angle) * accel;
+        // Friction
+        raider.vel.x *= 0.98;
+        raider.vel.y *= 0.98;
+        raider.pos.x += raider.vel.x;
+        raider.pos.y += raider.vel.y;
+        // Wrap
+        if (raider.pos.x < -30) raider.pos.x = W + 30;
+        if (raider.pos.x > W + 30) raider.pos.x = -30;
+        if (raider.pos.y < -30) raider.pos.y = H + 30;
+        if (raider.pos.y > H + 30) raider.pos.y = -30;
+        // Fire at player
+        raider.fireTimer -= dt;
+        if (raider.fireTimer <= 0) {
+          raider.fireTimer = 600 + Math.random() * 400; // every 0.6-1s
+          const bSpeed = 5;
+          raider.bullets.push({
+            pos: { x: raider.pos.x + Math.cos(raider.angle) * SHIP_SIZE, y: raider.pos.y + Math.sin(raider.angle) * SHIP_SIZE },
+            vel: { x: Math.cos(raider.angle) * bSpeed, y: Math.sin(raider.angle) * bSpeed },
+            life: 2000,
+          });
+        }
+        // Update raider bullets
+        for (let i = raider.bullets.length - 1; i >= 0; i--) {
+          const rb = raider.bullets[i];
+          rb.pos.x += rb.vel.x;
+          rb.pos.y += rb.vel.y;
+          rb.life -= dt;
+          if (rb.life <= 0 || rb.pos.x < -20 || rb.pos.x > W + 20 || rb.pos.y < -20 || rb.pos.y > H + 20) {
+            raider.bullets.splice(i, 1);
+            continue;
+          }
+          // Hit player
+          if (game.ship.invulnerable <= 0) {
+            const pdx = rb.pos.x - game.ship.pos.x;
+            const pdy = rb.pos.y - game.ship.pos.y;
+            if (pdx * pdx + pdy * pdy < SHIP_SIZE * SHIP_SIZE) {
+              raider.bullets.splice(i, 1);
+              if (game.hasShield) {
+                game.hasShield = false;
+                game.particles.push(...makeParticles(game.ship.pos, 12, '#60a5fa'));
+              } else {
+                game.lives--;
+                if (game.rlRunStats) game.rlRunStats.damageTaken++;
+                game.particles.push(...makeParticles(game.ship.pos, 20, '#f87171'));
+                sfx.deathSound();
+                game.activePowers = [];
+                game.hasShield = false;
+                if (game.lives <= 0) {
+                  sfx.gameOverSound();
+                  setDisplayScore(game.score);
+                  setDisplayLives(0);
+                  setPhase('ended');
+                  if (!savedRef.current) { savedRef.current = true; const updated = updateStats(game.score, game.wave, game.asteroidsDestroyed); setStats(updated); }
+                  if (isRL && rlSaveRef.current) {
+                    const earned = game.rlScrap ?? 0;
+                    let updatedSave = addScrap(rlSaveRef.current, earned);
+                    updatedSave = { ...updatedSave, totalRuns: updatedSave.totalRuns + 1, bestWave: Math.max(updatedSave.bestWave, game.wave), bestScore: Math.max(updatedSave.bestScore, game.score), totalAsteroidsKilled: updatedSave.totalAsteroidsKilled + (game.rlRunStats?.asteroidsDestroyed ?? 0), totalBossesKilled: updatedSave.totalBossesKilled + (game.rlRunStats?.bossesKilled ?? 0), bestRunScrap: Math.max(updatedSave.bestRunScrap, earned) };
+                    if (game.rlBestiaryEncounters) { for (const key of game.rlBestiaryEncounters) { updatedSave = recordBestiaryEncounter(updatedSave, key, game.wave); } }
+                    const newMs = checkMilestones(updatedSave, game.rlRunStats ?? defaultRunStats(), game.wave, game.rlMegaBossDefeated ?? false, game.rlNoDamageBoss ?? false, false);
+                    if (newMs.length > 0) { updatedSave = applyMilestones(updatedSave, newMs); setNewMilestones(newMs.map(id => MILESTONES.find(m => m.id === id)!).filter(Boolean)); }
+                    saveRogueliteSave(updatedSave);
+                    if (cloudActive) syncRogueliteSave(updatedSave as unknown as Record<string, unknown>);
+                    setRlSave(updatedSave);
+                    setDisplayScrap(earned);
+                    if (game.rlIsDaily) { const dr: DailyRunResult = { date: getDailyRunDate(), wave: game.wave, score: game.score, scrap: earned }; saveDailyRun(dr); setDailyResult(dr); setIsDailyRun(false); }
+                  }
+                  return;
+                }
+                game.ship.pos = { x: W / 2, y: H / 2 };
+                game.ship.vel = { x: 0, y: 0 };
+                game.ship.angle = -Math.PI / 2;
+                game.ship.invulnerable = 2000;
+              }
+            }
+          }
+        }
+        // Player bullets hit raider
+        for (let i = game.bullets.length - 1; i >= 0; i--) {
+          const b = game.bullets[i];
+          const bdx = b.pos.x - raider.pos.x;
+          const bdy = b.pos.y - raider.pos.y;
+          if (bdx * bdx + bdy * bdy < (SHIP_SIZE + 4) * (SHIP_SIZE + 4)) {
+            game.bullets.splice(i, 1);
+            raider.hp--;
+            game.particles.push(...makeParticles(raider.pos, 8, '#f97316'));
+            if (raider.hp <= 0) {
+              raider.alive = false;
+              raider.bullets = [];
+              game.particles.push(...makeParticles(raider.pos, 30, '#f97316'));
+              game.score += 500;
+              sfx.bigExplosionSound();
+              // Drop scrap
+              if (game.rlScrapDrops) {
+                for (let s = 0; s < 5; s++) {
+                  game.rlScrapDrops.push({
+                    x: raider.pos.x + (Math.random() - 0.5) * 30,
+                    y: raider.pos.y + (Math.random() - 0.5) * 30,
+                    vx: (Math.random() - 0.5) * 2,
+                    vy: (Math.random() - 0.5) * 2,
+                    value: 20 + Math.floor(game.wave * 2),
+                    life: 8000,
+                  });
+                }
+              }
+              break;
+            }
+          }
+        }
+        // Player ship collide with raider
+        if (raider.alive && game.ship.invulnerable <= 0) {
+          const cdx = raider.pos.x - game.ship.pos.x;
+          const cdy = raider.pos.y - game.ship.pos.y;
+          if (cdx * cdx + cdy * cdy < (SHIP_SIZE * 2) * (SHIP_SIZE * 2)) {
+            if (game.hasShield) {
+              game.hasShield = false;
+              game.particles.push(...makeParticles(game.ship.pos, 12, '#60a5fa'));
+            } else {
+              game.lives--;
+              if (game.rlRunStats) game.rlRunStats.damageTaken++;
+              game.particles.push(...makeParticles(game.ship.pos, 20, '#f87171'));
+              sfx.deathSound();
+              game.ship.invulnerable = 2000;
+            }
+          }
+        }
+        // Clean up dead raider
+        if (!raider.alive) {
+          game.rlRaider = null;
         }
       }
 
@@ -878,6 +1112,10 @@ export function AsteroidsGame() {
       if (game.ship.invulnerable > 0) {
         game.ship.invulnerable -= dt;
       }
+      // Cloak field: grant invulnerability while active
+      if (game.rlMidWaveEvent?.type === 'cloakField') {
+        game.ship.invulnerable = Math.max(game.ship.invulnerable, 100);
+      }
 
       // ── Active power-up timers ──
       for (let i = game.activePowers.length - 1; i >= 0; i--) {
@@ -888,10 +1126,26 @@ export function AsteroidsGame() {
         }
       }
 
+      // ── Plasma field AoE (prestige buff) ──
+      if (isRL && game.rlActiveBuffs?.some(b => b.id === 'plasmaField') && rlStats) {
+        const plasmaRadius = 80;
+        for (const a of game.asteroids) {
+          const dx = a.pos.x - game.ship.pos.x, dy = a.pos.y - game.ship.pos.y;
+          if (dx * dx + dy * dy < (plasmaRadius + a.radius) ** 2) {
+            if (a.rlHp != null) {
+              a.rlHp -= rlStats.bulletDamage * 0.3 * (dt / 1000);
+            }
+          }
+        }
+      }
+
+      // ── Stellar forge artifact: scrap drops worth +50% ──
+      // (applied at drop time, see scrap drop creation)
+
       // ── Shooting ──
       const isRapid = hasPower(game.activePowers, 'rapid');
       const hasOverdrive = isRL && game.rlActiveBuffs?.some(b => b.id === 'overdrive');
-      const hasPowerSurge = game.rlMidWaveEvent?.type === 'powerSurge';
+      const hasPowerSurge = game.rlMidWaveEvent?.type === 'powerSurge' || game.rlMidWaveEvent?.type === 'overdrivePulse';
       const cooldown = (isRapid || hasOverdrive || hasPowerSurge) ? Math.min(fireCool * 0.5, 60) : fireCool;
       const maxBullets = isRapid ? 10 : MAX_BULLETS;
       shootCooldownRef.current -= dt;
@@ -1016,7 +1270,8 @@ export function AsteroidsGame() {
 
       // ── Time slow ──
       const hasTimeSlow = hasPower(game.activePowers, 'timeslow') || (isRL && game.rlActiveBuffs?.some(b => b.id === 'timeSlow'));
-      const timeSlowMult = hasTimeSlow ? 0.3 : 1;
+      const hasTimeCrystal = hasArt('timeCrystal');
+      const timeSlowMult = hasTimeSlow ? 0.3 : hasTimeCrystal ? 0.8 : 1;
 
       // ── Update asteroids ──
       const velocityCurseMult = isRL && game.rlCurses?.includes('velocity') ? 1.4 : 1;
@@ -1200,7 +1455,7 @@ export function AsteroidsGame() {
                 if (game.rlScrapDrops && a.rlScrapValue) {
                   const ascBonus = rlSaveRef.current ? getAscensionScrapBonus(rlSaveRef.current.ascensionLevel ?? 0) : 1;
                   const curseMult = game.rlCurses?.length ? getCurseScrapMultiplier(game.rlCurses) : 1;
-                  const scrapMult = rlStats.scrapMultiplier * ascBonus * curseMult * dailyScrapMult * (game.rlActiveBuffs?.some(b => b.id === 'doubleScrap') ? 2 : 1);
+                  const scrapMult = rlStats.scrapMultiplier * ascBonus * curseMult * dailyScrapMult * (game.rlActiveBuffs?.some(b => b.id === 'doubleScrap') ? 2 : 1) * (game.rlActiveBuffs?.some(b => b.id === 'scrapFrenzy') ? 3 : 1) * (hasArt('stellarForge') ? 1.5 : 1);
                   const val = Math.ceil(a.rlScrapValue * scrapMult);
                   game.rlScrapDrops.push({
                     x: a.pos.x, y: a.pos.y,
@@ -1549,28 +1804,136 @@ export function AsteroidsGame() {
           }
         }
 
+        // Berserker enrage: gets faster as HP drops
+        if (isRL && boss.rlVariant === 'berserker') {
+          const hpFrac = boss.hp / boss.maxHp;
+          const enrage = 1 + (1 - hpFrac) * 1.5; // up to 2.5x at low HP
+          const baseSpeed = BOSS_VARIANT_CONFIG.berserker.speed;
+          const speed = baseSpeed * enrage;
+          const len = Math.sqrt(boss.vx * boss.vx + boss.vy * boss.vy) || 1;
+          boss.vx = (boss.vx / len) * speed;
+          boss.vy = (boss.vy / len) * speed;
+        }
+
+        // Sniper: tries to keep distance from player
+        if (isRL && boss.rlVariant === 'sniper') {
+          const sdx = game.ship.pos.x - boss.x;
+          const sdy = game.ship.pos.y - boss.y;
+          const sDist = Math.sqrt(sdx * sdx + sdy * sdy) || 1;
+          if (sDist < 300) {
+            boss.vx -= (sdx / sDist) * 0.05;
+            boss.vy -= (sdy / sDist) * 0.05;
+          }
+        }
+
+        // Bomber: drop mines
+        if (isRL && boss.rlVariant === 'bomber') {
+          if (!boss.rlMines) boss.rlMines = [];
+          boss.rlSpawnTimer = (boss.rlSpawnTimer ?? 0) - 1;
+          if (boss.rlSpawnTimer <= 0) {
+            boss.rlSpawnTimer = 90; // every ~1.5s
+            boss.rlMines.push({ x: boss.x, y: boss.y, timer: 2500, exploded: false });
+          }
+          // Update mines
+          for (let mi = boss.rlMines.length - 1; mi >= 0; mi--) {
+            const mine = boss.rlMines[mi];
+            mine.timer -= dt;
+            if (mine.timer <= 0 && !mine.exploded) {
+              mine.exploded = true;
+              // Explosion: damage player if close
+              const mdx = mine.x - game.ship.pos.x;
+              const mdy = mine.y - game.ship.pos.y;
+              if (mdx * mdx + mdy * mdy < 80 * 80 && game.ship.invulnerable <= 0) {
+                if (game.hasShield) { game.hasShield = false; } else {
+                  game.lives--;
+                  if (game.rlRunStats) game.rlRunStats.damageTaken++;
+                  game.ship.invulnerable = 2000;
+                  sfx.deathSound();
+                }
+              }
+              // Fire 8 bullets outward from mine
+              for (let a = 0; a < 8; a++) {
+                const ang = (a / 8) * Math.PI * 2;
+                game.bossBullets.push({
+                  pos: { x: mine.x, y: mine.y },
+                  vel: { x: Math.cos(ang) * 2.5, y: Math.sin(ang) * 2.5 },
+                  life: 1500,
+                });
+              }
+              game.particles.push(...makeParticles({ x: mine.x, y: mine.y }, 20, '#fbbf24'));
+              sfx.explosionSound();
+              boss.rlMines.splice(mi, 1);
+            }
+          }
+        }
+
         // Fire at player
         boss.fireTimer--;
+        const berserkerEnrage = (isRL && boss.rlVariant === 'berserker') ? (1 + (1 - boss.hp / boss.maxHp) * 1.5) : 1;
+        const effectiveFireInterval = isRL && boss.rlVariant
+          ? Math.ceil(BOSS_VARIANT_CONFIG[boss.rlVariant].fireInterval / berserkerEnrage)
+          : BOSS_FIRE_INTERVAL;
         if (boss.fireTimer <= 0) {
-          boss.fireTimer = isRL && boss.rlVariant
-            ? BOSS_VARIANT_CONFIG[boss.rlVariant].fireInterval
-            : BOSS_FIRE_INTERVAL;
+          boss.fireTimer = effectiveFireInterval;
           const dx = game.ship.pos.x - boss.x;
           const dy = game.ship.pos.y - boss.y;
           const angle = Math.atan2(dy, dx);
-          game.bossBullets.push({
-            pos: { x: boss.x, y: boss.y },
-            vel: { x: Math.cos(angle) * BOSS_BULLET_SPEED, y: Math.sin(angle) * BOSS_BULLET_SPEED },
-            life: BOSS_BULLET_LIFE,
-          });
-          // Twin fires extra bullet at offset angle
-          if (isRL && boss.rlVariant === 'twin') {
-            const offAngle = angle + 0.3;
+          const variant = boss.rlVariant;
+          const cfg = isRL && variant ? BOSS_VARIANT_CONFIG[variant] : null;
+          const burstCount = cfg?.burstCount ?? 1;
+          const spread = cfg?.spreadAngle ?? 0;
+
+          if (isRL && variant === 'sniper') {
+            // Sniper: fast, accurate single shot
             game.bossBullets.push({
               pos: { x: boss.x, y: boss.y },
-              vel: { x: Math.cos(offAngle) * BOSS_BULLET_SPEED, y: Math.sin(offAngle) * BOSS_BULLET_SPEED },
-              life: BOSS_BULLET_LIFE,
+              vel: { x: Math.cos(angle) * 7, y: Math.sin(angle) * 7 },
+              life: 4000,
             });
+          } else if (isRL && variant === 'bomber') {
+            // Bomber fires slow spread
+            for (let i = 0; i < 3; i++) {
+              const a = angle + (i - 1) * 0.4;
+              game.bossBullets.push({
+                pos: { x: boss.x, y: boss.y },
+                vel: { x: Math.cos(a) * 2, y: Math.sin(a) * 2 },
+                life: 2500,
+              });
+            }
+          } else if (isRL && variant === 'berserker') {
+            // Berserker: more bullets as HP drops
+            const shotCount = boss.hp / boss.maxHp < 0.3 ? 5 : boss.hp / boss.maxHp < 0.6 ? 3 : 1;
+            for (let i = 0; i < shotCount; i++) {
+              const a = angle + (i - Math.floor(shotCount / 2)) * 0.25;
+              game.bossBullets.push({
+                pos: { x: boss.x, y: boss.y },
+                vel: { x: Math.cos(a) * (BOSS_BULLET_SPEED + 1), y: Math.sin(a) * (BOSS_BULLET_SPEED + 1) },
+                life: BOSS_BULLET_LIFE,
+              });
+            }
+          } else {
+            // Default + twin + shield + carrier + splitter
+            for (let i = 0; i < burstCount; i++) {
+              const offset = burstCount > 1 ? (i - (burstCount - 1) / 2) * spread : 0;
+              const a = angle + offset;
+              game.bossBullets.push({
+                pos: { x: boss.x, y: boss.y },
+                vel: { x: Math.cos(a) * BOSS_BULLET_SPEED, y: Math.sin(a) * BOSS_BULLET_SPEED },
+                life: BOSS_BULLET_LIFE,
+              });
+            }
+          }
+
+          // Standard boss: occasional spread shot in later waves
+          if (isRL && variant === 'standard' && game.wave >= 15 && Math.random() < 0.3) {
+            for (let i = -2; i <= 2; i++) {
+              if (i === 0) continue; // already fired center
+              game.bossBullets.push({
+                pos: { x: boss.x, y: boss.y },
+                vel: { x: Math.cos(angle + i * 0.2) * BOSS_BULLET_SPEED * 0.8, y: Math.sin(angle + i * 0.2) * BOSS_BULLET_SPEED * 0.8 },
+                life: BOSS_BULLET_LIFE * 0.7,
+              });
+            }
           }
         }
 
@@ -1601,11 +1964,27 @@ export function AsteroidsGame() {
               game.particles.push(...makeParticles({ x: boss.x, y: boss.y }, 20, '#eab308'));
               sfx.bigExplosionSound();
 
+              // Splitter: spawn 2 mini-bosses on death
+              if (isRL && boss.rlVariant === 'splitter' && !boss.rlSplitSpawned) {
+                boss.rlSplitSpawned = true;
+                if (!game.rlMiniBosses) game.rlMiniBosses = [];
+                for (let si = 0; si < 2; si++) {
+                  const offset = si === 0 ? -50 : 50;
+                  game.rlMiniBosses.push({
+                    x: boss.x + offset, y: boss.y,
+                    vx: randomBetween(-0.5, 0.5), vy: randomBetween(0.2, 0.5),
+                    hp: Math.ceil(boss.maxHp * 0.4), maxHp: Math.ceil(boss.maxHp * 0.4),
+                    fireTimer: 60, alive: true,
+                    rlVariant: 'standard',
+                  });
+                }
+              }
+
               // Scrap drop from boss (roguelite, with ascension bonus)
               if (isRL && game.rlScrapDrops && rlStats) {
                 const ascBonus = rlSaveRef.current ? getAscensionScrapBonus(rlSaveRef.current.ascensionLevel ?? 0) : 1;
                 const curseMult = game.rlCurses?.length ? getCurseScrapMultiplier(game.rlCurses) : 1;
-                const scrapMult = rlStats.scrapMultiplier * ascBonus * curseMult * dailyScrapMult * (hasDM('richBosses') ? 5 : 1) * (game.rlActiveBuffs?.some(b => b.id === 'doubleScrap') ? 2 : 1);
+                const scrapMult = rlStats.scrapMultiplier * ascBonus * curseMult * dailyScrapMult * (hasDM('richBosses') ? 5 : 1) * (game.rlActiveBuffs?.some(b => b.id === 'doubleScrap') ? 2 : 1) * (game.rlActiveBuffs?.some(b => b.id === 'scrapFrenzy') ? 3 : 1) * (hasArt('stellarForge') ? 1.5 : 1);
                 const val = Math.ceil(BASE_SCRAP_VALUES.boss * scrapMult);
                 game.rlScrapDrops.push({
                   x: boss.x, y: boss.y,
@@ -1618,7 +1997,7 @@ export function AsteroidsGame() {
 
               // Artifact drop: offer 2 random artifacts after boss kill
               if (isRL && game.rlArtifacts && game.rlArtifacts.length < ARTIFACTS.length) {
-                const artChoices = pickRandomArtifacts(2, game.rlArtifacts);
+                const artChoices = pickRandomArtifacts(2, game.rlArtifacts, rlSaveRef.current?.ascensionLevel ?? 0);
                 if (artChoices.length > 0) {
                   setArtifactChoices(artChoices);
                   setPhase('artifact_choice');
@@ -1682,6 +2061,47 @@ export function AsteroidsGame() {
         b.life -= dt;
         return b.life > 0 && b.pos.x > -10 && b.pos.x < W + 10 && b.pos.y > -10 && b.pos.y < H + 10;
       });
+
+      // ── Mini-bosses update (splitter children) ──
+      if (game.rlMiniBosses) {
+        for (let mbi = game.rlMiniBosses.length - 1; mbi >= 0; mbi--) {
+          const mb = game.rlMiniBosses[mbi];
+          if (!mb.alive) { game.rlMiniBosses.splice(mbi, 1); continue; }
+          mb.x += mb.vx * timeSlowMult;
+          mb.y += mb.vy * timeSlowMult;
+          if (mb.x < 30) { mb.x = 30; mb.vx = Math.abs(mb.vx); }
+          if (mb.x > W - 30) { mb.x = W - 30; mb.vx = -Math.abs(mb.vx); }
+          if (mb.y < 30) { mb.y = 30; mb.vy = Math.abs(mb.vy); }
+          if (mb.y > H - 30) { mb.y = H - 30; mb.vy = -Math.abs(mb.vy); }
+          mb.fireTimer--;
+          if (mb.fireTimer <= 0) {
+            mb.fireTimer = 80;
+            const a = Math.atan2(game.ship.pos.y - mb.y, game.ship.pos.x - mb.x);
+            game.bossBullets.push({ pos: { x: mb.x, y: mb.y }, vel: { x: Math.cos(a) * BOSS_BULLET_SPEED, y: Math.sin(a) * BOSS_BULLET_SPEED }, life: BOSS_BULLET_LIFE });
+          }
+          // Player bullets hit mini-boss
+          for (let bi = game.bullets.length - 1; bi >= 0; bi--) {
+            if (dist(game.bullets[bi].pos, { x: mb.x, y: mb.y }) < 30) {
+              game.bullets.splice(bi, 1);
+              const dmg = (isRL && rlStats) ? Math.ceil(rlStats.bulletDamage * bulletDmgMult) : 1;
+              mb.hp -= dmg;
+              game.particles.push(...makeParticles({ x: mb.x, y: mb.y }, 5, '#4ade80'));
+              sfx.explosionSound();
+              if (mb.hp <= 0) {
+                mb.alive = false;
+                game.score += 200;
+                game.particles.push(...makeParticles({ x: mb.x, y: mb.y }, 20, '#4ade80'));
+                sfx.bigExplosionSound();
+                if (game.rlScrapDrops) {
+                  game.rlScrapDrops.push({ x: mb.x, y: mb.y, vx: (Math.random() - 0.5) * 2, vy: (Math.random() - 0.5) * 2, value: 30, life: 8000 });
+                }
+              }
+              break;
+            }
+          }
+        }
+        game.rlMiniBosses = game.rlMiniBosses.filter(mb => mb.alive);
+      }
 
       // ── Boss bullet hitting ship ──
       if (game.ship.invulnerable <= 0) {
@@ -1930,7 +2350,7 @@ export function AsteroidsGame() {
 
             // Artifact drop
             if (game.rlArtifacts && game.rlArtifacts.length < ARTIFACTS.length) {
-              const artChoices = pickRandomArtifacts(2, game.rlArtifacts);
+              const artChoices = pickRandomArtifacts(2, game.rlArtifacts, rlSaveRef.current?.ascensionLevel ?? 0);
               if (artChoices.length > 0) {
                 setArtifactChoices(artChoices);
                 setPhase('artifact_choice');
@@ -2051,7 +2471,7 @@ export function AsteroidsGame() {
       }
 
       // ── Wave cleared ──
-      if (game.asteroids.length === 0 && !game.boss && !game.rlWaveEvent) {
+      if (game.asteroids.length === 0 && !game.boss && !game.rlWaveEvent && !(game.rlMiniBosses && game.rlMiniBosses.length > 0)) {
         game.wave++;
         if (isRL && game.rlRunStats) game.rlRunStats.wavesCleared++;
         sfx.levelUpSound();
@@ -2080,7 +2500,7 @@ export function AsteroidsGame() {
 
         // Buff choice every 3 waves in roguelite (not on boss waves)
         if (isRL && game.wave > 1 && (game.wave - 1) % 3 === 0 && !isBossWave(game.wave)) {
-          const choices = pickRandomBuffs(3, game.rlActiveBuffs ?? []);
+          const choices = pickRandomBuffs(3, game.rlActiveBuffs ?? [], rlSaveRef.current?.ascensionLevel ?? 0);
           setBuffChoices(choices);
           setPhase('buff_choice');
           // Draw current frame before pausing
@@ -2195,7 +2615,7 @@ export function AsteroidsGame() {
     if (phase === 'playing' && gameRef.current && buffChoices === null) {
       const game = gameRef.current;
       // If asteroids are empty and no boss, spawn next wave (post-buff-choice)
-      if (game.asteroids.length === 0 && !game.boss) {
+      if (game.asteroids.length === 0 && !game.boss && !(game.rlMiniBosses && game.rlMiniBosses.length > 0)) {
         const config = DIFF_CONFIG[diffRef.current];
         if (isBossWave(game.wave)) {
           if (modeRef.current === 'roguelite') {
@@ -2245,13 +2665,18 @@ export function AsteroidsGame() {
         const evtType = game.rlWaveEvent.type;
         const evtScale = getEventWaveScale(game.wave);
         if (evtType === 'scrapBonus') {
-          // Spawn scrap-only asteroids (scales with wave)
-          const count = Math.ceil(15 * evtScale);
-          const asteroids = spawnWaveAsteroids(count, game.ship.pos, config.speedMult * 0.6);
+          // Spawn golden scrap asteroids — slow, high value, scales well
+          const count = Math.ceil(12 + game.wave * 0.5);
+          const asteroids = spawnWaveAsteroids(count, game.ship.pos, config.speedMult * 0.4);
           for (const a of asteroids) {
             assignRogueliteAsteroidData(a, game.wave, game.rlDailyModifiers);
-            a.rlScrapValue = Math.ceil((a.rlScrapValue ?? 5) * 3 * evtScale);
+            // Base scrap 30, scales +20% per 5 waves, quadratic late game bonus
+            const waveBonus = 1 + Math.floor(game.wave / 5) * 0.2 + (game.wave / 50) ** 2;
+            a.rlScrapValue = Math.ceil(30 * waveBonus * evtScale);
+            a.rlHp = 1; // easy to destroy
+            a.rlMaxHp = 1;
             a.rlEventAsteroid = true;
+            a.rlGolden = true;
           }
           game.asteroids = asteroids;
         } else if (evtType === 'asteroidSprint') {
@@ -2304,6 +2729,53 @@ export function AsteroidsGame() {
           game.lives += 1;
           game.hasShield = true;
           game.rlWaveEvent = null; // instant, no timer
+        } else if (evtType === 'blackout') {
+          // Normal wave but with darkness — standard asteroid count
+          const count = Math.ceil(config.startCount + (game.wave - 1) * config.countIncrement);
+          const asteroids = spawnWaveAsteroids(count, game.ship.pos, config.speedMult);
+          for (const a of asteroids) {
+            assignRogueliteAsteroidData(a, game.wave, game.rlDailyModifiers);
+            a.rlEventAsteroid = true;
+          }
+          game.asteroids = asteroids;
+        } else if (evtType === 'scrapStorm') {
+          // No enemies, just scrap drops raining down
+          game.asteroids = [];
+          if (game.rlScrapDrops) {
+            const dropCount = Math.ceil(30 + game.wave * 1.5);
+            for (let i = 0; i < dropCount; i++) {
+              game.rlScrapDrops.push({
+                x: Math.random() * W,
+                y: -20 - Math.random() * 200,
+                vx: (Math.random() - 0.5) * 0.5,
+                vy: 1.5 + Math.random() * 2,
+                value: Math.ceil(5 + game.wave * 0.5),
+                life: 10000,
+              });
+            }
+          }
+        } else if (evtType === 'eliteArena') {
+          // Only elite asteroids
+          const count = Math.ceil(8 + game.wave * 0.3);
+          const asteroids = spawnWaveAsteroids(count, game.ship.pos, config.speedMult * 0.9);
+          for (const a of asteroids) {
+            assignRogueliteAsteroidData(a, game.wave, game.rlDailyModifiers);
+            a.rlElite = pickEliteModifier();
+            a.rlScrapValue = Math.ceil((a.rlScrapValue ?? 10) * 3);
+            a.rlHp = Math.ceil((a.rlHp ?? 1) * 1.5);
+            a.rlMaxHp = a.rlHp;
+            a.rlEventAsteroid = true;
+          }
+          game.asteroids = asteroids;
+        } else if (evtType === 'warpZone') {
+          // Normal asteroids that teleport randomly — handled in game loop via rlWaveEvent type
+          const count = Math.ceil(config.startCount + (game.wave - 1) * config.countIncrement);
+          const asteroids = spawnWaveAsteroids(count, game.ship.pos, config.speedMult * 1.1);
+          for (const a of asteroids) {
+            assignRogueliteAsteroidData(a, game.wave, game.rlDailyModifiers);
+            a.rlEventAsteroid = true;
+          }
+          game.asteroids = asteroids;
         }
       }
       setPhase('playing');
@@ -2603,14 +3075,20 @@ export function AsteroidsGame() {
               <div className="absolute inset-0 bg-black/70 flex items-center justify-center rounded-lg">
                 <div className="text-center">
                   <span className="text-3xl font-bold text-white">{t('game.paused')}</span>
-                  <p className="text-zinc-400 text-sm mt-3">
+                  <div className="flex flex-col gap-2 mt-4">
                     <button
                       onClick={handleResume}
                       className="px-6 py-2 bg-indigo-600 hover:bg-indigo-500 text-white rounded-lg text-sm font-medium transition-colors"
                     >
                       {t('game.resume')}
                     </button>
-                  </p>
+                    <button
+                      onClick={() => setPhase('menu')}
+                      className="px-6 py-2 bg-zinc-700 hover:bg-zinc-600 text-zinc-200 rounded-lg text-sm font-medium transition-colors"
+                    >
+                      {t('asteroids.backToMenu')}
+                    </button>
+                  </div>
                 </div>
               </div>
             )}
@@ -2872,14 +3350,21 @@ function drawGame(
 
   // Asteroids
   for (const a of asteroids) {
-    const variantColor = (isRL && a.rlVariant) ? ASTEROID_VARIANT_CONFIG[a.rlVariant].color : '#a1a1aa';
-    const glowColor = (isRL && a.rlVariant) ? ASTEROID_VARIANT_CONFIG[a.rlVariant].glowColor : null;
+    const isGolden = a.rlGolden;
+    const variantColor = isGolden ? '#fbbf24' : (isRL && a.rlVariant) ? ASTEROID_VARIANT_CONFIG[a.rlVariant].color : '#a1a1aa';
+    const glowColor = isGolden ? '#f59e0b' : (isRL && a.rlVariant) ? ASTEROID_VARIANT_CONFIG[a.rlVariant].glowColor : null;
 
     ctx.save();
     ctx.translate(a.pos.x, a.pos.y);
     ctx.rotate(a.rotation);
 
-    if (glowColor) {
+    if (isGolden) {
+      // Golden sparkle glow
+      ctx.shadowColor = '#fbbf24';
+      ctx.shadowBlur = 12 + Math.sin(Date.now() * 0.008 + a.pos.x) * 4;
+      // Fill with gold
+      ctx.fillStyle = 'rgba(251, 191, 36, 0.15)';
+    } else if (glowColor) {
       ctx.shadowColor = glowColor;
       ctx.shadowBlur = 8;
     }
@@ -2897,6 +3382,7 @@ function drawGame(
       else ctx.lineTo(ax, ay);
     }
     ctx.closePath();
+    if (isGolden) ctx.fill();
     ctx.stroke();
 
     ctx.shadowBlur = 0;
@@ -2965,6 +3451,24 @@ function drawGame(
 
     ctx.restore();
 
+    // Plasma field aura (prestige buff)
+    if (isRL && game.rlActiveBuffs?.some(b => b.id === 'plasmaField')) {
+      ctx.save();
+      const pulse = 80 + Math.sin(Date.now() * 0.004) * 8;
+      const grad = ctx.createRadialGradient(ship.pos.x, ship.pos.y, 10, ship.pos.x, ship.pos.y, pulse);
+      grad.addColorStop(0, 'rgba(250, 204, 21, 0.12)');
+      grad.addColorStop(0.7, 'rgba(250, 204, 21, 0.04)');
+      grad.addColorStop(1, 'rgba(250, 204, 21, 0)');
+      ctx.fillStyle = grad;
+      ctx.beginPath();
+      ctx.arc(ship.pos.x, ship.pos.y, pulse, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.strokeStyle = 'rgba(250, 204, 21, 0.25)';
+      ctx.lineWidth = 1;
+      ctx.stroke();
+      ctx.restore();
+    }
+
     // Shield circle (drawn after restore so it's not rotated with ship)
     if (hasShield) {
       ctx.save();
@@ -3020,31 +3524,101 @@ function drawGame(
   }
   ctx.shadowBlur = 0;
 
-  // Boss bullets (red)
-  ctx.fillStyle = '#ef4444';
-  ctx.shadowColor = '#dc2626';
-  ctx.shadowBlur = 4;
-  for (const b of game.bossBullets) {
-    ctx.beginPath();
-    ctx.arc(b.pos.x, b.pos.y, 4, 0, Math.PI * 2);
-    ctx.fill();
+  // Boss bullets (variant color)
+  {
+    const bBulletColor = (isRL && game.boss?.rlVariant) ? BOSS_VARIANT_CONFIG[game.boss.rlVariant].color : '#ef4444';
+    ctx.fillStyle = bBulletColor;
+    ctx.shadowColor = bBulletColor;
+    ctx.shadowBlur = 4;
+    for (const b of game.bossBullets) {
+      ctx.beginPath();
+      ctx.arc(b.pos.x, b.pos.y, 4, 0, Math.PI * 2);
+      ctx.fill();
+    }
+    ctx.shadowBlur = 0;
   }
-  ctx.shadowBlur = 0;
+
+  // Bomber mines
+  if (isRL && game.boss?.rlMines) {
+    for (const mine of game.boss.rlMines) {
+      if (mine.exploded) continue;
+      const fuseProgress = 1 - mine.timer / 2500;
+      const pulseR = 8 + fuseProgress * 6 + Math.sin(Date.now() * 0.01 * (1 + fuseProgress * 3)) * 2;
+      ctx.save();
+      ctx.fillStyle = `rgba(251, 191, 36, ${0.3 + fuseProgress * 0.5})`;
+      ctx.shadowColor = '#fbbf24';
+      ctx.shadowBlur = 8 + fuseProgress * 12;
+      ctx.beginPath();
+      ctx.arc(mine.x, mine.y, pulseR, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.strokeStyle = '#fbbf24';
+      ctx.lineWidth = 1.5;
+      ctx.stroke();
+      // Inner dot
+      ctx.fillStyle = mine.timer < 600 ? '#ef4444' : '#fbbf24';
+      ctx.beginPath();
+      ctx.arc(mine.x, mine.y, 3, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.shadowBlur = 0;
+      ctx.restore();
+    }
+  }
+
+  // Mini-bosses (splitter children)
+  if (game.rlMiniBosses) {
+    for (const mb of game.rlMiniBosses) {
+      if (!mb.alive) continue;
+      const mbR = BOSS_RADIUS * 0.55;
+      ctx.save();
+      ctx.translate(mb.x, mb.y);
+      ctx.strokeStyle = '#4ade80';
+      ctx.fillStyle = 'rgba(74, 222, 128, 0.15)';
+      ctx.lineWidth = 2;
+      ctx.shadowColor = '#4ade80';
+      ctx.shadowBlur = 8;
+      ctx.beginPath();
+      ctx.moveTo(0, -mbR * 0.8);
+      ctx.lineTo(mbR * 0.6, -mbR * 0.2);
+      ctx.lineTo(mbR * 0.5, mbR * 0.3);
+      ctx.lineTo(mbR * 0.15, mbR * 0.6);
+      ctx.lineTo(-mbR * 0.15, mbR * 0.6);
+      ctx.lineTo(-mbR * 0.5, mbR * 0.3);
+      ctx.lineTo(-mbR * 0.6, -mbR * 0.2);
+      ctx.closePath();
+      ctx.fill();
+      ctx.stroke();
+      ctx.shadowBlur = 0;
+      ctx.restore();
+      // Mini-boss HP bar
+      const mbHpW = 40, mbHpH = 4;
+      const mbHpFrac = mb.hp / mb.maxHp;
+      ctx.fillStyle = 'rgba(0,0,0,0.5)';
+      ctx.fillRect(mb.x - mbHpW / 2, mb.y - mbR - 10, mbHpW, mbHpH);
+      ctx.fillStyle = mbHpFrac > 0.3 ? '#4ade80' : '#fbbf24';
+      ctx.fillRect(mb.x - mbHpW / 2, mb.y - mbR - 10, mbHpW * mbHpFrac, mbHpH);
+    }
+  }
 
   // Boss
   if (game.boss && game.boss.alive) {
     const boss = game.boss;
+    const bossColor = (isRL && boss.rlVariant) ? BOSS_VARIANT_CONFIG[boss.rlVariant].color : '#ef4444';
+    // Parse hex to rgba for fill
+    const r = parseInt(bossColor.slice(1, 3), 16);
+    const g = parseInt(bossColor.slice(3, 5), 16);
+    const b = parseInt(bossColor.slice(5, 7), 16);
+
     ctx.save();
     ctx.translate(boss.x, boss.y);
 
     // Boss body: large diamond/ship shape
-    ctx.strokeStyle = '#ef4444';
-    ctx.fillStyle = 'rgba(239, 68, 68, 0.15)';
+    ctx.strokeStyle = bossColor;
+    ctx.fillStyle = `rgba(${r}, ${g}, ${b}, 0.15)`;
     ctx.lineWidth = 2.5;
-    ctx.shadowColor = '#ef4444';
+    ctx.shadowColor = bossColor;
     ctx.shadowBlur = 12;
     ctx.beginPath();
-    ctx.moveTo(0, -BOSS_RADIUS * 0.8); // top
+    ctx.moveTo(0, -BOSS_RADIUS * 0.8);
     ctx.lineTo(BOSS_RADIUS * 0.6, -BOSS_RADIUS * 0.2);
     ctx.lineTo(BOSS_RADIUS * 0.5, BOSS_RADIUS * 0.3);
     ctx.lineTo(BOSS_RADIUS * 0.15, BOSS_RADIUS * 0.6);
@@ -3056,7 +3630,7 @@ function drawGame(
     ctx.stroke();
 
     // Inner detail lines
-    ctx.strokeStyle = 'rgba(239, 68, 68, 0.5)';
+    ctx.strokeStyle = `rgba(${r}, ${g}, ${b}, 0.5)`;
     ctx.lineWidth = 1;
     ctx.shadowBlur = 0;
     ctx.beginPath();
@@ -3067,7 +3641,7 @@ function drawGame(
     ctx.stroke();
 
     // Wings
-    ctx.strokeStyle = '#ef4444';
+    ctx.strokeStyle = bossColor;
     ctx.lineWidth = 1.5;
     ctx.beginPath();
     ctx.moveTo(BOSS_RADIUS * 0.6, -BOSS_RADIUS * 0.2);
@@ -3079,6 +3653,34 @@ function drawGame(
     ctx.lineTo(-BOSS_RADIUS * 0.9, -BOSS_RADIUS * 0.1);
     ctx.lineTo(-BOSS_RADIUS * 0.7, BOSS_RADIUS * 0.2);
     ctx.stroke();
+
+    // Berserker enrage visual — pulsing red aura when low HP
+    if (isRL && boss.rlVariant === 'berserker') {
+      const hpRatio = boss.hp / boss.maxHp;
+      if (hpRatio < 0.6) {
+        const intensity = (1 - hpRatio / 0.6);
+        const pulse = 0.4 + Math.sin(Date.now() * 0.008) * 0.3 * intensity;
+        ctx.fillStyle = `rgba(220, 38, 38, ${pulse * intensity * 0.3})`;
+        ctx.beginPath();
+        ctx.arc(0, 0, BOSS_RADIUS * (1.1 + intensity * 0.3), 0, Math.PI * 2);
+        ctx.fill();
+      }
+    }
+
+    // Sniper laser sight line
+    if (isRL && boss.rlVariant === 'sniper') {
+      const sx = game.ship.pos.x - boss.x;
+      const sy = game.ship.pos.y - boss.y;
+      const sAngle = Math.atan2(sy, sx);
+      ctx.strokeStyle = 'rgba(34, 211, 238, 0.25)';
+      ctx.lineWidth = 1;
+      ctx.setLineDash([6, 6]);
+      ctx.beginPath();
+      ctx.moveTo(0, 0);
+      ctx.lineTo(Math.cos(sAngle) * 400, Math.sin(sAngle) * 400);
+      ctx.stroke();
+      ctx.setLineDash([]);
+    }
 
     ctx.restore();
 
@@ -3108,20 +3710,23 @@ function drawGame(
 
     ctx.fillStyle = 'rgba(255,255,255,0.15)';
     ctx.fillRect(hpBarX, hpBarY, hpBarW, hpBarH);
-    ctx.fillStyle = hpFraction > 0.3 ? '#ef4444' : '#f97316';
+    ctx.fillStyle = hpFraction > 0.3 ? bossColor : '#f97316';
     ctx.fillRect(hpBarX, hpBarY, hpBarW * hpFraction, hpBarH);
     ctx.strokeStyle = 'rgba(255,255,255,0.3)';
     ctx.lineWidth = 1;
     ctx.strokeRect(hpBarX, hpBarY, hpBarW, hpBarH);
 
-    // BOSS label
-    ctx.fillStyle = '#ef4444';
+    // BOSS variant label
+    ctx.fillStyle = bossColor;
     ctx.font = 'bold 10px monospace';
     ctx.textAlign = 'center';
     ctx.textBaseline = 'bottom';
-    const bossLabel = (isRL && boss.rlVariant && boss.rlVariant !== 'standard')
-      ? `BOSS [${boss.rlVariant.toUpperCase()}]`
-      : 'BOSS';
+    const variantNames: Record<string, string> = {
+      standard: 'BOSS', twin: 'BOSS [TWIN]', shield: 'BOSS [SHIELD]',
+      carrier: 'BOSS [CARRIER]', bomber: 'BOSS [BOMBER]', sniper: 'BOSS [SNIPER]',
+      berserker: 'BOSS [BERSERKER]', splitter: 'BOSS [SPLITTER]',
+    };
+    const bossLabel = (isRL && boss.rlVariant) ? (variantNames[boss.rlVariant] ?? 'BOSS') : 'BOSS';
     ctx.fillText(bossLabel, boss.x, hpBarY - 2);
   }
 
@@ -3195,6 +3800,25 @@ function drawGame(
     }
   }
 
+  // Blackout overlay (between-wave event) — darkens everything except near ship
+  if (isRL && game.rlWaveEvent?.type === 'blackout') {
+    ctx.save();
+    ctx.fillStyle = 'rgba(0, 0, 0, 0.85)';
+    ctx.fillRect(0, 0, W, H);
+    // Cut out circle around ship
+    ctx.globalCompositeOperation = 'destination-out';
+    const viewRadius = 100 + Math.sin(Date.now() * 0.003) * 10;
+    const grad = ctx.createRadialGradient(game.ship.pos.x, game.ship.pos.y, viewRadius * 0.3, game.ship.pos.x, game.ship.pos.y, viewRadius);
+    grad.addColorStop(0, 'rgba(0, 0, 0, 1)');
+    grad.addColorStop(1, 'rgba(0, 0, 0, 0)');
+    ctx.fillStyle = grad;
+    ctx.beginPath();
+    ctx.arc(game.ship.pos.x, game.ship.pos.y, viewRadius, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.globalCompositeOperation = 'source-over';
+    ctx.restore();
+  }
+
   // Scrap counter in-canvas (roguelite, top-left)
   if (isRL) {
     ctx.fillStyle = '#fbbf24';
@@ -3245,7 +3869,7 @@ function drawGame(
     const barY = H - 12;
     ctx.fillStyle = 'rgba(255,255,255,0.15)';
     ctx.fillRect(barX, barY, barW, barH);
-    const evtColorMap: Record<string, string> = { scrapBonus: '#fbbf24', asteroidSprint: '#ef4444', miniBossRush: '#a78bfa', meteorShower: '#f97316' };
+    const evtColorMap: Record<string, string> = { scrapBonus: '#fbbf24', asteroidSprint: '#ef4444', miniBossRush: '#a78bfa', meteorShower: '#f97316', blackout: '#1e1b4b', scrapStorm: '#facc15', eliteArena: '#c084fc', warpZone: '#22d3ee' };
     const evtColor = evtColorMap[game.rlWaveEvent.type] ?? '#a78bfa';
     ctx.fillStyle = evtColor;
     ctx.fillRect(barX, barY, barW * fraction, barH);
@@ -3291,19 +3915,76 @@ function drawGame(
       ctx.restore();
     }
 
-    if (mwe.type === 'powerSurge') {
-      // Green border glow
+    if (mwe.type === 'powerSurge' || mwe.type === 'overdrivePulse') {
+      // Green/gold border glow
+      const color = mwe.type === 'overdrivePulse' ? '250, 204, 21' : '74, 222, 128';
       ctx.save();
-      ctx.strokeStyle = `rgba(74, 222, 128, ${0.3 + Math.sin(Date.now() * 0.006) * 0.15})`;
+      ctx.strokeStyle = `rgba(${color}, ${0.3 + Math.sin(Date.now() * 0.006) * 0.15})`;
       ctx.lineWidth = 4;
       ctx.strokeRect(2, 2, W - 4, H - 4);
+      ctx.restore();
+    }
+
+    if (mwe.type === 'empBurst') {
+      // Blue electric flicker overlay
+      const intensity = 0.08 + Math.sin(Date.now() * 0.008) * 0.05;
+      ctx.fillStyle = `rgba(96, 165, 250, ${intensity})`;
+      ctx.fillRect(0, 0, W, H);
+      // Electric arcs at edges
+      ctx.save();
+      ctx.strokeStyle = `rgba(96, 165, 250, ${0.4 + Math.sin(Date.now() * 0.01) * 0.2})`;
+      ctx.lineWidth = 1.5;
+      for (let i = 0; i < 4; i++) {
+        ctx.beginPath();
+        const sx = Math.random() * W, sy = Math.random() * H;
+        ctx.moveTo(sx, sy);
+        ctx.lineTo(sx + (Math.random() - 0.5) * 40, sy + (Math.random() - 0.5) * 40);
+        ctx.stroke();
+      }
+      ctx.restore();
+    }
+
+    if (mwe.type === 'magneticStorm') {
+      // Purple swirl overlay with distortion lines
+      const intensity = 0.06 + Math.sin(Date.now() * 0.004) * 0.03;
+      ctx.fillStyle = `rgba(232, 121, 249, ${intensity})`;
+      ctx.fillRect(0, 0, W, H);
+      ctx.save();
+      ctx.strokeStyle = 'rgba(232, 121, 249, 0.2)';
+      ctx.lineWidth = 1;
+      for (let i = 0; i < 6; i++) {
+        ctx.beginPath();
+        const y = (Date.now() * 0.05 + i * 100) % H;
+        ctx.moveTo(0, y);
+        for (let x = 0; x < W; x += 20) {
+          ctx.lineTo(x, y + Math.sin(x * 0.02 + Date.now() * 0.003) * 8);
+        }
+        ctx.stroke();
+      }
+      ctx.restore();
+    }
+
+    if (mwe.type === 'cloakField') {
+      // Cyan shimmer on ship + fading border
+      ctx.save();
+      ctx.strokeStyle = `rgba(34, 211, 238, ${0.25 + Math.sin(Date.now() * 0.008) * 0.15})`;
+      ctx.lineWidth = 3;
+      ctx.strokeRect(2, 2, W - 4, H - 4);
+      // Ship glow ring
+      const grad = ctx.createRadialGradient(game.ship.pos.x, game.ship.pos.y, 5, game.ship.pos.x, game.ship.pos.y, 35);
+      grad.addColorStop(0, 'rgba(34, 211, 238, 0.25)');
+      grad.addColorStop(1, 'rgba(34, 211, 238, 0)');
+      ctx.fillStyle = grad;
+      ctx.beginPath();
+      ctx.arc(game.ship.pos.x, game.ship.pos.y, 35, 0, Math.PI * 2);
+      ctx.fill();
       ctx.restore();
     }
 
     // Event name + timer bar at top
     if (mweCfg.duration > 1) {
       const fraction = mwe.timer / mweCfg.duration;
-      const midNames: Record<string, string> = { solarFlare: 'SOLAR FLARE', gravityWell: 'GRAVITY WELL', powerSurge: 'POWER SURGE', asteroidSwarm: 'ASTEROID SWARM' };
+      const midNames: Record<string, string> = { solarFlare: 'SOLAR FLARE', gravityWell: 'GRAVITY WELL', powerSurge: 'POWER SURGE', asteroidSwarm: 'ASTEROID SWARM', raid: 'RAID!', empBurst: 'EMP BURST', magneticStorm: 'MAGNETIC STORM', cloakField: 'CLOAK FIELD', overdrivePulse: 'OVERDRIVE' };
       ctx.save();
       ctx.fillStyle = mweCfg.color + 'cc';
       ctx.font = 'bold 11px monospace';
@@ -3317,6 +3998,44 @@ function drawGame(
       ctx.fillStyle = mweCfg.color;
       ctx.fillRect(bx, by, bw * fraction, bh);
       ctx.restore();
+    }
+  }
+
+  // Raider drawing (roguelite mid-wave event)
+  if (game.rlRaider?.alive) {
+    const raider = game.rlRaider;
+    // Draw raider ship (red triangle, same shape as player)
+    ctx.save();
+    ctx.translate(raider.pos.x, raider.pos.y);
+    ctx.rotate(raider.angle);
+    ctx.shadowColor = '#f97316';
+    ctx.shadowBlur = 12;
+    ctx.strokeStyle = '#f97316';
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.moveTo(SHIP_SIZE, 0);
+    ctx.lineTo(-SHIP_SIZE * 0.7, -SHIP_SIZE * 0.6);
+    ctx.lineTo(-SHIP_SIZE * 0.4, 0);
+    ctx.lineTo(-SHIP_SIZE * 0.7, SHIP_SIZE * 0.6);
+    ctx.closePath();
+    ctx.stroke();
+    ctx.fillStyle = 'rgba(249, 115, 22, 0.15)';
+    ctx.fill();
+    ctx.shadowBlur = 0;
+    ctx.restore();
+    // HP bar above raider
+    const hpFrac = raider.hp / raider.maxHp;
+    const hpW = 30, hpH = 3;
+    ctx.fillStyle = 'rgba(0,0,0,0.6)';
+    ctx.fillRect(raider.pos.x - hpW / 2, raider.pos.y - SHIP_SIZE - 10, hpW, hpH);
+    ctx.fillStyle = hpFrac > 0.5 ? '#4ade80' : hpFrac > 0.25 ? '#fbbf24' : '#ef4444';
+    ctx.fillRect(raider.pos.x - hpW / 2, raider.pos.y - SHIP_SIZE - 10, hpW * hpFrac, hpH);
+    // Draw raider bullets (orange dots)
+    ctx.fillStyle = '#f97316';
+    for (const rb of raider.bullets) {
+      ctx.beginPath();
+      ctx.arc(rb.pos.x, rb.pos.y, 3, 0, Math.PI * 2);
+      ctx.fill();
     }
   }
 
@@ -3441,10 +4160,21 @@ function drawGame(
 
     // Boss
     if (game.boss && game.boss.alive) {
-      ctx.fillStyle = '#ef4444';
+      ctx.fillStyle = (game.boss.rlVariant) ? BOSS_VARIANT_CONFIG[game.boss.rlVariant].color : '#ef4444';
       ctx.beginPath();
       ctx.arc(mmX + game.boss.x * scaleX, mmY + game.boss.y * scaleY, 3, 0, Math.PI * 2);
       ctx.fill();
+    }
+
+    // Mini-bosses (splitter children)
+    if (game.rlMiniBosses) {
+      ctx.fillStyle = '#4ade80';
+      for (const mb2 of game.rlMiniBosses) {
+        if (!mb2.alive) continue;
+        ctx.beginPath();
+        ctx.arc(mmX + mb2.x * scaleX, mmY + mb2.y * scaleY, 2, 0, Math.PI * 2);
+        ctx.fill();
+      }
     }
 
     // Mega-boss
