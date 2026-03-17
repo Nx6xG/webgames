@@ -4,7 +4,7 @@ import { useState, useCallback, useEffect } from 'react';
 import type { NcPackType, NcRarity, NcPlayerProfile, NcCardDef } from 'shared';
 import {
   NC_STANDARD_PACK_COST, NC_PREMIUM_PACK_COST, NC_CARDS_PER_PACK,
-  NC_STANDARD_RATES, NC_PREMIUM_RATES, NC_DUPLICATE_REFUND,
+  NC_STANDARD_RATES, NC_PREMIUM_RATES, NC_DUPLICATE_SHARDS,
   NC_CARDS_BY_RARITY, NC_MAX_COPIES,
 } from 'shared';
 import { NexusClashCard } from './NexusClashCard';
@@ -19,7 +19,7 @@ interface PackOpeningProps {
 interface RevealedCard {
   cardDef: NcCardDef;
   isDuplicate: boolean;
-  refundCoins: number;
+  refundShards: number;
   isNew: boolean;
   revealed: boolean;
 }
@@ -90,16 +90,16 @@ export function PackOpening({ profile, onUpdateProfile, onClose }: PackOpeningPr
       const cardDef = rollCard(rates);
       const currentOwned = newProfile.collection.cards[cardDef.id] ?? 0;
       const isDuplicate = currentOwned >= NC_MAX_COPIES;
-      const refundCoins = isDuplicate ? NC_DUPLICATE_REFUND[cardDef.rarity] : 0;
+      const refundShards = isDuplicate ? NC_DUPLICATE_SHARDS[cardDef.rarity] : 0;
       const isNew = currentOwned === 0;
 
       if (isDuplicate) {
-        newProfile.currencies.coins += refundCoins;
+        newProfile.currencies.shards = (newProfile.currencies.shards ?? 0) + refundShards;
       } else {
         newProfile.collection.cards[cardDef.id] = currentOwned + 1;
       }
 
-      cards.push({ cardDef, isDuplicate, refundCoins, isNew, revealed: false });
+      cards.push({ cardDef, isDuplicate, refundShards, isNew, revealed: false });
     }
 
     const rarityOrder: Record<NcRarity, number> = { common: 0, rare: 1, epic: 2, legendary: 3 };
@@ -276,9 +276,9 @@ export function PackOpening({ profile, onUpdateProfile, onClose }: PackOpeningPr
                         showNew={rc.isNew}
                       />
                       {rc.isDuplicate && (
-                        <div className="flex items-center gap-1 text-[10px]" style={{ color: '#c9a84c' }}>
-                          <span>+{rc.refundCoins}</span>
-                          <CoinIcon size={10} />
+                        <div className="flex items-center gap-1 text-[10px]" style={{ color: '#67e8f9' }}>
+                          <span>+{rc.refundShards}</span>
+                          <svg viewBox="0 0 16 16" style={{ width: 10, height: 10 }}><polygon points="8,1 12,5 10,14 6,14 4,5" fill="#22d3ee" stroke="#67e8f9" strokeWidth="0.8"/><polygon points="4,4 5.5,5 4,11 2.5,5" fill="#22d3ee" opacity="0.4"/></svg>
                         </div>
                       )}
                     </div>

@@ -208,12 +208,17 @@ import {
   NC_STANDARD_RATES as _ncStdRates,
   NC_PREMIUM_RATES as _ncPremRates,
   NC_DUPLICATE_REFUND as _ncDupRefund,
+  NC_DUPLICATE_SHARDS as _ncDupShards,
+  NC_SHARD_PRICES as _ncShardPrices,
   NC_WIN_COINS as _ncWinCoins,
   NC_LOSS_COINS as _ncLossCoins,
   NC_DAILY_QUEST_COINS as _ncDailyQuestCoins,
   NC_WEEKLY_QUEST_GEMS as _ncWeeklyQuestGems,
   NC_STARTER_COINS as _ncStarterCoins,
+  getNcDailyReward as _getNcDailyReward,
   createDefaultNcProfile as _createDefaultNcProfile,
+  NC_BOT_TOKEN_PREFIX as _ncBotTokenPrefix,
+  isNcBotToken as _isNcBotToken,
 } from './games/nexusclash';
 export const NC_CARDS = _ncCards;
 export const NC_CARD_MAP = _ncCardMap;
@@ -239,12 +244,17 @@ export const NC_CARDS_PER_PACK = _ncCardsPerPack;
 export const NC_STANDARD_RATES = _ncStdRates;
 export const NC_PREMIUM_RATES = _ncPremRates;
 export const NC_DUPLICATE_REFUND = _ncDupRefund;
+export const NC_DUPLICATE_SHARDS = _ncDupShards;
+export const NC_SHARD_PRICES = _ncShardPrices;
 export const NC_WIN_COINS = _ncWinCoins;
 export const NC_LOSS_COINS = _ncLossCoins;
 export const NC_DAILY_QUEST_COINS = _ncDailyQuestCoins;
 export const NC_WEEKLY_QUEST_GEMS = _ncWeeklyQuestGems;
 export const NC_STARTER_COINS = _ncStarterCoins;
+export const getNcDailyReward = _getNcDailyReward;
 export const createDefaultNcProfile = _createDefaultNcProfile;
+export const NC_BOT_TOKEN_PREFIX = _ncBotTokenPrefix;
+export const isNcBotToken = _isNcBotToken;
 export type {
   NcTag,
   NcRarity,
@@ -272,6 +282,8 @@ export type {
   NcQuest,
   NcDeckSlot,
   NcPlayerProfile,
+  NcBotDifficulty,
+  NcMulliganAction,
 } from './games/nexusclash';
 export type {
   TournamentId,

@@ -24,7 +24,10 @@ import {
   NC_BREAKTHROUGHS_TO_WIN,
   NC_MAX_ROUNDS,
   NC_TURN_TIME_MS,
+  NC_BOT_TOKEN_PREFIX,
+  isNcBotToken,
 } from 'shared';
+import type { NcBotDifficulty } from 'shared';
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -139,6 +142,7 @@ function resolveRound(state: NexusClashState): NexusClashState {
     discardPiles: [[...state.discardPiles[0]], [...state.discardPiles[1]]] as [string[], string[]],
     mana: [state.mana[0], state.mana[1]] as [number, number],
     maxMana: [state.maxMana[0], state.maxMana[1]] as [number, number],
+    manaBoost: [state.manaBoost[0], state.manaBoost[1]] as [number, number],
     history: [...state.history],
   };
 
@@ -255,6 +259,23 @@ function resolveRound(state: NexusClashState): NexusClashState {
     });
 
     applyEffect(ability, card, rc.owner, cardLane, s.lanes, log, pushBonuses, newCardUids);
+  }
+
+  // ── 3b. Handle draw_card and mana_boost effects from newly placed cards ──
+  for (const rc of revealCards) {
+    const ability = rc.def.ability;
+    if (ability.trigger !== 'on_reveal') continue;
+
+    if (ability.effect === 'draw_card' && ability.value) {
+      const drawn = drawCards(s.decks[rc.owner], s.hands[rc.owner], ability.value, s.discardPiles[rc.owner]);
+      s.decks[rc.owner] = drawn.deck;
+      s.hands[rc.owner] = drawn.hand;
+      s.discardPiles[rc.owner] = drawn.discardPile;
+    }
+
+    if (ability.effect === 'mana_boost' && ability.value) {
+      s.manaBoost[rc.owner] += ability.value;
+    }
   }
 
   // ── 4. On-Ally-Played triggers ──────────────────────────────────────────
@@ -506,7 +527,11 @@ function resolveRound(state: NexusClashState): NexusClashState {
     Math.min(NC_MAX_MANA, s.maxMana[0] + NC_MANA_PER_ROUND),
     Math.min(NC_MAX_MANA, s.maxMana[1] + NC_MANA_PER_ROUND),
   ];
-  s.mana = [s.maxMana[0], s.maxMana[1]];
+  s.mana = [
+    Math.min(NC_MAX_MANA, s.maxMana[0] + s.manaBoost[0]),
+    Math.min(NC_MAX_MANA, s.maxMana[1] + s.manaBoost[1]),
+  ];
+  s.manaBoost = [0, 0]; // reset after applying
 
   // Draw cards (reshuffle discard pile into deck if empty)
   for (const pIdx of [0, 1] as const) {
@@ -707,11 +732,145 @@ function applyEffect(
       break;
     }
 
+    case 'draw_card': {
+      // draw_card is handled at resolve level, not in applyEffect per-lane
+      // Just log it; actual draw happens in resolveRound after effects
+      break;
+    }
+
+    case 'mana_boost': {
+      // Tracked at state level, applied at start of next round
+      break;
+    }
+
+    case 'heal_allies': {
+      const val = ability.value ?? 0;
+      for (const ally of lane.cards[owner]) {
+        if (ally.uid === card.uid) continue;
+        ally.power += val;
+        ally.basePower += val;
+      }
+      break;
+    }
+
+    case 'destroy_strongest_enemy': {
+      const enemies = lane.cards[oppSide].filter(c => {
+        if (c.shieldRounds > 0) return false;
+        if (lane.modifier === 'indestructible') return false;
+        return true;
+      });
+      if (enemies.length === 0) break;
+      enemies.sort((a, b) => b.power - a.power);
+      const strongest = enemies[0];
+      const idx = lane.cards[oppSide].findIndex(c => c.uid === strongest.uid);
+      if (idx !== -1) {
+        const destroyed = lane.cards[oppSide].splice(idx, 1)[0];
+        log.push({
+          type: 'card_destroyed',
+          laneIndex: cardLane,
+          cardUid: destroyed.uid,
+          owner: oppSide,
+        });
+        const destroyedDef = getCardDef(destroyed.cardId);
+        if (destroyedDef.ability.trigger === 'on_destroy') {
+          log.push({
+            type: 'ability_triggered',
+            cardUid: destroyed.uid,
+            trigger: 'on_destroy',
+            effect: destroyedDef.ability.effect,
+            value: destroyedDef.ability.value,
+          });
+          if (destroyedDef.ability.effect === 'buff_self' && destroyedDef.ability.value === -1) {
+            const respawned: NcCardInstance = {
+              ...destroyed,
+              power: 3,
+              basePower: 3,
+              playedThisRound: true,
+            };
+            lane.cards[oppSide].push(respawned);
+          }
+        }
+      }
+      break;
+    }
+
     case 'double_push_if':
     case 'power_per_tag':
       // These are ongoing effects, not on_reveal
       break;
   }
+}
+
+// ── Bot AI ────────────────────────────────────────────────────────────────────
+
+function computeBotPlays(
+  state: NexusClashState,
+  botIdx: 0 | 1,
+  difficulty: NcBotDifficulty,
+): Array<{ cardId: string; laneIndex: 0 | 1 | 2 }> {
+  const hand = state.hands[botIdx];
+  if (hand.length === 0) return [];
+
+  const plays: Array<{ cardId: string; laneIndex: 0 | 1 | 2 }> = [];
+  let remainingMana = state.mana[botIdx] - computeSpentMana(state.pendingPlays[botIdx], state.lanes as [NcLane, NcLane, NcLane]);
+  const availableCards = [...hand];
+
+  // Sort cards by cost descending (play expensive cards first)
+  const sortedCards = availableCards
+    .map(id => ({ id, def: getCardDef(id) }))
+    .filter(c => c.def.cost <= remainingMana)
+    .sort((a, b) => b.def.cost - a.def.cost);
+
+  for (const card of sortedCards) {
+    if (remainingMana < card.def.cost) continue;
+
+    // Pick target lane
+    let targetLane: 0 | 1 | 2;
+
+    if (difficulty === 'easy') {
+      // Random lane
+      const unlocked = ([0, 1, 2] as const).filter(i => !state.lanes[i].locked);
+      if (unlocked.length === 0) break;
+      targetLane = unlocked[Math.floor(Math.random() * unlocked.length)];
+    } else if (difficulty === 'medium') {
+      // Play to weakest lane (where bot is losing most)
+      const unlocked = ([0, 1, 2] as const).filter(i => !state.lanes[i].locked);
+      if (unlocked.length === 0) break;
+      const perspective = botIdx === 0 ? 1 : -1;
+      unlocked.sort((a, b) => (state.lanes[a].tugValue * perspective) - (state.lanes[b].tugValue * perspective));
+      targetLane = unlocked[0];
+    } else {
+      // Hard: play to lane closest to breakthrough for bot, or defend weakest
+      const unlocked = ([0, 1, 2] as const).filter(i => !state.lanes[i].locked);
+      if (unlocked.length === 0) break;
+      const perspective = botIdx === 0 ? 1 : -1;
+      // Prioritize lanes close to winning (positive tug for bot)
+      const laneScores = unlocked.map(i => {
+        const tug = state.lanes[i].tugValue * perspective;
+        // High score = good for bot (close to breakthrough)
+        if (tug > 60) return { lane: i, score: 100 + tug }; // almost winning, push to finish
+        if (tug < -60) return { lane: i, score: 90 - tug }; // almost losing, defend
+        return { lane: i, score: 50 + tug }; // neutral
+      });
+      laneScores.sort((a, b) => b.score - a.score);
+      targetLane = laneScores[0].lane;
+    }
+
+    // Check effective mana cost with lane modifier
+    const effectiveCost = effectiveManaCost(card.def, state.lanes[targetLane].modifier);
+    if (effectiveCost > remainingMana) continue;
+
+    plays.push({ cardId: card.id, laneIndex: targetLane });
+    remainingMana -= effectiveCost;
+
+    // Easy bot: only plays 1 card per round
+    if (difficulty === 'easy' && plays.length >= 1) break;
+    // Medium: plays up to 2
+    if (difficulty === 'medium' && plays.length >= 2) break;
+    // Hard: plays as many as possible (no break)
+  }
+
+  return plays;
 }
 
 // ── Engine ────────────────────────────────────────────────────────────────────
@@ -720,9 +879,10 @@ export const nexusClashEngine: GameEngine<NexusClashState, NexusClashAction> = {
   simultaneousInput: true,
   tickInterval: 1000,
 
-  initialState(playerIds: string[], _startingPlayerIndex?: number, _config?: unknown): NexusClashState {
+  initialState(playerIds: string[], _startingPlayerIndex?: number, config?: unknown): NexusClashState {
     const p0 = playerIds[0];
     const p1 = playerIds[1];
+    const gameConfig = config as { botDifficulty?: NcBotDifficulty } | undefined;
 
     // Pick 3 unique lane modifiers
     const modifiers = pickUniqueModifiers(3);
@@ -754,13 +914,14 @@ export const nexusClashEngine: GameEngine<NexusClashState, NexusClashAction> = {
       playerIds: [p0, p1],
       round: 1,
       maxRounds: NC_MAX_ROUNDS,
-      phase: 'placing',
+      phase: 'mulligan' as const,
       lanes,
       hands: [draw0.hand, draw1.hand],
       decks: [draw0.deck, draw1.deck],
       discardPiles: [draw0.discardPile, draw1.discardPile],
       mana: [NC_START_MANA, NC_START_MANA],
       maxMana: [NC_START_MANA, NC_START_MANA],
+      manaBoost: [0, 0] as [number, number],
       pendingPlays: [[], []],
       confirmed: [false, false],
       breakthroughs: [0, 0],
@@ -770,16 +931,63 @@ export const nexusClashEngine: GameEngine<NexusClashState, NexusClashAction> = {
       currentTurn: p0, // Required by server sanity guard
       turnDeadline: Date.now() + NC_TURN_TIME_MS,
       history: [],
+      mulliganDecisions: [null, null] as [('keep' | 'redraw' | null), ('keep' | 'redraw' | null)],
+      botDifficulty: gameConfig?.botDifficulty,
     };
   },
 
   applyAction(state: NexusClashState, action: NexusClashAction, ctx: ActionContext): NexusClashState {
     if (state.status !== 'ongoing') throw new Error('GAME_OVER: Game is already finished');
-    if (state.phase !== 'placing') throw new Error('INVALID_PHASE: Can only act during placing phase');
 
     const pIdx = state.playerIds.indexOf(ctx.playerId);
     if (pIdx === -1 || (pIdx !== 0 && pIdx !== 1)) throw new Error('NOT_IN_ROOM: You are not a player');
     const pi = pIdx as 0 | 1;
+
+    // ── Mulligan Phase ──
+    if (state.phase === 'mulligan') {
+      if (action.type !== 'nc_mulligan') throw new Error('INVALID_ACTION: Must mulligan first');
+
+      const decisions = [state.mulliganDecisions[0], state.mulliganDecisions[1]] as [('keep' | 'redraw' | null), ('keep' | 'redraw' | null)];
+      decisions[pi] = action.decision;
+
+      // If both decided, process mulligans and move to placing
+      if (decisions[0] !== null && decisions[1] !== null) {
+        const newHands = [[...state.hands[0]], [...state.hands[1]]] as [string[], string[]];
+        const newDecks = [[...state.decks[0]], [...state.decks[1]]] as [string[], string[]];
+        const newDiscards = [[...state.discardPiles[0]], [...state.discardPiles[1]]] as [string[], string[]];
+
+        for (const idx of [0, 1] as const) {
+          if (decisions[idx] === 'redraw') {
+            // Put hand back in deck and reshuffle
+            newDecks[idx].push(...newHands[idx]);
+            newDecks[idx] = shuffle(newDecks[idx]);
+            newHands[idx] = [];
+            // Draw new hand
+            const drawn = drawCards(newDecks[idx], newHands[idx], NC_START_HAND, newDiscards[idx]);
+            newDecks[idx] = drawn.deck;
+            newHands[idx] = drawn.hand;
+            newDiscards[idx] = drawn.discardPile;
+          }
+        }
+
+        return {
+          ...state,
+          phase: 'placing' as any,
+          mulliganDecisions: decisions,
+          hands: newHands,
+          decks: newDecks,
+          discardPiles: newDiscards,
+          turnDeadline: Date.now() + NC_TURN_TIME_MS,
+        };
+      }
+
+      return {
+        ...state,
+        mulliganDecisions: decisions,
+      };
+    }
+
+    if (state.phase !== 'placing') throw new Error('INVALID_PHASE: Can only act during placing phase');
 
     switch (action.type) {
       case 'nc_place': {
@@ -885,11 +1093,96 @@ export const nexusClashEngine: GameEngine<NexusClashState, NexusClashAction> = {
   },
 
   tick(state: NexusClashState): NexusClashState {
-    if (state.status !== 'ongoing' || state.phase !== 'placing') return state;
+    if (state.status !== 'ongoing') return state;
+
+    // ── Bot mulligan ──
+    if (state.phase === 'mulligan') {
+      for (const pIdx of [0, 1] as const) {
+        if (isNcBotToken(state.playerIds[pIdx]) && state.mulliganDecisions[pIdx] === null) {
+          const decisions = [...state.mulliganDecisions] as [('keep' | 'redraw' | null), ('keep' | 'redraw' | null)];
+          decisions[pIdx] = 'keep';
+
+          if (decisions[0] !== null && decisions[1] !== null) {
+            // Process mulligans
+            const newHands = [[...state.hands[0]], [...state.hands[1]]] as [string[], string[]];
+            const newDecks = [[...state.decks[0]], [...state.decks[1]]] as [string[], string[]];
+            const newDiscards = [[...state.discardPiles[0]], [...state.discardPiles[1]]] as [string[], string[]];
+
+            for (const idx of [0, 1] as const) {
+              if (decisions[idx] === 'redraw') {
+                newDecks[idx].push(...newHands[idx]);
+                newDecks[idx] = shuffle(newDecks[idx]);
+                newHands[idx] = [];
+                const drawn = drawCards(newDecks[idx], newHands[idx], NC_START_HAND, newDiscards[idx]);
+                newDecks[idx] = drawn.deck;
+                newHands[idx] = drawn.hand;
+                newDiscards[idx] = drawn.discardPile;
+              }
+            }
+
+            return {
+              ...state,
+              phase: 'placing' as any,
+              mulliganDecisions: decisions,
+              hands: newHands,
+              decks: newDecks,
+              discardPiles: newDiscards,
+              turnDeadline: Date.now() + NC_TURN_TIME_MS,
+            };
+          }
+          return { ...state, mulliganDecisions: decisions };
+        }
+      }
+      return state;
+    }
+
+    if (state.phase !== 'placing') return state;
+
+    // ── Bot play logic ──
+    for (const pIdx of [0, 1] as const) {
+      if (!isNcBotToken(state.playerIds[pIdx])) continue;
+      if (state.confirmed[pIdx]) continue;
+
+      // Bot places cards and confirms
+      let s = { ...state, hands: [[...state.hands[0]], [...state.hands[1]]] as [string[], string[]], pendingPlays: [[...state.pendingPlays[0]], [...state.pendingPlays[1]]] as [NcPendingPlay[], NcPendingPlay[]] };
+
+      const difficulty = state.botDifficulty ?? 'medium';
+      const botPlays = computeBotPlays(s, pIdx, difficulty);
+
+      for (const play of botPlays) {
+        const def = getCardDef(play.cardId);
+        const cost = effectiveManaCost(def, s.lanes[play.laneIndex].modifier);
+        const spent = computeSpentMana(s.pendingPlays[pIdx], s.lanes as [NcLane, NcLane, NcLane]);
+        if (cost > s.mana[pIdx] - spent) continue;
+        if (s.lanes[play.laneIndex].locked) continue;
+
+        const handIdx = s.hands[pIdx].indexOf(play.cardId);
+        if (handIdx === -1) continue;
+
+        s.hands[pIdx].splice(handIdx, 1);
+        s.pendingPlays[pIdx].push({
+          cardUid: s.nextUid,
+          cardId: play.cardId,
+          laneIndex: play.laneIndex,
+        });
+        s.nextUid = (s.nextUid ?? 1) + 1;
+      }
+
+      // Confirm
+      const newConfirmed = [s.confirmed[0], s.confirmed[1]] as [boolean, boolean];
+      newConfirmed[pIdx] = true;
+      s.confirmed = newConfirmed;
+
+      if (s.confirmed[0] && s.confirmed[1]) {
+        return resolveRound(s);
+      }
+      return s;
+    }
+
+    // ── Timer auto-confirm ──
     if (!state.turnDeadline) return state;
     if (Date.now() < state.turnDeadline) return state;
 
-    // Auto-confirm unconfirmed players
     let newConfirmed = [state.confirmed[0], state.confirmed[1]] as [boolean, boolean];
     let changed = false;
 
@@ -898,7 +1191,6 @@ export const nexusClashEngine: GameEngine<NexusClashState, NexusClashAction> = {
 
     if (!changed) return state;
 
-    // Both are now confirmed, resolve
     if (newConfirmed[0] && newConfirmed[1]) {
       return resolveRound({ ...state, confirmed: newConfirmed });
     }

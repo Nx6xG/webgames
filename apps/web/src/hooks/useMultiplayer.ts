@@ -83,7 +83,7 @@ export interface MultiplayerState<TState extends AnyGameState = AnyGameState> {
 }
 
 export interface MultiplayerActions {
-  createRoom: (options?: { visibility?: RoomVisibility; roomName?: string; rpsConfig?: { mode: string; bestOf?: number }; ldConfig?: { mode: string }; battleshipConfig?: { fleetPreset: string; boardSize?: number; salvoMode?: boolean; shotTimerSec?: number }; cfConfig?: { bestOf?: number; speed?: string; powerUpDensity?: string; thickness?: string; noGaps?: boolean; shrinkingArena?: boolean; suddenDeath?: boolean; disabledPowerUps?: string[]; obstacles?: boolean; teamMode?: boolean; arenaShape?: string; mapSize?: string; bots?: Array<{ token: string; difficulty: string; nickname: string }> }; unoConfig?: { targetScore?: number; stackDraw2?: boolean; stackDraw4?: boolean; allowDraw2OnDraw4?: boolean; allowDraw4OnDraw2?: boolean; playDrawnCardImmediately?: boolean; drawUntilPlayable?: boolean; forcedPlay?: boolean; stackSameCards?: boolean }; chessConfig?: { timeSeconds: number; incrementSeconds: number }; maxPlayers?: number }) => void;
+  createRoom: (options?: { visibility?: RoomVisibility; roomName?: string; rpsConfig?: { mode: string; bestOf?: number }; ldConfig?: { mode: string }; battleshipConfig?: { fleetPreset: string; boardSize?: number; salvoMode?: boolean; shotTimerSec?: number }; cfConfig?: { bestOf?: number; speed?: string; powerUpDensity?: string; thickness?: string; noGaps?: boolean; shrinkingArena?: boolean; suddenDeath?: boolean; disabledPowerUps?: string[]; obstacles?: boolean; teamMode?: boolean; arenaShape?: string; mapSize?: string; bots?: Array<{ token: string; difficulty: string; nickname: string }> }; unoConfig?: { targetScore?: number; stackDraw2?: boolean; stackDraw4?: boolean; allowDraw2OnDraw4?: boolean; allowDraw4OnDraw2?: boolean; playDrawnCardImmediately?: boolean; drawUntilPlayable?: boolean; forcedPlay?: boolean; stackSameCards?: boolean }; chessConfig?: { timeSeconds: number; incrementSeconds: number }; ncConfig?: { botDifficulty?: string }; maxPlayers?: number }) => void;
   joinRoom: (code: string) => void;
   /** Join the per-gameId matchmaking queue. Server assigns a room automatically. */
   quickPlay: () => void;
@@ -517,7 +517,7 @@ export function useMultiplayer<TState extends AnyGameState = AnyGameState>(
     };
   }, [wsUrl]);
 
-  const createRoom = useCallback((options?: { visibility?: RoomVisibility; roomName?: string; rpsConfig?: { mode: string; bestOf?: number }; ldConfig?: { mode: string }; battleshipConfig?: { fleetPreset: string; boardSize?: number; salvoMode?: boolean; shotTimerSec?: number }; cfConfig?: { bestOf?: number; speed?: string; powerUpDensity?: string; thickness?: string; noGaps?: boolean; shrinkingArena?: boolean; suddenDeath?: boolean; disabledPowerUps?: string[]; obstacles?: boolean; teamMode?: boolean; arenaShape?: string; mapSize?: string; bots?: Array<{ token: string; difficulty: string; nickname: string }> }; unoConfig?: { targetScore?: number; stackDraw2?: boolean; stackDraw4?: boolean; allowDraw2OnDraw4?: boolean; allowDraw4OnDraw2?: boolean; playDrawnCardImmediately?: boolean; drawUntilPlayable?: boolean; forcedPlay?: boolean; stackSameCards?: boolean }; chessConfig?: { timeSeconds: number; incrementSeconds: number }; maxPlayers?: number }) => {
+  const createRoom = useCallback((options?: { visibility?: RoomVisibility; roomName?: string; rpsConfig?: { mode: string; bestOf?: number }; ldConfig?: { mode: string }; battleshipConfig?: { fleetPreset: string; boardSize?: number; salvoMode?: boolean; shotTimerSec?: number }; cfConfig?: { bestOf?: number; speed?: string; powerUpDensity?: string; thickness?: string; noGaps?: boolean; shrinkingArena?: boolean; suddenDeath?: boolean; disabledPowerUps?: string[]; obstacles?: boolean; teamMode?: boolean; arenaShape?: string; mapSize?: string; bots?: Array<{ token: string; difficulty: string; nickname: string }> }; unoConfig?: { targetScore?: number; stackDraw2?: boolean; stackDraw4?: boolean; allowDraw2OnDraw4?: boolean; allowDraw4OnDraw2?: boolean; playDrawnCardImmediately?: boolean; drawUntilPlayable?: boolean; forcedPlay?: boolean; stackSameCards?: boolean }; chessConfig?: { timeSeconds: number; incrementSeconds: number }; ncConfig?: { botDifficulty?: string }; maxPlayers?: number }) => {
     set((prev) => ({ ...prev, error: null }));
     socketRef.current?.emit('create_room', {
       playerToken: tokenRef.current,
@@ -531,6 +531,7 @@ export function useMultiplayer<TState extends AnyGameState = AnyGameState>(
       cfConfig: options?.cfConfig,
       unoConfig: options?.unoConfig,
       chessConfig: options?.chessConfig,
+      ncConfig: options?.ncConfig,
       maxPlayers: options?.maxPlayers,
     });
   }, []);

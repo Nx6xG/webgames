@@ -1340,6 +1340,321 @@ const CARD_ART: Record<string, CardArt> = {
       </>
     ),
   },
+
+  // ── New Commons ──
+  nebelkrieger: {
+    bg: 'linear-gradient(180deg, #2a2a3a 0%, #1a1a2a 50%, #0d0d17 100%)',
+    svg: (
+      <>
+        {/* Fog bank */}
+        <ellipse cx="50" cy="70" rx="45" ry="12" fill="#6b7280" opacity="0.15"/>
+        <ellipse cx="50" cy="65" rx="35" ry="8" fill="#9ca3af" opacity="0.1"/>
+        {/* Shadow figure */}
+        <path d="M50 18 L42 35 L38 60 L44 72 L56 72 L62 60 L58 35 Z" fill="#1e1b4b" opacity="0.8" stroke="#6b21a8" strokeWidth="0.5"/>
+        {/* Hood */}
+        <path d="M40 30 Q50 12 60 30 L58 35 L42 35 Z" fill="#2e1065" stroke="#7c3aed" strokeWidth="0.4"/>
+        {/* Glowing eyes */}
+        <circle cx="46" cy="28" r="1.5" fill="#a78bfa"/>
+        <circle cx="54" cy="28" r="1.5" fill="#a78bfa"/>
+        <circle cx="46" cy="28" r="0.6" fill="#e9d5ff"/>
+        <circle cx="54" cy="28" r="0.6" fill="#e9d5ff"/>
+        {/* Fog wisps */}
+        <path d="M20 55 Q35 48 50 55 Q65 62 80 55" fill="none" stroke="#9ca3af" strokeWidth="0.6" opacity="0.2"/>
+        <path d="M15 62 Q30 56 50 62 Q70 68 85 62" fill="none" stroke="#6b7280" strokeWidth="0.5" opacity="0.15"/>
+      </>
+    ),
+  },
+  lichtbringer: {
+    bg: 'linear-gradient(180deg, #fef3c7 0%, #92400e 40%, #1c1917 100%)',
+    svg: (
+      <>
+        {/* Divine radiance */}
+        <circle cx="50" cy="30" r="25" fill="#fbbf24" opacity="0.08"/>
+        <circle cx="50" cy="30" r="15" fill="#fde68a" opacity="0.12"/>
+        {/* Robed figure */}
+        <path d="M50 20 L40 40 L36 72 L64 72 L60 40 Z" fill="#fef3c7" opacity="0.7" stroke="#f59e0b" strokeWidth="0.5"/>
+        {/* Head halo */}
+        <circle cx="50" cy="16" r="8" fill="none" stroke="#fbbf24" strokeWidth="1" opacity="0.6"/>
+        <circle cx="50" cy="16" r="5" fill="#fef9c3" opacity="0.3"/>
+        {/* Face */}
+        <circle cx="50" cy="18" r="4" fill="#fde68a" opacity="0.5"/>
+        {/* Raised arms with light beams */}
+        <line x1="40" y1="40" x2="24" y2="28" stroke="#fef3c7" strokeWidth="1.5" opacity="0.5"/>
+        <line x1="60" y1="40" x2="76" y2="28" stroke="#fef3c7" strokeWidth="1.5" opacity="0.5"/>
+        <circle cx="24" cy="28" r="3" fill="#fbbf24" opacity="0.3"/>
+        <circle cx="76" cy="28" r="3" fill="#fbbf24" opacity="0.3"/>
+      </>
+    ),
+  },
+  wurzelgolem: {
+    bg: 'linear-gradient(180deg, #365314 0%, #1a2e05 40%, #0d1705 100%)',
+    svg: (
+      <>
+        {/* Ground roots */}
+        <path d="M30 75 Q20 78 10 82" stroke="#713f12" strokeWidth="1.5" fill="none" opacity="0.5"/>
+        <path d="M70 75 Q80 78 90 82" stroke="#713f12" strokeWidth="1.5" fill="none" opacity="0.5"/>
+        <path d="M45 78 Q35 82 25 80" stroke="#713f12" strokeWidth="1" fill="none" opacity="0.4"/>
+        {/* Massive body */}
+        <path d="M35 25 L30 55 L32 75 L68 75 L70 55 L65 25 Z" fill="#78350f" stroke="#92400e" strokeWidth="0.6"/>
+        {/* Stone/moss patches */}
+        <circle cx="45" cy="45" r="6" fill="#57534e" opacity="0.5"/>
+        <circle cx="58" cy="52" r="5" fill="#57534e" opacity="0.4"/>
+        <ellipse cx="50" cy="48" rx="4" ry="3" fill="#4d7c0f" opacity="0.3"/>
+        {/* Head — rough boulder */}
+        <path d="M38 25 L40 14 L50 10 L60 14 L62 25 Z" fill="#78350f" stroke="#a16207" strokeWidth="0.5"/>
+        {/* Eyes — dim green glow */}
+        <circle cx="45" cy="19" r="2" fill="#4d7c0f" opacity="0.7"/>
+        <circle cx="55" cy="19" r="2" fill="#4d7c0f" opacity="0.7"/>
+        <circle cx="45" cy="19" r="0.8" fill="#84cc16"/>
+        <circle cx="55" cy="19" r="0.8" fill="#84cc16"/>
+      </>
+    ),
+  },
+
+  // ── New Rares ──
+  frostriese: {
+    bg: 'linear-gradient(180deg, #bae6fd 0%, #1e3a5f 40%, #0c1929 100%)',
+    svg: (
+      <>
+        {/* Icy aura */}
+        <circle cx="50" cy="40" r="35" fill="#38bdf8" opacity="0.06"/>
+        {/* Massive body */}
+        <path d="M32 25 L28 55 L30 75 L70 75 L72 55 L68 25 Z" fill="#7dd3fc" opacity="0.3" stroke="#38bdf8" strokeWidth="0.5"/>
+        {/* Icy chest plate */}
+        <path d="M38 30 L62 30 L60 55 L40 55 Z" fill="#0c4a6e" opacity="0.6" stroke="#67e8f9" strokeWidth="0.3"/>
+        {/* Head — horned */}
+        <path d="M40 25 L42 14 L50 10 L58 14 L60 25 Z" fill="#7dd3fc" opacity="0.4" stroke="#38bdf8" strokeWidth="0.5"/>
+        <line x1="42" y1="14" x2="34" y2="4" stroke="#67e8f9" strokeWidth="1.5" opacity="0.6"/>
+        <line x1="58" y1="14" x2="66" y2="4" stroke="#67e8f9" strokeWidth="1.5" opacity="0.6"/>
+        {/* Eyes — cold blue */}
+        <circle cx="46" cy="19" r="1.5" fill="#22d3ee"/>
+        <circle cx="54" cy="19" r="1.5" fill="#22d3ee"/>
+        {/* Ice crystals */}
+        <path d="M18 50 L22 44 L26 50 L22 56 Z" fill="#67e8f9" opacity="0.2"/>
+        <path d="M78 45 L82 39 L86 45 L82 51 Z" fill="#67e8f9" opacity="0.2"/>
+        {/* Frost particles */}
+        <circle cx="30" cy="35" r="0.8" fill="#a5f3fc" opacity="0.4"/>
+        <circle cx="72" cy="38" r="0.6" fill="#a5f3fc" opacity="0.3"/>
+        <circle cx="25" cy="60" r="0.5" fill="#a5f3fc" opacity="0.3"/>
+      </>
+    ),
+  },
+  zeitweber: {
+    bg: 'linear-gradient(180deg, #4c1d95 0%, #1e1b4b 50%, #0d0d17 100%)',
+    svg: (
+      <>
+        {/* Arcane rings */}
+        <circle cx="50" cy="42" r="30" fill="none" stroke="#7c3aed" strokeWidth="0.3" opacity="0.3" strokeDasharray="3 2"/>
+        <circle cx="50" cy="42" r="22" fill="none" stroke="#a78bfa" strokeWidth="0.3" opacity="0.2" strokeDasharray="2 3"/>
+        {/* Robed figure */}
+        <path d="M50 16 L40 35 L36 72 L64 72 L60 35 Z" fill="#2e1065" opacity="0.8" stroke="#7c3aed" strokeWidth="0.4"/>
+        {/* Hood */}
+        <path d="M40 30 Q50 14 60 30 L58 34 L42 34 Z" fill="#1e1b4b" stroke="#6d28d9" strokeWidth="0.4"/>
+        {/* Hourglass held at center */}
+        <path d="M45 38 L55 38 L52 46 L55 54 L45 54 L48 46 Z" fill="#6d28d9" opacity="0.6" stroke="#a78bfa" strokeWidth="0.5"/>
+        <circle cx="50" cy="46" r="1.5" fill="#c4b5fd"/>
+        {/* Sand particles */}
+        <circle cx="50" cy="42" r="0.5" fill="#ddd6fe" opacity="0.6"/>
+        <circle cx="49" cy="50" r="0.5" fill="#ddd6fe" opacity="0.5"/>
+        {/* Eyes */}
+        <circle cx="46" cy="25" r="1.2" fill="#a78bfa"/>
+        <circle cx="54" cy="25" r="1.2" fill="#a78bfa"/>
+      </>
+    ),
+  },
+  koenigsgarde: {
+    bg: 'linear-gradient(180deg, #d4af37 0%, #5c4a1e 40%, #1a1505 100%)',
+    svg: (
+      <>
+        {/* Ground reflection */}
+        <ellipse cx="50" cy="78" rx="22" ry="4" fill="#d4af37" opacity="0.06"/>
+        {/* Armored body */}
+        <path d="M36 30 L34 55 L36 72 L64 72 L66 55 L64 30 Z" fill="#a1a1aa" stroke="#d4d4d8" strokeWidth="0.5"/>
+        {/* Gold chest emblem */}
+        <path d="M44 35 L56 35 L56 50 L50 55 L44 50 Z" fill="#1a1505" stroke="#d4af37" strokeWidth="0.8"/>
+        <path d="M48 39 L52 39 L52 46 L50 48 L48 46 Z" fill="#d4af37" opacity="0.5"/>
+        {/* Helmet with plume */}
+        <path d="M40 30 L42 16 L50 12 L58 16 L60 30 Z" fill="#d4d4d8" stroke="#e5e7eb" strokeWidth="0.4"/>
+        <rect x="42" y="22" width="16" height="4" rx="1" fill="#27272a"/>
+        <rect x="44" y="23" width="5" height="2" rx="0.5" fill="#d4af37" opacity="0.7"/>
+        <rect x="51" y="23" width="5" height="2" rx="0.5" fill="#d4af37" opacity="0.7"/>
+        {/* Gold plume */}
+        <path d="M50 12 Q52 4 56 2 Q50 6 50 12" fill="#d4af37" opacity="0.6"/>
+        {/* Shield in left hand */}
+        <path d="M22 35 L18 35 L16 50 L22 55 L28 50 L28 35 Z" fill="#d4af37" stroke="#fbbf24" strokeWidth="0.4"/>
+        {/* Sword in right hand */}
+        <line x1="76" y1="25" x2="76" y2="60" stroke="#e5e7eb" strokeWidth="1.5"/>
+        <line x1="72" y1="52" x2="80" y2="52" stroke="#d4af37" strokeWidth="1"/>
+      </>
+    ),
+  },
+
+  // ── New Epics ──
+  valkyria: {
+    bg: 'linear-gradient(180deg, #fef9c3 0%, #92400e 35%, #1c1917 100%)',
+    svg: (
+      <>
+        {/* Divine glow */}
+        <circle cx="50" cy="35" r="30" fill="#fbbf24" opacity="0.06"/>
+        {/* Wings */}
+        <path d="M36 35 Q20 20 8 8 Q14 22 22 32 Q28 38 36 40 Z" fill="#fef3c7" opacity="0.5" stroke="#fbbf24" strokeWidth="0.3"/>
+        <path d="M64 35 Q80 20 92 8 Q86 22 78 32 Q72 38 64 40 Z" fill="#fef3c7" opacity="0.5" stroke="#fbbf24" strokeWidth="0.3"/>
+        {/* Wing feather details */}
+        <path d="M30 30 Q18 18 10 12" stroke="#fde68a" strokeWidth="0.3" fill="none" opacity="0.4"/>
+        <path d="M70 30 Q82 18 90 12" stroke="#fde68a" strokeWidth="0.3" fill="none" opacity="0.4"/>
+        {/* Armored body */}
+        <path d="M40 32 L38 55 L40 72 L60 72 L62 55 L60 32 Z" fill="#d4d4d8" stroke="#e5e7eb" strokeWidth="0.4"/>
+        {/* Head with winged helm */}
+        <path d="M42 32 L44 20 L50 16 L56 20 L58 32 Z" fill="#e5e7eb" stroke="#fbbf24" strokeWidth="0.4"/>
+        {/* Eyes */}
+        <circle cx="47" cy="25" r="1.2" fill="#fbbf24"/>
+        <circle cx="53" cy="25" r="1.2" fill="#fbbf24"/>
+        {/* Spear */}
+        <line x1="72" y1="10" x2="72" y2="72" stroke="#d4d4d8" strokeWidth="1"/>
+        <path d="M72 10 L69 18 L72 16 L75 18 Z" fill="#fbbf24"/>
+      </>
+    ),
+  },
+  schattenjaeger: {
+    bg: 'linear-gradient(180deg, #450a0a 0%, #1c0a0a 50%, #0a0505 100%)',
+    svg: (
+      <>
+        {/* Dark aura */}
+        <circle cx="50" cy="42" r="30" fill="#dc2626" opacity="0.04"/>
+        {/* Cloaked figure */}
+        <path d="M50 14 L36 35 L32 72 L68 72 L64 35 Z" fill="#1c1917" opacity="0.9" stroke="#450a0a" strokeWidth="0.5"/>
+        {/* Hood — deep shadow */}
+        <path d="M38 32 Q50 12 62 32 L60 36 L40 36 Z" fill="#0a0505" stroke="#7f1d1d" strokeWidth="0.4"/>
+        {/* Glowing red eyes */}
+        <circle cx="46" cy="26" r="1.5" fill="#ef4444"/>
+        <circle cx="54" cy="26" r="1.5" fill="#ef4444"/>
+        <circle cx="46" cy="26" r="0.6" fill="#fca5a5"/>
+        <circle cx="54" cy="26" r="0.6" fill="#fca5a5"/>
+        {/* Twin daggers */}
+        <line x1="28" y1="38" x2="20" y2="54" stroke="#a1a1aa" strokeWidth="1.2"/>
+        <line x1="72" y1="38" x2="80" y2="54" stroke="#a1a1aa" strokeWidth="1.2"/>
+        <circle cx="20" cy="54" r="1" fill="#dc2626" opacity="0.5"/>
+        <circle cx="80" cy="54" r="1" fill="#dc2626" opacity="0.5"/>
+        {/* Blood mist */}
+        <circle cx="35" cy="60" r="4" fill="#dc2626" opacity="0.05"/>
+        <circle cx="65" cy="58" r="3" fill="#dc2626" opacity="0.04"/>
+      </>
+    ),
+  },
+  weltenbaum: {
+    bg: 'linear-gradient(180deg, #166534 0%, #14532d 30%, #052e16 60%, #1a0e05 100%)',
+    svg: (
+      <>
+        {/* Root glow */}
+        <ellipse cx="50" cy="78" rx="40" ry="6" fill="#4d7c0f" opacity="0.08"/>
+        {/* Trunk */}
+        <path d="M44 45 L42 78 L58 78 L56 45 Z" fill="#78350f" stroke="#a16207" strokeWidth="0.5"/>
+        {/* Roots spreading */}
+        <path d="M42 72 Q30 76 15 80" stroke="#713f12" strokeWidth="2" fill="none" opacity="0.6"/>
+        <path d="M58 72 Q70 76 85 80" stroke="#713f12" strokeWidth="2" fill="none" opacity="0.6"/>
+        <path d="M44 75 Q35 80 28 78" stroke="#713f12" strokeWidth="1" fill="none" opacity="0.4"/>
+        {/* Crown — massive canopy */}
+        <circle cx="50" cy="28" r="24" fill="#166534" opacity="0.5"/>
+        <circle cx="40" cy="24" r="14" fill="#15803d" opacity="0.3"/>
+        <circle cx="60" cy="24" r="14" fill="#15803d" opacity="0.3"/>
+        <circle cx="50" cy="18" r="12" fill="#22c55e" opacity="0.15"/>
+        {/* Golden runes/leaves */}
+        <circle cx="38" cy="20" r="1" fill="#fbbf24" opacity="0.5"/>
+        <circle cx="62" cy="22" r="1" fill="#fbbf24" opacity="0.4"/>
+        <circle cx="50" cy="12" r="1.2" fill="#fbbf24" opacity="0.6"/>
+        <circle cx="45" cy="30" r="0.8" fill="#fbbf24" opacity="0.3"/>
+        <circle cx="56" cy="16" r="0.8" fill="#fbbf24" opacity="0.4"/>
+      </>
+    ),
+  },
+
+  // ── New Legendaries ──
+  odin: {
+    bg: 'linear-gradient(180deg, #d4af37 0%, #1e3a5f 40%, #0c1929 100%)',
+    svg: (
+      <>
+        {/* Divine aura */}
+        <circle cx="50" cy="35" r="35" fill="#fbbf24" opacity="0.06"/>
+        {/* Robed figure */}
+        <path d="M50 18 L38 38 L34 75 L66 75 L62 38 Z" fill="#1e3a5f" opacity="0.8" stroke="#d4af37" strokeWidth="0.5"/>
+        {/* Armor chest */}
+        <path d="M42 38 L58 38 L56 55 L44 55 Z" fill="#d4af37" opacity="0.3" stroke="#fbbf24" strokeWidth="0.4"/>
+        {/* Head with one eye */}
+        <path d="M42 30 Q50 14 58 30 L56 34 L44 34 Z" fill="#1e3a5f" stroke="#d4af37" strokeWidth="0.5"/>
+        <circle cx="53" cy="25" r="2" fill="#fbbf24"/>
+        <circle cx="53" cy="25" r="0.8" fill="#fef9c3"/>
+        <line x1="44" y1="24" x2="48" y2="26" stroke="#d4af37" strokeWidth="0.5" opacity="0.5"/>
+        {/* Ravens */}
+        <path d="M22 16 Q20 14 18 15 Q16 14 17 12 Q20 10 22 12 Q23 14 22 16" fill="#27272a" stroke="#3f3f46" strokeWidth="0.3"/>
+        <path d="M78 20 Q76 18 74 19 Q72 18 73 16 Q76 14 78 16 Q79 18 78 20" fill="#27272a" stroke="#3f3f46" strokeWidth="0.3"/>
+        {/* Spear Gungnir */}
+        <line x1="74" y1="6" x2="68" y2="75" stroke="#d4af37" strokeWidth="1.2"/>
+        <path d="M74 6 L72 14 L74 12 L76 14 Z" fill="#fbbf24"/>
+      </>
+    ),
+  },
+  mechanicus: {
+    bg: 'linear-gradient(180deg, #164e63 0%, #0e3a4a 40%, #0a1929 100%)',
+    svg: (
+      <>
+        <defs>
+          <radialGradient id="mech_core" cx="50%" cy="42%" r="20%"><stop offset="0%" stopColor="#22d3ee" stopOpacity="0.5"/><stop offset="100%" stopColor="#164e63" stopOpacity="0"/></radialGradient>
+        </defs>
+        {/* Electric arcs */}
+        <path d="M20 30 L28 26 L24 34 L32 30" stroke="#22d3ee" strokeWidth="0.4" fill="none" opacity="0.3"/>
+        <path d="M76 28 L70 24 L74 32 L68 28" stroke="#22d3ee" strokeWidth="0.4" fill="none" opacity="0.3"/>
+        {/* Mechanical body */}
+        <path d="M34 24 L32 55 L34 72 L66 72 L68 55 L66 24 Z" fill="#71717a" stroke="#a1a1aa" strokeWidth="0.5"/>
+        {/* Core reactor */}
+        <circle cx="50" cy="42" r="10" fill="url(#mech_core)"/>
+        <circle cx="50" cy="42" r="6" fill="#083344" stroke="#22d3ee" strokeWidth="0.8"/>
+        <circle cx="50" cy="42" r="3" fill="#06b6d4" opacity="0.6"/>
+        <circle cx="50" cy="42" r="1" fill="#a5f3fc"/>
+        {/* Head — angular chrome */}
+        <path d="M40 24 L42 12 L50 8 L58 12 L60 24 Z" fill="#a1a1aa" stroke="#d4d4d8" strokeWidth="0.4"/>
+        {/* Multiple eyes — sensor array */}
+        <circle cx="45" cy="17" r="1.5" fill="#22d3ee"/>
+        <circle cx="50" cy="16" r="1.8" fill="#06b6d4"/>
+        <circle cx="55" cy="17" r="1.5" fill="#22d3ee"/>
+        <circle cx="50" cy="16" r="0.7" fill="#a5f3fc"/>
+        {/* Gear shoulders */}
+        <circle cx="26" cy="30" r="7" fill="none" stroke="#71717a" strokeWidth="1" strokeDasharray="3 2"/>
+        <circle cx="74" cy="30" r="7" fill="none" stroke="#71717a" strokeWidth="1" strokeDasharray="3 2"/>
+      </>
+    ),
+  },
+  nyx: {
+    bg: 'linear-gradient(180deg, #1e1b4b 0%, #0f0a2a 40%, #050210 100%)',
+    svg: (
+      <>
+        {/* Star field */}
+        <circle cx="15" cy="10" r="0.6" fill="#e9d5ff" opacity="0.6"/>
+        <circle cx="82" cy="8" r="0.5" fill="#c4b5fd" opacity="0.5"/>
+        <circle cx="28" cy="18" r="0.4" fill="#ddd6fe" opacity="0.4"/>
+        <circle cx="75" cy="22" r="0.7" fill="#e9d5ff" opacity="0.5"/>
+        <circle cx="10" cy="40" r="0.5" fill="#c4b5fd" opacity="0.3"/>
+        <circle cx="90" cy="45" r="0.4" fill="#ddd6fe" opacity="0.4"/>
+        <circle cx="20" cy="55" r="0.5" fill="#e9d5ff" opacity="0.3"/>
+        <circle cx="85" cy="60" r="0.6" fill="#c4b5fd" opacity="0.3"/>
+        {/* Dark flowing robes */}
+        <path d="M50 16 L34 38 L28 75 L72 75 L66 38 Z" fill="#1e1b4b" opacity="0.8" stroke="#6d28d9" strokeWidth="0.4"/>
+        {/* Ethereal face */}
+        <path d="M40 32 Q50 14 60 32 L58 36 L42 36 Z" fill="#0f0a2a" stroke="#7c3aed" strokeWidth="0.5"/>
+        {/* Eyes — deep violet stars */}
+        <circle cx="46" cy="26" r="2" fill="#7c3aed"/>
+        <circle cx="54" cy="26" r="2" fill="#7c3aed"/>
+        <circle cx="46" cy="26" r="0.8" fill="#e9d5ff"/>
+        <circle cx="54" cy="26" r="0.8" fill="#e9d5ff"/>
+        {/* Crescent moon crown */}
+        <path d="M50 10 Q44 6 46 2 Q52 4 54 10 Q52 8 50 10" fill="#c4b5fd" opacity="0.6"/>
+        {/* Nebula wisps from hands */}
+        <circle cx="28" cy="50" r="6" fill="#7c3aed" opacity="0.08"/>
+        <circle cx="72" cy="50" r="6" fill="#6d28d9" opacity="0.08"/>
+        <circle cx="28" cy="50" r="3" fill="#a78bfa" opacity="0.1"/>
+        <circle cx="72" cy="50" r="3" fill="#a78bfa" opacity="0.1"/>
+      </>
+    ),
+  },
 };
 
 // ── Component ───────────────────────────────────────────────────────────────
@@ -1428,8 +1743,9 @@ export function NexusClashCard({
         pending ? 'opacity-60' : '',
         disabled ? 'opacity-40 grayscale cursor-not-allowed' : '',
         locked ? 'opacity-30 grayscale' : '',
-        def.rarity === 'legendary' ? 'nc-legendary-pulse' : '',
-        def.rarity === 'epic' ? 'nc-epic-shimmer' : '',
+        def.rarity === 'legendary' ? 'nc-legendary-pulse nc-card-shine nc-card-legendary-holo' : '',
+        def.rarity === 'epic' ? 'nc-epic-shimmer nc-card-shine nc-card-epic-holo' : '',
+        def.rarity === 'rare' ? 'nc-card-shine' : '',
         className,
       ].join(' ')}
       style={{

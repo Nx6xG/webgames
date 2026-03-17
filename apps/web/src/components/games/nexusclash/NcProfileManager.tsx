@@ -5,6 +5,7 @@ import type { NcPlayerProfile, NcDeckSlot, NcQuest, NcQuestGoal } from 'shared';
 import {
   createDefaultNcProfile, NC_WIN_COINS, NC_LOSS_COINS,
   NC_DAILY_QUEST_COINS, NC_WEEKLY_QUEST_GEMS,
+  getNcDailyReward,
 } from 'shared';
 
 const PROFILE_KEY = 'webgames.nexusclash.profile';
@@ -13,7 +14,15 @@ function loadProfile(): NcPlayerProfile {
   if (typeof window === 'undefined') return createDefaultNcProfile();
   try {
     const raw = localStorage.getItem(PROFILE_KEY);
-    if (raw) return JSON.parse(raw) as NcPlayerProfile;
+    if (raw) {
+      const p = JSON.parse(raw) as NcPlayerProfile;
+      // Migrate: add shards if missing
+      if (p.currencies.shards === undefined) p.currencies.shards = 0;
+      // Migrate: add lastLoginReward if missing
+      if (!p.lastLoginReward) p.lastLoginReward = '';
+      if (p.loginDay === undefined) p.loginDay = 0;
+      return p;
+    }
   } catch { /* fallback */ }
   return createDefaultNcProfile();
 }
@@ -174,5 +183,33 @@ export function useNcProfile() {
     });
   }, []);
 
-  return { profile, updateProfile, saveDecks, claimQuest, trackMatchEnd };
+  // Daily login reward (7-day cycle)
+  const [dailyLoginReward, setDailyLoginReward] = useState<{ day: number; coins: number; shards: number; gems?: number } | null>(null);
+
+  useEffect(() => {
+    if (!hydratedRef.current) return;
+    const today = new Date().toISOString().slice(0, 10);
+    if (profile.lastLoginReward !== today) {
+      const nextDay = (profile.loginDay ?? 0) + 1; // continuous counter
+      const reward = getNcDailyReward(nextDay);
+      setProfile(prev => ({
+        ...prev,
+        lastLoginReward: today,
+        loginDay: nextDay,
+        currencies: {
+          ...prev.currencies,
+          coins: prev.currencies.coins + reward.coins,
+          shards: (prev.currencies.shards ?? 0) + reward.shards,
+          gems: prev.currencies.gems + (reward.gems ?? 0),
+        },
+      }));
+      setDailyLoginReward({ day: nextDay, ...reward });
+    }
+  }, [profile.lastLoginReward]); // eslint-disable-line
+
+  const dismissDailyLogin = useCallback(() => {
+    setDailyLoginReward(null);
+  }, []);
+
+  return { profile, updateProfile, saveDecks, claimQuest, trackMatchEnd, dailyLoginReward, dismissDailyLogin };
 }

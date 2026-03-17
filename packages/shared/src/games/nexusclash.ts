@@ -24,7 +24,11 @@ export type NcEffectType =
   | 'drain'
   | 'double_push_if'
   | 'power_per_tag'
-  | 'swap_lane_positions';
+  | 'swap_lane_positions'
+  | 'draw_card'
+  | 'mana_boost'
+  | 'heal_allies'
+  | 'destroy_strongest_enemy';
 
 export interface NcAbility {
   trigger: NcTrigger;
@@ -107,7 +111,7 @@ export interface NcPendingPlay {
 
 // ── Game Phase ──────────────────────────────────────────────────────────────
 
-export type NcPhase = 'placing' | 'revealing' | 'finished';
+export type NcPhase = 'mulligan' | 'placing' | 'revealing' | 'finished';
 
 // ── Resolve Log Entry (for animation) ───────────────────────────────────────
 
@@ -159,6 +163,12 @@ export interface NexusClashState {
   currentTurn: string;
   /** Timer deadline (unix ms) for current round */
   turnDeadline?: number;
+  /** Temporary mana boost for next round per player */
+  manaBoost: [number, number];
+  /** Bot difficulty (null if no bot) */
+  botDifficulty?: NcBotDifficulty;
+  /** Mulligan decisions: [p0, p1], null = not yet decided */
+  mulliganDecisions: [('keep' | 'redraw' | null), ('keep' | 'redraw' | null)];
   /** History of states per round for replay */
   history: Array<{
     round: number;
@@ -188,7 +198,13 @@ export interface NcConfirmAction {
   type: 'nc_confirm';
 }
 
-export type NexusClashAction = NcPlaceCardAction | NcUndoPlaceAction | NcConfirmAction;
+export interface NcMulliganAction {
+  type: 'nc_mulligan';
+  /** Whether to keep current hand or redraw */
+  decision: 'keep' | 'redraw';
+}
+
+export type NexusClashAction = NcPlaceCardAction | NcUndoPlaceAction | NcConfirmAction | NcMulliganAction;
 
 // ── Progression Types ───────────────────────────────────────────────────────
 
@@ -200,6 +216,7 @@ export interface NcPlayerCollection {
 export interface NcCurrencies {
   coins: number;
   gems: number;
+  shards: number;
 }
 
 export type NcPackType = 'standard' | 'premium';
@@ -258,6 +275,10 @@ export interface NcPlayerProfile {
   lastDailyReset: string;
   /** Last weekly quest reset date (ISO date) */
   lastWeeklyReset: string;
+  /** Last daily login reward claimed (ISO date) */
+  lastLoginReward: string;
+  /** Current login streak day (1-7, resets after 7) */
+  loginDay: number;
   /** Total matches played */
   matchesPlayed: number;
   /** Total wins */
@@ -265,6 +286,12 @@ export interface NcPlayerProfile {
 }
 
 // ── Constants ───────────────────────────────────────────────────────────────
+
+export type NcBotDifficulty = 'easy' | 'medium' | 'hard';
+export const NC_BOT_TOKEN_PREFIX = 'nc-bot-';
+export function isNcBotToken(token: string): boolean {
+  return token.startsWith(NC_BOT_TOKEN_PREFIX);
+}
 
 export const NC_DECK_SIZE = 12;
 export const NC_MAX_COPIES = 1;
@@ -300,6 +327,23 @@ export const NC_PREMIUM_RATES: Record<NcRarity, number> = {
   legendary: 0.15,
 };
 
+/** Shard refund when opening a duplicate card */
+export const NC_DUPLICATE_SHARDS: Record<NcRarity, number> = {
+  common: 5,
+  rare: 15,
+  epic: 40,
+  legendary: 100,
+};
+
+/** Shard cost to buy a specific card in the shard shop */
+export const NC_SHARD_PRICES: Record<NcRarity, number> = {
+  common: 20,
+  rare: 60,
+  epic: 160,
+  legendary: 400,
+};
+
+/** @deprecated Use NC_DUPLICATE_SHARDS instead */
 export const NC_DUPLICATE_REFUND: Record<NcRarity, number> = {
   common: 10,
   rare: 25,
@@ -314,6 +358,21 @@ export const NC_LOSS_COINS = 10;
 export const NC_DAILY_QUEST_COINS = 50;
 export const NC_WEEKLY_QUEST_GEMS = 20;
 export const NC_STARTER_COINS = 300;
+/** Deterministic daily reward for any day number (1-based, infinite). */
+export function getNcDailyReward(day: number): { coins: number; shards: number; gems?: number } {
+  // Cycle patterns every 7 days with slight variation
+  const cycle = ((day - 1) % 7);          // 0-6
+  const week = Math.floor((day - 1) / 7); // which week we're in
+  // Base coins: 15-30, varies by day-in-cycle
+  const coinPattern = [15, 20, 15, 25, 20, 25, 35];
+  const coins = coinPattern[cycle] + Math.min(week, 5); // tiny weekly bonus, caps at +5
+  // Shards: most days 0, some days 2-5
+  const shardPattern = [0, 0, 2, 0, 3, 0, 5];
+  const shards = shardPattern[cycle];
+  // Gems: only every 7th day
+  const gems = cycle === 6 ? 5 : undefined;
+  return gems !== undefined ? { coins, shards, gems } : { coins, shards };
+}
 
 // ── Lane Modifier Definitions ───────────────────────────────────────────────
 
@@ -334,7 +393,7 @@ export const NC_LANE_MODIFIERS: NcLaneModifier[] = [
 export const NC_CARDS: NcCardDef[] = [
   // ── Commons ──
   { id: 'schildbot', nameKey: 'nc.card.schildbot', cost: 2, power: 2, tags: ['mech'], rarity: 'common', ability: { trigger: 'on_reveal', effect: 'shield', value: 2 } },
-  { id: 'aufklaerer', nameKey: 'nc.card.aufklaerer', cost: 1, power: 1, tags: ['mech', 'shadow'], rarity: 'common', ability: { trigger: 'on_reveal', effect: 'move_to_lane', laneTarget: 'strongest' } },
+  { id: 'aufklaerer', nameKey: 'nc.card.aufklaerer', cost: 1, power: 2, tags: ['mech', 'shadow'], rarity: 'common', ability: { trigger: 'on_reveal', effect: 'move_to_lane', laneTarget: 'strongest' } },
   { id: 'skelett_horde', nameKey: 'nc.card.skelett_horde', cost: 1, power: 1, tags: ['undead'], rarity: 'common', ability: { trigger: 'on_ally_played', effect: 'buff_self', value: 1 } },
   { id: 'druidin', nameKey: 'nc.card.druidin', cost: 2, power: 2, tags: ['nature', 'arcane'], rarity: 'common', ability: { trigger: 'on_reveal', effect: 'buff_allies', value: 1 } },
   { id: 'hermes', nameKey: 'nc.card.hermes', cost: 2, power: 2, tags: ['divine', 'shadow'], rarity: 'common', ability: { trigger: 'on_reveal', effect: 'move_to_lane', laneTarget: 'weakest' } },
@@ -348,19 +407,35 @@ export const NC_CARDS: NcCardDef[] = [
   // ── Rares ──
   { id: 'apollo', nameKey: 'nc.card.apollo', cost: 3, power: 4, tags: ['divine', 'nature'], rarity: 'rare', ability: { trigger: 'ongoing', effect: 'power_per_tag', value: 1, tagFilter: 'divine' } },
   { id: 'greif', nameKey: 'nc.card.greif', cost: 3, power: 4, tags: ['beast', 'noble'], rarity: 'rare', ability: { trigger: 'ongoing', effect: 'double_push_if', conditionCount: 2, conditionTag: 'beast' } },
-  { id: 'energiekern', nameKey: 'nc.card.energiekern', cost: 3, power: 2, tags: ['mech', 'arcane'], rarity: 'rare', ability: { trigger: 'ongoing', effect: 'push_bonus', value: 2 } },
+  { id: 'energiekern', nameKey: 'nc.card.energiekern', cost: 2, power: 2, tags: ['mech', 'arcane'], rarity: 'rare', ability: { trigger: 'ongoing', effect: 'push_bonus', value: 2 } },
   { id: 'athena', nameKey: 'nc.card.athena', cost: 4, power: 5, tags: ['divine', 'arcane'], rarity: 'rare', ability: { trigger: 'on_reveal', effect: 'buff_allies', value: 1 } },
   { id: 'phoenix', nameKey: 'nc.card.phoenix', cost: 4, power: 4, tags: ['beast', 'arcane'], rarity: 'rare', ability: { trigger: 'on_destroy', effect: 'buff_self', value: -1 } }, // special: respawn with 3 power
   { id: 'erzmagier', nameKey: 'nc.card.erzmagier', cost: 4, power: 3, tags: ['arcane'], rarity: 'rare', ability: { trigger: 'on_reveal', effect: 'copy_strongest_ally_power' } },
   { id: 'kriegsherr', nameKey: 'nc.card.kriegsherr', cost: 4, power: 5, tags: ['noble'], rarity: 'rare', ability: { trigger: 'on_reveal', effect: 'push_bonus', value: 3 } },
-  { id: 'seelendieb', nameKey: 'nc.card.seelendieb', cost: 4, power: 4, tags: ['shadow', 'undead'], rarity: 'rare', ability: { trigger: 'on_reveal', effect: 'drain', value: 2 } },
+  { id: 'seelendieb', nameKey: 'nc.card.seelendieb', cost: 4, power: 5, tags: ['shadow', 'undead'], rarity: 'rare', ability: { trigger: 'on_reveal', effect: 'drain', value: 2 } },
   // ── Epics ──
   { id: 'treant', nameKey: 'nc.card.treant', cost: 4, power: 6, tags: ['nature'], rarity: 'epic', ability: { trigger: 'ongoing', effect: 'power_per_tag', value: 1, tagFilter: 'nature' } },
   { id: 'lichkoenig', nameKey: 'nc.card.lichkoenig', cost: 5, power: 6, tags: ['undead', 'arcane'], rarity: 'epic', ability: { trigger: 'on_reveal', effect: 'buff_allies', value: 2, tagFilter: 'undead' } },
   { id: 'zeus', nameKey: 'nc.card.zeus', cost: 5, power: 7, tags: ['divine', 'noble'], rarity: 'epic', ability: { trigger: 'on_reveal', effect: 'buff_allies', value: 2, tagFilter: 'divine' } },
-  { id: 'fenrir', nameKey: 'nc.card.fenrir', cost: 5, power: 8, tags: ['beast', 'shadow'], rarity: 'epic', ability: { trigger: 'on_reveal', effect: 'destroy_weakest_enemy' } },
+  { id: 'fenrir', nameKey: 'nc.card.fenrir', cost: 6, power: 7, tags: ['beast', 'shadow'], rarity: 'epic', ability: { trigger: 'on_reveal', effect: 'destroy_weakest_enemy' } },
   // ── Legendaries ──
   { id: 'titan_mk3', nameKey: 'nc.card.titan_mk3', cost: 6, power: 9, tags: ['mech'], rarity: 'legendary', ability: { trigger: 'on_reveal', effect: 'buff_allies', value: 2, tagFilter: 'mech' } },
+  // ── New Commons ──
+  { id: 'nebelkrieger', nameKey: 'nc.card.nebelkrieger', cost: 2, power: 3, tags: ['shadow', 'undead'], rarity: 'common', ability: { trigger: 'on_reveal', effect: 'debuff_enemies', value: 1 } },
+  { id: 'lichtbringer', nameKey: 'nc.card.lichtbringer', cost: 2, power: 2, tags: ['divine', 'arcane'], rarity: 'common', ability: { trigger: 'on_reveal', effect: 'mana_boost', value: 1 } },
+  { id: 'wurzelgolem', nameKey: 'nc.card.wurzelgolem', cost: 3, power: 4, tags: ['nature', 'mech'], rarity: 'common', ability: { trigger: 'on_reveal', effect: 'push_bonus', value: 1 } },
+  // ── New Rares ──
+  { id: 'frostriese', nameKey: 'nc.card.frostriese', cost: 4, power: 5, tags: ['beast', 'nature'], rarity: 'rare', ability: { trigger: 'on_reveal', effect: 'debuff_enemies', value: 2 } },
+  { id: 'zeitweber', nameKey: 'nc.card.zeitweber', cost: 3, power: 3, tags: ['arcane', 'shadow'], rarity: 'rare', ability: { trigger: 'on_reveal', effect: 'draw_card', value: 1 } },
+  { id: 'koenigsgarde', nameKey: 'nc.card.koenigsgarde', cost: 4, power: 6, tags: ['noble', 'mech'], rarity: 'rare', ability: { trigger: 'on_ally_played', effect: 'shield', value: 1 } },
+  // ── New Epics ──
+  { id: 'valkyria', nameKey: 'nc.card.valkyria', cost: 5, power: 6, tags: ['divine', 'beast'], rarity: 'epic', ability: { trigger: 'on_reveal', effect: 'mana_boost', value: 2 } },
+  { id: 'schattenjaeger', nameKey: 'nc.card.schattenjaeger', cost: 4, power: 5, tags: ['shadow', 'mech'], rarity: 'epic', ability: { trigger: 'on_reveal', effect: 'destroy_strongest_enemy' } },
+  { id: 'weltenbaum', nameKey: 'nc.card.weltenbaum', cost: 5, power: 7, tags: ['nature', 'arcane'], rarity: 'epic', ability: { trigger: 'ongoing', effect: 'power_per_tag', value: 1, tagFilter: 'nature' } },
+  // ── New Legendaries ──
+  { id: 'odin', nameKey: 'nc.card.odin', cost: 7, power: 10, tags: ['divine', 'noble'], rarity: 'legendary', ability: { trigger: 'on_reveal', effect: 'buff_allies', value: 3 } },
+  { id: 'mechanicus', nameKey: 'nc.card.mechanicus', cost: 6, power: 8, tags: ['mech', 'arcane'], rarity: 'legendary', ability: { trigger: 'on_reveal', effect: 'draw_card', value: 2 } },
+  { id: 'nyx', nameKey: 'nc.card.nyx', cost: 7, power: 9, tags: ['shadow', 'undead'], rarity: 'legendary', ability: { trigger: 'on_reveal', effect: 'destroy_strongest_enemy' } },
 ];
 
 /** Card lookup map by id */
@@ -393,12 +468,14 @@ export function createDefaultNcProfile(): NcPlayerProfile {
   };
   return {
     collection: { cards: collection },
-    currencies: { coins: NC_STARTER_COINS, gems: 0 },
+    currencies: { coins: NC_STARTER_COINS, gems: 0, shards: 0 },
     decks: [defaultDeck],
     selectedDeckId: 'default',
     quests: [],
     lastDailyReset: '',
     lastWeeklyReset: '',
+    lastLoginReward: '',
+    loginDay: 0,
     matchesPlayed: 0,
     wins: 0,
   };

@@ -2,6 +2,7 @@ import { createServer, type IncomingMessage, type ServerResponse } from 'node:ht
 import { randomUUID } from 'node:crypto';
 import { Server } from 'socket.io';
 import type { ServerToClientEvents, ClientToServerEvents } from 'shared';
+import { NC_BOT_TOKEN_PREFIX } from 'shared';
 import { roomManager, PLAYER_RECONNECT_MS } from './rooms.js';
 import { engineRegistry } from './engineRegistry.js';
 import { rateLimiter } from './rateLimiter.js';
@@ -770,7 +771,7 @@ io.on('connection', (socket) => {
   });
 
   // ── create_room ───────────────────────────────────────────────────────────
-  socket.on('create_room', ({ playerToken, gameId = 'tictactoe', nickname, visibility = 'private', roomName, rpsConfig, ldConfig, battleshipConfig, cfConfig, unoConfig, chessConfig, maxPlayers: requestedMax }) => {
+  socket.on('create_room', ({ playerToken, gameId = 'tictactoe', nickname, visibility = 'private', roomName, rpsConfig, ldConfig, battleshipConfig, cfConfig, unoConfig, chessConfig, ncConfig, maxPlayers: requestedMax }) => {
     identifiedTokens.set(socket.id, playerToken);
     nicknameMap.set(socket.id, nickname);
     if (!profiles.has(playerToken)) profiles.set(playerToken, { nickname });
@@ -815,7 +816,9 @@ io.on('connection', (socket) => {
               ? unoConfig
               : gameId === 'chess' && chessConfig
                 ? chessConfig
-                : undefined;
+                : gameId === 'nexusclash' && ncConfig
+                  ? ncConfig
+                  : undefined;
     const cap = getGameCapacity(gameId);
     // Allow creator to choose maxPlayers within the game's valid range
     const effectiveMax = requestedMax
@@ -854,6 +857,23 @@ io.on('connection', (socket) => {
       const projected = projectGameState(room.gameId, room.state, { playerIndex: 0, isSpectator: false });
       socket.emit('game_state', { roomCode: room.code, gameId: room.gameId, state: projected, spectatorCount: 0 });
     }
+    // ── Nexus Clash bot game: add virtual bot player and start immediately ──
+    if (gameId === 'nexusclash' && ncConfig?.botDifficulty) {
+      const botToken = NC_BOT_TOKEN_PREFIX + randomUUID();
+      const botNickname = `Bot (${ncConfig.botDifficulty})`;
+      // Add the bot as player index 1 (no real socket — use empty string)
+      room.players.push({ socketId: '', index: 1, playerToken: botToken, nickname: botNickname });
+      // Initialize game state with both players; human always starts
+      const engine = engineRegistry[gameId];
+      const state = engine.initialState([playerToken, botToken], 0, room.gameConfig);
+      room.state = state;
+      startTickLoop(room.code);
+      // Emit the game state to the human player
+      const projected = projectGameState(room.gameId, state, { playerIndex: 0, isSpectator: false });
+      socket.emit('game_state', { roomCode: room.code, gameId: room.gameId, state: projected, spectatorCount: 0 });
+      console.log(`[room] ${room.code} nexusclash bot game started (difficulty: ${ncConfig.botDifficulty})`);
+    }
+
     // Empty history for the brand-new room
     socket.emit('chat_history', { scope: 'room', messages: [] });
     socketActivity.set(socket.id, { kind: 'room', gameId: room.gameId, roomCode: room.code, isPublic: room.visibility === 'public' });

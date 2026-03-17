@@ -19,12 +19,19 @@ const RARITY_COLORS: Record<NcRarity, string> = {
 };
 
 type FilterOwned = 'all' | 'owned' | 'unowned';
+type GroupBy = 'rarity' | 'tag';
+
+const TAG_COLORS: Record<NcTag, string> = {
+  divine: '#facc15', arcane: '#818cf8', beast: '#f97316', mech: '#94a3b8',
+  undead: '#a78bfa', nature: '#4ade80', shadow: '#a855f7', noble: '#fbbf24',
+};
 
 export function Collection({ profile, onClose }: CollectionProps) {
   const { t } = useI18n();
   const [filterTag, setFilterTag] = useState<NcTag | null>(null);
   const [filterRarity, setFilterRarity] = useState<NcRarity | null>(null);
   const [filterOwned, setFilterOwned] = useState<FilterOwned>('all');
+  const [groupBy, setGroupBy] = useState<GroupBy>('rarity');
   const [selectedId, setSelectedId] = useState<string | null>(null);
 
   const ownedCount = useMemo(() => {
@@ -135,33 +142,84 @@ export function Collection({ profile, onClose }: CollectionProps) {
               </button>
             ))}
           </div>
+          {/* Group by toggle */}
+          <div className="flex gap-1 p-0.5 rounded ml-auto" style={{ background: '#0a0a12', border: '1px solid #1e1e3a' }}>
+            {(['rarity', 'tag'] as GroupBy[]).map(g => (
+              <button
+                key={g}
+                onClick={() => setGroupBy(g)}
+                className="px-2.5 py-1 text-xs rounded font-semibold uppercase tracking-wider transition-all"
+                style={{
+                  background: groupBy === g ? '#1e1e3a' : 'transparent',
+                  color: groupBy === g ? '#c9a84c' : '#5a5a6a',
+                }}
+              >
+                {t(`nc.collection.group.${g}`)}
+              </button>
+            ))}
+          </div>
         </div>
 
         {/* Main area: Grid + always-visible detail panel */}
         <div className="flex-1 flex overflow-hidden">
-          {/* Grid */}
-          <div className="flex-1 overflow-y-auto p-5 grid grid-cols-[repeat(auto-fill,minmax(112px,1fr))] gap-4 content-start">
-            {filteredCards.map(card => {
-              const owned = (profile.collection.cards[card.id] ?? 0) > 0;
+          {/* Grid — grouped */}
+          <div className="flex-1 overflow-y-auto p-5 flex flex-col gap-5">
+            {(groupBy === 'rarity'
+              ? (['legendary', 'epic', 'rare', 'common'] as const).map(r => ({
+                  key: r,
+                  label: t(`nc.rarity.${r}`),
+                  color: RARITY_COLORS[r],
+                  cards: filteredCards.filter(c => c.rarity === r),
+                }))
+              : ALL_TAGS.map(tag => ({
+                  key: tag,
+                  label: t(`nc.tag.${tag}`),
+                  color: TAG_COLORS[tag],
+                  cards: filteredCards.filter(c => c.tags.includes(tag)),
+                }))
+            ).map(group => {
+              if (group.cards.length === 0) return null;
+              const ownedInGroup = group.cards.filter(c => (profile.collection.cards[c.id] ?? 0) > 0).length;
               return (
-                <div
-                  key={card.id}
-                  className="flex flex-col items-center gap-1"
-                >
-                  <NexusClashCard
-                    card={card}
-                    locked={!owned}
-                    onClick={() => setSelectedId(card.id)}
-                    selected={selectedId === card.id}
-                  />
-                  <p className="text-[10px] font-semibold truncate max-w-full text-center" style={{ color: owned ? '#c0c0d0' : '#3a3a4a' }}>
-                    {t(card.nameKey)}
-                  </p>
-                  {owned && (
-                    <div className="flex items-center gap-1">
-                      <svg viewBox="0 0 12 12" className="w-3 h-3"><circle cx="6" cy="6" r="5" fill="#16a34a" opacity="0.8"/><path d="M3.5 6L5.5 8L8.5 4.5" fill="none" stroke="white" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/></svg>
-                    </div>
-                  )}
+                <div key={group.key}>
+                  {/* Section header */}
+                  <div className="flex items-center gap-3 mb-3">
+                    <div className="w-1 h-4 rounded-full" style={{ background: group.color }} />
+                    <span className="text-xs font-black uppercase tracking-wider" style={{ color: group.color }}>
+                      {group.label}
+                    </span>
+                    <span className="text-[10px] font-bold" style={{ color: '#4a4a5a' }}>
+                      {ownedInGroup}/{group.cards.length}
+                    </span>
+                    <div className="flex-1 h-px" style={{ background: `${group.color}18` }} />
+                  </div>
+                  {/* Cards */}
+                  <div className="grid grid-cols-[repeat(auto-fill,minmax(112px,1fr))] gap-4">
+                    {group.cards.map(card => {
+                      const owned = (profile.collection.cards[card.id] ?? 0) > 0;
+                      return (
+                        <div
+                          key={card.id}
+                          className="flex flex-col items-center gap-1"
+                        >
+                          <NexusClashCard
+                            card={card}
+                            locked={!owned}
+                            onClick={() => setSelectedId(card.id)}
+                            selected={selectedId === card.id}
+                          />
+                          <p className="text-[10px] font-semibold truncate max-w-full text-center" style={{ color: owned ? '#c0c0d0' : '#3a3a4a' }}>
+                            {t(card.nameKey)}
+                          </p>
+                          {owned && (
+                            <div className="flex items-center gap-1">
+                              <svg viewBox="0 0 12 12" className="w-3 h-3"><circle cx="6" cy="6" r="5" fill="#16a34a" opacity="0.8"/><path d="M3.5 6L5.5 8L8.5 4.5" fill="none" stroke="white" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/></svg>
+                            </div>
+                          )}
+                        </div>
+                      );
+                    })}
+                  </div>
                 </div>
               );
             })}
