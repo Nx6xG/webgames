@@ -18,6 +18,8 @@ import {
 import { getSupabase } from '@/lib/supabaseClient';
 
 const PROFILE_KEY = 'webgames.nexusclash.profile';
+/** Bump this to force a full profile reset for all players */
+const PROFILE_VERSION = 2;
 
 function loadProfile(): NcPlayerProfile {
   if (typeof window === 'undefined') return createDefaultNcProfile();
@@ -25,6 +27,12 @@ function loadProfile(): NcPlayerProfile {
     const raw = localStorage.getItem(PROFILE_KEY);
     if (raw) {
       const p = JSON.parse(raw) as NcPlayerProfile;
+      // Full reset if profile version is outdated
+      if ((p as unknown as Record<string, unknown>).__v !== PROFILE_VERSION) {
+        const fresh = createDefaultNcProfile();
+        (fresh as unknown as Record<string, unknown>).__v = PROFILE_VERSION;
+        return fresh;
+      }
       // Migrate: add shards if missing
       if (p.currencies.shards === undefined) p.currencies.shards = 0;
       // Migrate: add lastLoginReward if missing
@@ -35,7 +43,7 @@ function loadProfile(): NcPlayerProfile {
       if (!p.battlePass || p.battlePass.seasonId !== NC_BP_SEASON_ID) {
         p.battlePass = createDefaultBattlePass();
       }
-      // Migrate: grant any new starter commons not yet in collection
+      // Migrate: grant any new starter cards not yet in collection
       for (const id of NC_STARTER_CARDS) {
         if (!p.collection.cards[id]) {
           p.collection.cards[id] = 1;
@@ -44,13 +52,16 @@ function loadProfile(): NcPlayerProfile {
       return p;
     }
   } catch { /* fallback */ }
-  return createDefaultNcProfile();
+  const fresh = createDefaultNcProfile();
+  (fresh as unknown as Record<string, unknown>).__v = PROFILE_VERSION;
+  return fresh;
 }
 
 function saveProfile(profile: NcPlayerProfile) {
   if (typeof window === 'undefined') return;
   try {
-    localStorage.setItem(PROFILE_KEY, JSON.stringify(profile));
+    const data = { ...profile, __v: PROFILE_VERSION };
+    localStorage.setItem(PROFILE_KEY, JSON.stringify(data));
   } catch { /* ignore quota */ }
 }
 
