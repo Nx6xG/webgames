@@ -76,9 +76,16 @@ export function DeckBuilder({ profile, onSave, onClose, onToggleFavorite }: Deck
 
   const activeDeck = decks.find(d => d.id === activeTab) ?? decks[0];
 
-  const ownedCards = useMemo(() => {
-    return NC_CARDS.filter(card => (profile.collection.cards[card.id] ?? 0) > 0);
+  const ownedSet = useMemo(() => {
+    const s = new Set<string>();
+    for (const [id, count] of Object.entries(profile.collection.cards)) {
+      if (count > 0) s.add(id);
+    }
+    return s;
   }, [profile.collection]);
+
+  // Show ALL cards, not just owned — unowned are greyed out
+  const allCards = NC_CARDS;
 
   // Snapshot favorites for sort order — only update when filters change, not on every toggle
   // This prevents cards from jumping position mid-click
@@ -86,7 +93,7 @@ export function DeckBuilder({ profile, onSave, onClose, onToggleFavorite }: Deck
   useEffect(() => { sortFavsRef.current = favs; }, [searchQuery, filterTag, filterRarity, filterCost, favs]);
 
   const filteredCards = useMemo(() => {
-    let cards = ownedCards;
+    let cards = [...allCards];
     if (searchQuery) {
       const q = searchQuery.toLowerCase();
       cards = cards.filter(c => t(c.nameKey).toLowerCase().includes(q) || c.id.toLowerCase().includes(q));
@@ -98,15 +105,18 @@ export function DeckBuilder({ profile, onSave, onClose, onToggleFavorite }: Deck
         ? cards.filter(c => c.cost >= 6)
         : cards.filter(c => c.cost === filterCost);
     }
-    // Sort: favorites first, then by cost, then rarity
+    // Sort: owned first, then favorites, then by cost, then rarity
     const sf = sortFavsRef.current;
-    return [...cards].sort((a, b) => {
+    return cards.sort((a, b) => {
+      const aOwned = ownedSet.has(a.id) ? 0 : 1;
+      const bOwned = ownedSet.has(b.id) ? 0 : 1;
+      if (aOwned !== bOwned) return aOwned - bOwned;
       const aFav = sf.has(a.id) ? 0 : 1;
       const bFav = sf.has(b.id) ? 0 : 1;
       if (aFav !== bFav) return aFav - bFav;
       return a.cost - b.cost || RARITY_ORDER.indexOf(a.rarity) - RARITY_ORDER.indexOf(b.rarity);
     });
-  }, [ownedCards, searchQuery, filterTag, filterRarity, filterCost, t]);
+  }, [allCards, ownedSet, searchQuery, filterTag, filterRarity, filterCost, t]);
 
   const deckCounts = useMemo(() => {
     const counts: Record<string, number> = {};
@@ -120,8 +130,9 @@ export function DeckBuilder({ profile, onSave, onClose, onToggleFavorite }: Deck
 
   const canAddCard = useCallback((cardId: string) => {
     if (!activeDeck || deckFull) return false;
+    if (!ownedSet.has(cardId)) return false;
     return (deckCounts[cardId] ?? 0) < NC_MAX_COPIES;
-  }, [activeDeck, deckFull, deckCounts]);
+  }, [activeDeck, deckFull, deckCounts, ownedSet]);
 
   const flashCard = useCallback((cardId: string) => {
     if (flashTimeout.current) clearTimeout(flashTimeout.current);
@@ -399,7 +410,7 @@ export function DeckBuilder({ profile, onSave, onClose, onToggleFavorite }: Deck
 
               {/* Cards count */}
               <span className="text-[10px] font-semibold ml-auto" style={{ color: '#3a3a5a' }}>
-                {filteredCards.length} / {ownedCards.length}
+                {filteredCards.length} / {allCards.length}
               </span>
             </div>
 
@@ -408,6 +419,7 @@ export function DeckBuilder({ profile, onSave, onClose, onToggleFavorite }: Deck
               <div className="grid gap-2" style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(120px, 1fr))' }}>
                 {filteredCards.map((card) => {
                   const inDeck = deckCounts[card.id] ?? 0;
+                  const owned = ownedSet.has(card.id);
                   const canAdd = canAddCard(card.id);
                   const isFlashing = flashCardId === card.id;
                   return (
@@ -418,9 +430,11 @@ export function DeckBuilder({ profile, onSave, onClose, onToggleFavorite }: Deck
                         background: inDeck > 0 ? `${RARITY_GLOW[card.rarity]}` : 'transparent',
                         border: `1px solid ${inDeck > 0 ? RARITY_COLORS[card.rarity] + '30' : 'transparent'}`,
                         transform: isFlashing ? 'scale(0.95)' : 'scale(1)',
+                        opacity: owned ? 1 : 0.35,
+                        filter: owned ? 'none' : 'grayscale(0.7)',
                         transition: 'transform 0.15s ease, background 0.3s, border-color 0.3s',
                       }}
-                      onClick={() => toggleCard(card.id)}
+                      onClick={() => owned ? toggleCard(card.id) : setSelectedId(selectedId === card.id ? null : card.id)}
                       onContextMenu={(e) => { e.preventDefault(); setSelectedId(selectedId === card.id ? null : card.id); }}
                     >
                       <div className="relative">
@@ -466,9 +480,9 @@ export function DeckBuilder({ profile, onSave, onClose, onToggleFavorite }: Deck
                       <div className="absolute inset-0 rounded-lg flex items-end justify-center pb-7 opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none"
                         style={{ background: 'linear-gradient(transparent 40%, #0a0a12dd 100%)' }}>
                         <span className="text-[9px] font-black uppercase tracking-wider" style={{
-                          color: inDeck > 0 ? '#ef4444' : canAdd ? '#4ade80' : '#3a3a5a',
+                          color: !owned ? '#6366f1' : inDeck > 0 ? '#ef4444' : canAdd ? '#4ade80' : '#3a3a5a',
                         }}>
-                          {inDeck > 0 ? t('nc.hover.remove') : canAdd ? t('nc.hover.add') : t('nc.hover.full')}
+                          {!owned ? t('nc.hover.locked') : inDeck > 0 ? t('nc.hover.remove') : canAdd ? t('nc.hover.add') : t('nc.hover.full')}
                         </span>
                       </div>
                     </div>

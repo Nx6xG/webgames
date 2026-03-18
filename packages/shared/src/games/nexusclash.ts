@@ -705,8 +705,25 @@ export const NC_CARDS_BY_RARITY: Record<NcRarity, NcCardDef[]> = {
   legendary: NC_CARDS.filter(c => c.rarity === 'legendary'),
 };
 
-/** Starter card ids (12 commons) */
-export const NC_STARTER_CARDS: string[] = NC_CARDS.filter(c => c.rarity === 'common').map(c => c.id);
+/** Hand-picked 12 starter cards — balanced curve, diverse mechanics & rarities */
+export const NC_STARTER_CARDS: string[] = [
+  // 1-cost (3)
+  'aufklaerer',     // common — lane movement
+  'imp',            // common — debuff enemies
+  'runenstein',     // common — ongoing push bonus
+  // 2-cost (5)
+  'schildbot',      // common — shield
+  'druidin',        // common — buff allies
+  'nebelkrieger',   // common — debuff strongest
+  'kriegshorn',     // common — push bonus
+  'greif',          // rare — double push if beasts
+  // 3-cost (3)
+  'hydra',          // common — scales with enemies
+  'assassine',      // common — destroy weakest
+  'paladin',        // common — shield allies
+  // 4-cost (1)
+  'phoenix',        // epic — respawn on destroy
+];
 
 /** Create a default new player profile */
 export function createDefaultNcProfile(): NcPlayerProfile {
