@@ -80,7 +80,13 @@ function startTickLoop(roomCode: string) {
   const interval = setInterval(() => {
     const r = roomManager.getRoom(roomCode);
     if (!r?.state) { stopTickLoop(roomCode); return; }
-    const newState = engine.tick!(r.state);
+    let newState;
+    try {
+      newState = engine.tick!(r.state);
+    } catch (err) {
+      console.error(`[tick error] room=${r.code} game=${r.gameId}:`, err);
+      return; // skip this tick, don't crash
+    }
     // Skip emit if state reference didn't change (no timeout occurred)
     if (newState !== r.state) {
       r.state = newState;
@@ -817,7 +823,13 @@ io.on('connection', (socket) => {
               : gameId === 'chess' && chessConfig
                 ? chessConfig
                 : gameId === 'nexusclash' && ncConfig
-                  ? ncConfig
+                  ? {
+                      ...ncConfig,
+                      // Map creator's flat deckCards into playerDecks keyed by token
+                      playerDecks: ncConfig.deckCards
+                        ? { [playerToken]: ncConfig.deckCards }
+                        : ncConfig.playerDecks ?? {},
+                    }
                   : undefined;
     const cap = getGameCapacity(gameId);
     // Allow creator to choose maxPlayers within the game's valid range
@@ -883,7 +895,7 @@ io.on('connection', (socket) => {
   });
 
   // ── join_room ─────────────────────────────────────────────────────────────
-  socket.on('join_room', ({ roomCode, playerToken, nickname }) => {
+  socket.on('join_room', ({ roomCode, playerToken, nickname, ncDeckCards }) => {
     identifiedTokens.set(socket.id, playerToken);
     nicknameMap.set(socket.id, nickname);
     if (!profiles.has(playerToken)) profiles.set(playerToken, { nickname });
@@ -954,6 +966,14 @@ io.on('connection', (socket) => {
       { const joinProf = profiles.get(playerToken); joiner.avatarId = joinProf?.avatarId; joiner.nameColor = joinProf?.nameColor; joiner.avatarFrame = joinProf?.avatarFrame; }
       socket.join(code);
       addPresence(code, joiner.index, socket.id);
+
+      // Nexus Clash: inject joiner's deck into gameConfig.playerDecks
+      if (room.gameId === 'nexusclash' && ncDeckCards && Array.isArray(ncDeckCards)) {
+        const cfg = (room.gameConfig ?? {}) as { playerDecks?: Record<string, string[]> };
+        if (!cfg.playerDecks) cfg.playerDecks = {};
+        cfg.playerDecks[playerToken] = ncDeckCards;
+        room.gameConfig = cfg;
+      }
 
       // Initialize game state when the room reaches minPlayers for the first time.
       // Liarsbar uses a lobby phase — state is created immediately but the host
@@ -1125,6 +1145,12 @@ io.on('connection', (socket) => {
     const player = actingToken ? room.players.find((p) => p.playerToken === actingToken) : undefined;
     if (!player) {
       socket.emit('action_error', { code: 'NOT_IN_ROOM', message: 'You are not a player in this room.' });
+      return;
+    }
+
+    // Handle Nexus Clash emotes without touching game state
+    if (room.gameId === 'nexusclash' && action.type === 'nc_emote') {
+      socket.to(room.code).emit('nc_emote', { emoteId: (action as { emoteId: string }).emoteId, playerIndex: player.index });
       return;
     }
 

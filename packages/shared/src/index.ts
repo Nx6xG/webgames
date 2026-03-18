@@ -219,6 +219,33 @@ import {
   createDefaultNcProfile as _createDefaultNcProfile,
   NC_BOT_TOKEN_PREFIX as _ncBotTokenPrefix,
   isNcBotToken as _isNcBotToken,
+  NC_MAX_MATCH_HISTORY as _ncMaxMatchHistory,
+  NC_ONGOING_PUSH_RATIO as _ncOngoingPushRatio,
+  NC_DESTROY_TUG_REFUND as _ncDestroyTugRefund,
+  NC_MIN_HAND_SIZE as _ncMinHandSize,
+  NC_RESONANCE_BONUS as _ncResonanceBonus,
+  NC_DOMINANCE_THRESHOLD as _ncDominanceThreshold,
+  NC_DOMINANCE_BONUS as _ncDominanceBonus,
+  NC_BP_SEASON_ID as _ncBpSeasonId,
+  NC_BP_PREMIUM_COST as _ncBpPremiumCost,
+  NC_BP_WIN_XP as _ncBpWinXp,
+  NC_BP_LOSS_XP as _ncBpLossXp,
+  NC_BP_QUEST_XP as _ncBpQuestXp,
+  NC_BP_FREE_EPIC_ID as _ncBpFreeEpicId,
+  NC_BP_PAID_LEGENDARY_ID as _ncBpPaidLegId,
+  NC_BP_TIERS as _ncBpTiers,
+  getNcBpTier as _getNcBpTier,
+  createDefaultBattlePass as _createDefaultBattlePass,
+  NC_MODIFIER_ROTATION_ROUND as _ncModRotRound,
+  encodeDeckCode as _encodeDeckCode,
+  decodeDeckCode as _decodeDeckCode,
+  NC_RANK_DEFS as _ncRankDefs,
+  NC_RANK_WIN_POINTS as _ncRankWinPts,
+  NC_RANK_LOSS_POINTS as _ncRankLossPts,
+  NC_RANK_REWARDS as _ncRankRewards,
+  getNcRank as _getNcRank,
+  getNcRankLabel as _getNcRankLabel,
+  getNcCurrentSeason as _getNcCurrentSeason,
 } from './games/nexusclash';
 export const NC_CARDS = _ncCards;
 export const NC_CARD_MAP = _ncCardMap;
@@ -255,6 +282,33 @@ export const getNcDailyReward = _getNcDailyReward;
 export const createDefaultNcProfile = _createDefaultNcProfile;
 export const NC_BOT_TOKEN_PREFIX = _ncBotTokenPrefix;
 export const isNcBotToken = _isNcBotToken;
+export const NC_MAX_MATCH_HISTORY = _ncMaxMatchHistory;
+export const NC_ONGOING_PUSH_RATIO = _ncOngoingPushRatio;
+export const NC_DESTROY_TUG_REFUND = _ncDestroyTugRefund;
+export const NC_MIN_HAND_SIZE = _ncMinHandSize;
+export const NC_RESONANCE_BONUS = _ncResonanceBonus;
+export const NC_DOMINANCE_THRESHOLD = _ncDominanceThreshold;
+export const NC_DOMINANCE_BONUS = _ncDominanceBonus;
+export const NC_BP_SEASON_ID = _ncBpSeasonId;
+export const NC_BP_PREMIUM_COST = _ncBpPremiumCost;
+export const NC_BP_WIN_XP = _ncBpWinXp;
+export const NC_BP_LOSS_XP = _ncBpLossXp;
+export const NC_BP_QUEST_XP = _ncBpQuestXp;
+export const NC_BP_FREE_EPIC_ID = _ncBpFreeEpicId;
+export const NC_BP_PAID_LEGENDARY_ID = _ncBpPaidLegId;
+export const NC_BP_TIERS = _ncBpTiers;
+export const getNcBpTier = _getNcBpTier;
+export const createDefaultBattlePass = _createDefaultBattlePass;
+export const NC_MODIFIER_ROTATION_ROUND = _ncModRotRound;
+export const encodeDeckCode = _encodeDeckCode;
+export const decodeDeckCode = _decodeDeckCode;
+export const NC_RANK_DEFS = _ncRankDefs;
+export const NC_RANK_WIN_POINTS = _ncRankWinPts;
+export const NC_RANK_LOSS_POINTS = _ncRankLossPts;
+export const NC_RANK_REWARDS = _ncRankRewards;
+export const getNcRank = _getNcRank;
+export const getNcRankLabel = _getNcRankLabel;
+export const getNcCurrentSeason = _getNcCurrentSeason;
 export type {
   NcTag,
   NcRarity,
@@ -284,6 +338,16 @@ export type {
   NcPlayerProfile,
   NcBotDifficulty,
   NcMulliganAction,
+  NcEmoteId,
+  NcEmoteAction,
+  NcMatchRecord,
+  NcBpReward,
+  NcBattlePassTier,
+  NcBattlePassState,
+  NcRankTier,
+  NcRankDef,
+  NcRankedState,
+  NcRankReward,
 } from './games/nexusclash';
 export type {
   TournamentId,

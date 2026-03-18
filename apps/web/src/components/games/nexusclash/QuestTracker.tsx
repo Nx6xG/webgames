@@ -1,6 +1,7 @@
 'use client';
 
 import type { NcQuest, NcPlayerProfile } from 'shared';
+import { NC_BP_QUEST_XP } from 'shared';
 import { useI18n } from '@/components/providers/LanguageProvider';
 
 interface QuestTrackerProps {
@@ -91,6 +92,10 @@ function QuestRow({ quest, onClaim }: { quest: NcQuest; onClaim: () => void }) {
             <GemIcon />
           </div>
         )}
+        <div className="flex items-center gap-0.5">
+          <span className="text-[10px] font-bold" style={{ color: '#4a7dff' }}>+{NC_BP_QUEST_XP}</span>
+          <span className="text-[8px] font-bold" style={{ color: '#4a7dff' }}>{t('nc.bp.bpXp')}</span>
+        </div>
       </div>
 
       {/* Claim button */}

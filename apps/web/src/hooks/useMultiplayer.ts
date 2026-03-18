@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useRef, useState, useCallback } from 'react';
+import { useEffect, useRef, useState, useCallback, type MutableRefObject } from 'react';
 import { getWsUrl } from '@/lib/getWsUrl';
 import { io, type Socket } from 'socket.io-client';
 import type {
@@ -83,8 +83,8 @@ export interface MultiplayerState<TState extends AnyGameState = AnyGameState> {
 }
 
 export interface MultiplayerActions {
-  createRoom: (options?: { visibility?: RoomVisibility; roomName?: string; rpsConfig?: { mode: string; bestOf?: number }; ldConfig?: { mode: string }; battleshipConfig?: { fleetPreset: string; boardSize?: number; salvoMode?: boolean; shotTimerSec?: number }; cfConfig?: { bestOf?: number; speed?: string; powerUpDensity?: string; thickness?: string; noGaps?: boolean; shrinkingArena?: boolean; suddenDeath?: boolean; disabledPowerUps?: string[]; obstacles?: boolean; teamMode?: boolean; arenaShape?: string; mapSize?: string; bots?: Array<{ token: string; difficulty: string; nickname: string }> }; unoConfig?: { targetScore?: number; stackDraw2?: boolean; stackDraw4?: boolean; allowDraw2OnDraw4?: boolean; allowDraw4OnDraw2?: boolean; playDrawnCardImmediately?: boolean; drawUntilPlayable?: boolean; forcedPlay?: boolean; stackSameCards?: boolean }; chessConfig?: { timeSeconds: number; incrementSeconds: number }; ncConfig?: { botDifficulty?: string }; maxPlayers?: number }) => void;
-  joinRoom: (code: string) => void;
+  createRoom: (options?: { visibility?: RoomVisibility; roomName?: string; rpsConfig?: { mode: string; bestOf?: number }; ldConfig?: { mode: string }; battleshipConfig?: { fleetPreset: string; boardSize?: number; salvoMode?: boolean; shotTimerSec?: number }; cfConfig?: { bestOf?: number; speed?: string; powerUpDensity?: string; thickness?: string; noGaps?: boolean; shrinkingArena?: boolean; suddenDeath?: boolean; disabledPowerUps?: string[]; obstacles?: boolean; teamMode?: boolean; arenaShape?: string; mapSize?: string; bots?: Array<{ token: string; difficulty: string; nickname: string }> }; unoConfig?: { targetScore?: number; stackDraw2?: boolean; stackDraw4?: boolean; allowDraw2OnDraw4?: boolean; allowDraw4OnDraw2?: boolean; playDrawnCardImmediately?: boolean; drawUntilPlayable?: boolean; forcedPlay?: boolean; stackSameCards?: boolean }; chessConfig?: { timeSeconds: number; incrementSeconds: number }; ncConfig?: { botDifficulty?: string; deckCards?: string[] }; maxPlayers?: number }) => void;
+  joinRoom: (code: string, options?: { ncDeckCards?: string[] }) => void;
   /** Join the per-gameId matchmaking queue. Server assigns a room automatically. */
   quickPlay: () => void;
   leaveRoom: () => void;
@@ -106,6 +106,8 @@ export interface MultiplayerActions {
   sendRoomInvite: (toToken: string) => void;
   /** Refresh the online users list from the server. */
   fetchOnlineUsers: () => void;
+  /** Direct access to the socket ref for custom event listeners (e.g. emotes). */
+  socketRef: MutableRefObject<GameSocket | null>;
 }
 
 function makeLobbyState<TState extends AnyGameState>(): MultiplayerState<TState> {
@@ -517,7 +519,7 @@ export function useMultiplayer<TState extends AnyGameState = AnyGameState>(
     };
   }, [wsUrl]);
 
-  const createRoom = useCallback((options?: { visibility?: RoomVisibility; roomName?: string; rpsConfig?: { mode: string; bestOf?: number }; ldConfig?: { mode: string }; battleshipConfig?: { fleetPreset: string; boardSize?: number; salvoMode?: boolean; shotTimerSec?: number }; cfConfig?: { bestOf?: number; speed?: string; powerUpDensity?: string; thickness?: string; noGaps?: boolean; shrinkingArena?: boolean; suddenDeath?: boolean; disabledPowerUps?: string[]; obstacles?: boolean; teamMode?: boolean; arenaShape?: string; mapSize?: string; bots?: Array<{ token: string; difficulty: string; nickname: string }> }; unoConfig?: { targetScore?: number; stackDraw2?: boolean; stackDraw4?: boolean; allowDraw2OnDraw4?: boolean; allowDraw4OnDraw2?: boolean; playDrawnCardImmediately?: boolean; drawUntilPlayable?: boolean; forcedPlay?: boolean; stackSameCards?: boolean }; chessConfig?: { timeSeconds: number; incrementSeconds: number }; ncConfig?: { botDifficulty?: string }; maxPlayers?: number }) => {
+  const createRoom = useCallback((options?: { visibility?: RoomVisibility; roomName?: string; rpsConfig?: { mode: string; bestOf?: number }; ldConfig?: { mode: string }; battleshipConfig?: { fleetPreset: string; boardSize?: number; salvoMode?: boolean; shotTimerSec?: number }; cfConfig?: { bestOf?: number; speed?: string; powerUpDensity?: string; thickness?: string; noGaps?: boolean; shrinkingArena?: boolean; suddenDeath?: boolean; disabledPowerUps?: string[]; obstacles?: boolean; teamMode?: boolean; arenaShape?: string; mapSize?: string; bots?: Array<{ token: string; difficulty: string; nickname: string }> }; unoConfig?: { targetScore?: number; stackDraw2?: boolean; stackDraw4?: boolean; allowDraw2OnDraw4?: boolean; allowDraw4OnDraw2?: boolean; playDrawnCardImmediately?: boolean; drawUntilPlayable?: boolean; forcedPlay?: boolean; stackSameCards?: boolean }; chessConfig?: { timeSeconds: number; incrementSeconds: number }; ncConfig?: { botDifficulty?: string; deckCards?: string[] }; maxPlayers?: number }) => {
     set((prev) => ({ ...prev, error: null }));
     socketRef.current?.emit('create_room', {
       playerToken: tokenRef.current,
@@ -536,12 +538,13 @@ export function useMultiplayer<TState extends AnyGameState = AnyGameState>(
     });
   }, []);
 
-  const joinRoom = useCallback((code: string) => {
+  const joinRoom = useCallback((code: string, options?: { ncDeckCards?: string[] }) => {
     set((prev) => ({ ...prev, error: null }));
     socketRef.current?.emit('join_room', {
       roomCode: code.toUpperCase().trim(),
       playerToken: tokenRef.current,
       nickname: nicknameRef.current,
+      ncDeckCards: options?.ncDeckCards,
     });
   }, []);
 
@@ -641,5 +644,5 @@ export function useMultiplayer<TState extends AnyGameState = AnyGameState>(
     socketRef.current?.emit('get_online_users');
   }, []);
 
-  return { ...s, createRoom, joinRoom, quickPlay, leaveRoom, sendAction, requestRematch, returnToLobby, clearError, sendChat, setNickname, setAvatarId, setNameColor, setAvatarFrame, sendRoomInvite, fetchOnlineUsers };
+  return { ...s, createRoom, joinRoom, quickPlay, leaveRoom, sendAction, requestRematch, returnToLobby, clearError, sendChat, setNickname, setAvatarId, setNameColor, setAvatarFrame, sendRoomInvite, fetchOnlineUsers, socketRef };
 }

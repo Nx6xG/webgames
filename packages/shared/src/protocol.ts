@@ -436,6 +436,9 @@ export interface ServerToClientEvents {
    */
   room_ready: (payload: { roomCode: string; ready: boolean; players: { p0: boolean; p1: boolean } }) => void;
 
+  // ── Nexus Clash emotes ──────────────────────────────────────────────
+  nc_emote: (data: { emoteId: string; playerIndex: number }) => void;
+
   // ── Tournament events ────────────────────────────────────────────────
   tournament_created: (data: { tournamentId: string }) => void;
   tournament_joined: (data: { tournamentId: string }) => void;
@@ -460,10 +463,10 @@ export interface ClientToServerEvents {
   identify: (data: { playerToken: string; nickname: string; avatarId?: string; nameColor?: string; avatarFrame?: string; cosmetics?: CosmeticsSelection; userId?: string; level?: number; showcase?: ProfileShowcase }) => void;
 
   /** playerToken is stored server-side so the seat can survive a refresh */
-  create_room: (data: { playerToken: string; gameId?: GameId; nickname: string; visibility?: RoomVisibility; roomName?: string; rpsConfig?: { mode: string; bestOf?: number }; ldConfig?: { mode: string }; battleshipConfig?: { fleetPreset: string; boardSize?: number; salvoMode?: boolean; shotTimerSec?: number }; cfConfig?: { bestOf?: number; speed?: string; powerUpDensity?: string; thickness?: string; noGaps?: boolean; shrinkingArena?: boolean; suddenDeath?: boolean; disabledPowerUps?: string[]; obstacles?: boolean; teamMode?: boolean; arenaShape?: string; mapSize?: string; bots?: Array<{ token: string; difficulty: string; nickname: string }> }; unoConfig?: { targetScore?: number; stackDraw2?: boolean; stackDraw4?: boolean; allowDraw2OnDraw4?: boolean; allowDraw4OnDraw2?: boolean; playDrawnCardImmediately?: boolean; drawUntilPlayable?: boolean; forcedPlay?: boolean; stackSameCards?: boolean }; chessConfig?: { timeSeconds: number; incrementSeconds: number }; ncConfig?: { botDifficulty?: string }; maxPlayers?: number }) => void;
+  create_room: (data: { playerToken: string; gameId?: GameId; nickname: string; visibility?: RoomVisibility; roomName?: string; rpsConfig?: { mode: string; bestOf?: number }; ldConfig?: { mode: string }; battleshipConfig?: { fleetPreset: string; boardSize?: number; salvoMode?: boolean; shotTimerSec?: number }; cfConfig?: { bestOf?: number; speed?: string; powerUpDensity?: string; thickness?: string; noGaps?: boolean; shrinkingArena?: boolean; suddenDeath?: boolean; disabledPowerUps?: string[]; obstacles?: boolean; teamMode?: boolean; arenaShape?: string; mapSize?: string; bots?: Array<{ token: string; difficulty: string; nickname: string }> }; unoConfig?: { targetScore?: number; stackDraw2?: boolean; stackDraw4?: boolean; allowDraw2OnDraw4?: boolean; allowDraw4OnDraw2?: boolean; playDrawnCardImmediately?: boolean; drawUntilPlayable?: boolean; forcedPlay?: boolean; stackSameCards?: boolean }; chessConfig?: { timeSeconds: number; incrementSeconds: number }; ncConfig?: { botDifficulty?: string; deckCards?: string[]; playerDecks?: Record<string, string[]> }; maxPlayers?: number }) => void;
 
   /** If the room is full the socket joins as spectator instead */
-  join_room: (data: { roomCode: string; playerToken: string; nickname: string }) => void;
+  join_room: (data: { roomCode: string; playerToken: string; nickname: string; ncDeckCards?: string[] }) => void;
 
   game_action: (data: { roomCode: string; action: AnyGameAction }) => void;
 

@@ -7,6 +7,7 @@ import { fetchUser, patchUser } from '@/lib/adminApi';
 import { ACHIEVEMENTS, CATEGORY_ORDER } from '@/lib/achievements/definitions';
 import type { AchievementCategory } from '@/lib/achievements/definitions';
 import { COSMETICS_REGISTRY, RARITY_COLORS, RARITY_BG, type CosmeticSlot } from '@/lib/cosmetics';
+import { NC_CARDS } from 'shared';
 
 interface ProgressionData {
   xp: number;
@@ -53,6 +54,17 @@ const ALL_UPGRADE_IDS: PermanentUpgradeId[] = [
   'magnet', 'scrapBonus', 'shieldGen', 'critStrike', 'retroThruster', 'range',
 ];
 
+interface NcGrant {
+  id: string;
+  coins: number;
+  gems: number;
+  shards: number;
+  cards: string[];
+  claimed: boolean;
+  note: string | null;
+  created_at: string;
+}
+
 interface UserDetail {
   profile: { id: string; nickname: string | null; role: string; created_at: string; suspended_at: string | null };
   email: string | null;
@@ -62,6 +74,7 @@ interface UserDetail {
   unlockedCosmetics: { data: Record<string, string[]> } | null;
   progression: ProgressionData | null;
   gameProgress: Record<string, unknown> | null;
+  ncGrants: NcGrant[];
 }
 
 const SLOT_ORDER: CosmeticSlot[] = ['frame', 'head', 'portal', 'aura', 'banner', 'cardColor', 'badge', 'title'];
@@ -312,6 +325,18 @@ export default function AdminUserDetailPage() {
           onSave={(data) => quickAction({ action: 'set_game_progress', game: 'asteroids_roguelite', data }, 'set_gp_asteroids_roguelite')}
           onReset={() => doAction({ action: 'reset_game_progress', game: 'asteroids_roguelite' }, 'reset_gp_asteroids_roguelite')}
           onCancelConfirm={() => setConfirm(null)}
+        />
+      </Section>
+
+      {/* Nexus Clash Grants */}
+      <Section title={t('admin.nc.title')}>
+        <NexusClashManager
+          grants={user.ncGrants ?? []}
+          actionLoading={actionLoading}
+          t={t}
+          onGrant={(coins, gems, shards, cards, note) =>
+            quickAction({ action: 'nc_grant', coins, gems, shards, cards, note }, 'nc_grant')
+          }
         />
       </Section>
 
@@ -1595,6 +1620,176 @@ function RogueliteManager({
           onCancel={onCancelConfirm}
         />
       </div>
+    </div>
+  );
+}
+
+// ── Nexus Clash Manager ──────────────────────────────────────────────────────
+
+function NexusClashManager({
+  grants, actionLoading, t, onGrant,
+}: {
+  grants: NcGrant[];
+  actionLoading: string | null;
+  t: (key: string) => string;
+  onGrant: (coins: number, gems: number, shards: number, cards: string[], note: string) => void;
+}) {
+  const [mode, setMode] = useState<'grant' | 'remove'>('grant');
+  const [coins, setCoins] = useState(0);
+  const [gems, setGems] = useState(0);
+  const [shards, setShards] = useState(0);
+  const [selectedCards, setSelectedCards] = useState<string[]>([]);
+  const [note, setNote] = useState('');
+  const [cardSearch, setCardSearch] = useState('');
+
+  const filteredCards = useMemo(() => {
+    if (!cardSearch) return NC_CARDS;
+    const q = cardSearch.toLowerCase();
+    return NC_CARDS.filter(c => c.id.includes(q) || c.tags.some(tg => tg.includes(q)) || c.rarity.includes(q));
+  }, [cardSearch]);
+
+  const rarityColor: Record<string, string> = {
+    common: 'text-zinc-400',
+    rare: 'text-blue-400',
+    epic: 'text-purple-400',
+    legendary: 'text-amber-400',
+  };
+
+  const handleSubmit = () => {
+    if (coins === 0 && gems === 0 && shards === 0 && selectedCards.length === 0) return;
+    const sign = mode === 'remove' ? -1 : 1;
+    const cardList = mode === 'remove' ? selectedCards.map(c => `-${c}`) : selectedCards;
+    onGrant(coins * sign, gems * sign, shards * sign, cardList, note);
+    setCoins(0);
+    setGems(0);
+    setShards(0);
+    setSelectedCards([]);
+    setNote('');
+  };
+
+  const isRemove = mode === 'remove';
+
+  return (
+    <div className="space-y-4">
+      {/* Mode toggle */}
+      <div className="flex gap-1 p-0.5 bg-zinc-900 rounded-md w-fit">
+        <button
+          onClick={() => setMode('grant')}
+          className={`px-3 py-1 rounded text-[11px] font-semibold transition-colors ${
+            !isRemove ? 'bg-emerald-700 text-white' : 'text-zinc-500 hover:text-zinc-300'
+          }`}
+        >
+          {t('admin.nc.grant')}
+        </button>
+        <button
+          onClick={() => setMode('remove')}
+          className={`px-3 py-1 rounded text-[11px] font-semibold transition-colors ${
+            isRemove ? 'bg-rose-700 text-white' : 'text-zinc-500 hover:text-zinc-300'
+          }`}
+        >
+          {t('admin.nc.remove')}
+        </button>
+      </div>
+
+      {/* Currency inputs */}
+      <div className="grid grid-cols-3 gap-3">
+        <div>
+          <label className="block text-[10px] text-zinc-500 mb-1">{t('admin.nc.coins')}</label>
+          <input type="number" value={coins} onChange={e => setCoins(Number(e.target.value))}
+            className="w-full bg-zinc-900 border border-zinc-700 rounded px-2 py-1.5 text-xs text-amber-400 font-mono tabular-nums" />
+        </div>
+        <div>
+          <label className="block text-[10px] text-zinc-500 mb-1">{t('admin.nc.gems')}</label>
+          <input type="number" value={gems} onChange={e => setGems(Number(e.target.value))}
+            className="w-full bg-zinc-900 border border-zinc-700 rounded px-2 py-1.5 text-xs text-purple-400 font-mono tabular-nums" />
+        </div>
+        <div>
+          <label className="block text-[10px] text-zinc-500 mb-1">{t('admin.nc.shards')}</label>
+          <input type="number" value={shards} onChange={e => setShards(Number(e.target.value))}
+            className="w-full bg-zinc-900 border border-zinc-700 rounded px-2 py-1.5 text-xs text-cyan-400 font-mono tabular-nums" />
+        </div>
+      </div>
+
+      {/* Card picker */}
+      <div>
+        <label className="block text-[10px] text-zinc-500 mb-1">{t('admin.nc.cards')}</label>
+        <input type="text" value={cardSearch} onChange={e => setCardSearch(e.target.value)}
+          placeholder={t('admin.nc.searchCards')}
+          className="w-full bg-zinc-900 border border-zinc-700 rounded px-2 py-1.5 text-xs text-zinc-300 mb-2" />
+        {selectedCards.length > 0 && (
+          <div className="flex flex-wrap gap-1 mb-2">
+            {selectedCards.map(id => {
+              const def = NC_CARDS.find(c => c.id === id);
+              return (
+                <button key={id} onClick={() => setSelectedCards(prev => prev.filter(c => c !== id))}
+                  className={`px-1.5 py-0.5 rounded text-[10px] font-medium bg-zinc-800 border border-zinc-700 hover:border-rose-700 transition-colors ${rarityColor[def?.rarity ?? 'common']}`}>
+                  {id} ✕
+                </button>
+              );
+            })}
+          </div>
+        )}
+        <div className="max-h-32 overflow-y-auto border border-zinc-800 rounded bg-zinc-900/50">
+          {filteredCards.map(card => {
+            const selected = selectedCards.includes(card.id);
+            return (
+              <button key={card.id}
+                onClick={() => setSelectedCards(prev =>
+                  selected ? prev.filter(c => c !== card.id) : [...prev, card.id]
+                )}
+                className={`w-full text-left px-2 py-1 text-[11px] flex items-center justify-between hover:bg-zinc-800/50 transition-colors ${
+                  selected ? 'bg-zinc-800' : ''
+                }`}>
+                <span className={rarityColor[card.rarity]}>
+                  {card.id}
+                  <span className="text-zinc-600 ml-1">{card.tags.join(', ')}</span>
+                </span>
+                <span className="text-zinc-600 text-[10px]">{card.rarity}</span>
+              </button>
+            );
+          })}
+        </div>
+      </div>
+
+      {/* Note */}
+      <div>
+        <label className="block text-[10px] text-zinc-500 mb-1">{t('admin.nc.note')}</label>
+        <input type="text" value={note} onChange={e => setNote(e.target.value)}
+          placeholder={t('admin.nc.notePlaceholder')}
+          className="w-full bg-zinc-900 border border-zinc-700 rounded px-2 py-1.5 text-xs text-zinc-300" />
+      </div>
+
+      {/* Submit */}
+      <button onClick={handleSubmit}
+        disabled={actionLoading === 'nc_grant' || (coins === 0 && gems === 0 && shards === 0 && selectedCards.length === 0)}
+        className={`px-4 py-1.5 rounded-md text-xs font-semibold text-white disabled:opacity-40 transition-colors ${
+          isRemove ? 'bg-rose-700 hover:bg-rose-600' : 'bg-emerald-700 hover:bg-emerald-600'
+        }`}>
+        {actionLoading === 'nc_grant' ? '...' : isRemove ? t('admin.nc.remove') : t('admin.nc.grant')}
+      </button>
+
+      {/* Grant history */}
+      {grants.length > 0 && (
+        <div className="border-t border-zinc-800 pt-3 mt-3">
+          <h3 className="text-[10px] text-zinc-500 mb-2">{t('admin.nc.history')}</h3>
+          <div className="space-y-1.5 max-h-48 overflow-y-auto">
+            {grants.map(g => (
+              <div key={g.id} className={`flex items-center gap-2 text-[10px] py-1 px-2 rounded ${
+                g.claimed ? 'bg-zinc-900/30 text-zinc-600' : 'bg-zinc-800/50 text-zinc-400'
+              }`}>
+                <span className="text-zinc-600">{new Date(g.created_at).toLocaleDateString()}</span>
+                {g.coins > 0 && <span className="text-amber-400">{g.coins} Coins</span>}
+                {g.gems > 0 && <span className="text-purple-400">{g.gems} Gems</span>}
+                {g.shards > 0 && <span className="text-cyan-400">{g.shards} Shards</span>}
+                {g.cards.length > 0 && <span className="text-emerald-400">{g.cards.length} Karten</span>}
+                {g.claimed && <span className="text-emerald-600 font-semibold ml-auto">{t('admin.nc.claimed')}</span>}
+                {!g.claimed && <span className="text-amber-600 font-semibold ml-auto">{t('admin.nc.pending')}</span>}
+                {g.note && <span className="text-zinc-600 truncate max-w-[100px]" title={g.note}>{g.note}</span>}
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
     </div>
   );
 }

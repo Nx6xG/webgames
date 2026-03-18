@@ -28,7 +28,7 @@ export async function GET(
   const { userId } = await params;
   const sb = getSupabaseAdmin()!;
 
-  const [profileRes, statsRes, achievementsRes, cosmeticsRes, unlockedRes, progressionRes, gameProgressRes, authRes] =
+  const [profileRes, statsRes, achievementsRes, cosmeticsRes, unlockedRes, progressionRes, gameProgressRes, authRes, ncGrantsRes] =
     await Promise.all([
       sb.from('profiles').select('*').eq('id', userId).single(),
       sb.from('user_stats').select('*').eq('user_id', userId).single(),
@@ -38,6 +38,7 @@ export async function GET(
       sb.from('user_progression').select('data').eq('user_id', userId).maybeSingle(),
       sb.from('user_game_progress').select('data').eq('user_id', userId).maybeSingle(),
       sb.auth.admin.getUserById(userId),
+      sb.from('nc_admin_grants').select('id, coins, gems, shards, cards, claimed, note, created_at').eq('user_id', userId).order('created_at', { ascending: false }).limit(20),
     ]);
 
   if (!profileRes.data) {
@@ -53,6 +54,7 @@ export async function GET(
     unlockedCosmetics: unlockedRes.data ?? null,
     progression: progressionRes.data?.data ?? null,
     gameProgress: gameProgressRes.data?.data ?? null,
+    ncGrants: ncGrantsRes.data ?? [],
   });
 }
 
@@ -384,6 +386,44 @@ export async function PATCH(
       );
       await auditLog(sb, admin.userId, 'reset_game_progress', userId, { game, prev });
       return NextResponse.json({ ok: true });
+    }
+
+    case 'nc_grant': {
+      const { coins, gems, shards, cards, note } = body as {
+        coins?: number; gems?: number; shards?: number; cards?: string[]; note?: string;
+      };
+      if (
+        (typeof coins !== 'number' && typeof gems !== 'number' && typeof shards !== 'number' && !Array.isArray(cards)) ||
+        ((coins ?? 0) === 0 && (gems ?? 0) === 0 && (shards ?? 0) === 0 && (!cards || cards.length === 0))
+      ) {
+        return NextResponse.json({ error: 'Must modify at least one resource' }, { status: 400 });
+      }
+      const { error: insertErr } = await sb.from('nc_admin_grants').insert({
+        user_id: userId,
+        coins: coins ?? 0,
+        gems: gems ?? 0,
+        shards: shards ?? 0,
+        cards: cards ?? [],
+        note: note ?? null,
+        admin_id: admin.userId,
+      });
+      if (insertErr) {
+        return NextResponse.json({ error: insertErr.message }, { status: 500 });
+      }
+      await auditLog(sb, admin.userId, 'nc_grant', userId, {
+        coins: coins ?? 0, gems: gems ?? 0, shards: shards ?? 0, cards: cards ?? [], note,
+      });
+      return NextResponse.json({ ok: true });
+    }
+
+    case 'nc_grants_history': {
+      const { data: grants } = await sb
+        .from('nc_admin_grants')
+        .select('id, coins, gems, shards, cards, claimed, note, created_at')
+        .eq('user_id', userId)
+        .order('created_at', { ascending: false })
+        .limit(20);
+      return NextResponse.json({ grants: grants ?? [] });
     }
 
     default:

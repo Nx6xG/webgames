@@ -2,16 +2,17 @@
 
 import { useState, useMemo } from 'react';
 import type { NcCardDef, NcRarity, NcTag, NcPlayerProfile } from 'shared';
-import { NC_CARDS, NC_CARD_MAP } from 'shared';
+import { NC_CARDS, NC_CARD_MAP, NC_BP_FREE_EPIC_ID, NC_BP_PAID_LEGENDARY_ID } from 'shared';
 import { NexusClashCard } from './NexusClashCard';
 import { useI18n } from '@/components/providers/LanguageProvider';
 
 interface CollectionProps {
   profile: NcPlayerProfile;
   onClose: () => void;
+  onToggleFavorite?: (cardId: string) => void;
 }
 
-const ALL_TAGS: NcTag[] = ['divine', 'arcane', 'beast', 'mech', 'undead', 'nature', 'shadow', 'noble'];
+const ALL_TAGS: NcTag[] = ['divine', 'arcane', 'beast', 'mech', 'undead', 'nature', 'shadow', 'noble', 'spell', 'dragon', 'demon', 'relic'];
 const RARITY_ORDER: NcRarity[] = ['common', 'rare', 'epic', 'legendary'];
 
 const RARITY_COLORS: Record<NcRarity, string> = {
@@ -23,10 +24,11 @@ type GroupBy = 'rarity' | 'tag';
 
 const TAG_COLORS: Record<NcTag, string> = {
   divine: '#facc15', arcane: '#818cf8', beast: '#f97316', mech: '#94a3b8',
-  undead: '#a78bfa', nature: '#4ade80', shadow: '#a855f7', noble: '#fbbf24',
+  undead: '#a78bfa', nature: '#4ade80', shadow: '#a855f7', noble: '#fbbf24', spell: '#e879f9',
+  dragon: '#ef4444', demon: '#dc2626', relic: '#d97706',
 };
 
-export function Collection({ profile, onClose }: CollectionProps) {
+export function Collection({ profile, onClose, onToggleFavorite }: CollectionProps) {
   const { t } = useI18n();
   const [filterTag, setFilterTag] = useState<NcTag | null>(null);
   const [filterRarity, setFilterRarity] = useState<NcRarity | null>(null);
@@ -42,14 +44,18 @@ export function Collection({ profile, onClose }: CollectionProps) {
     return count;
   }, [profile.collection]);
 
+  const favs = useMemo(() => new Set(profile.favorites ?? []), [profile.favorites]);
+
   const filteredCards = useMemo(() => {
     let cards = [...NC_CARDS];
     if (filterTag) cards = cards.filter(c => c.tags.includes(filterTag));
     if (filterRarity) cards = cards.filter(c => c.rarity === filterRarity);
     if (filterOwned === 'owned') cards = cards.filter(c => (profile.collection.cards[c.id] ?? 0) > 0);
     if (filterOwned === 'unowned') cards = cards.filter(c => (profile.collection.cards[c.id] ?? 0) === 0);
+    // Sort favorites first
+    cards.sort((a, b) => (favs.has(b.id) ? 1 : 0) - (favs.has(a.id) ? 1 : 0));
     return cards;
-  }, [filterTag, filterRarity, filterOwned, profile.collection]);
+  }, [filterTag, filterRarity, filterOwned, profile.collection, favs]);
 
   const selectedDef: NcCardDef | undefined = selectedId ? NC_CARD_MAP[selectedId] : undefined;
   const selectedOwned = selectedId ? (profile.collection.cards[selectedId] ?? 0) > 0 : false;
@@ -175,7 +181,7 @@ export function Collection({ profile, onClose }: CollectionProps) {
                   key: tag,
                   label: t(`nc.tag.${tag}`),
                   color: TAG_COLORS[tag],
-                  cards: filteredCards.filter(c => c.tags.includes(tag)),
+                  cards: filteredCards.filter(c => c.tags[0] === tag),
                 }))
             ).map(group => {
               if (group.cards.length === 0) return null;
@@ -208,9 +214,28 @@ export function Collection({ profile, onClose }: CollectionProps) {
                             onClick={() => setSelectedId(card.id)}
                             selected={selectedId === card.id}
                           />
-                          <p className="text-[10px] font-semibold truncate max-w-full text-center" style={{ color: owned ? '#c0c0d0' : '#3a3a4a' }}>
-                            {t(card.nameKey)}
-                          </p>
+                          <div className="flex items-center gap-0.5 max-w-full justify-center">
+                            {onToggleFavorite && (
+                              <button
+                                className="shrink-0 text-[9px] leading-none"
+                                style={{ color: favs.has(card.id) ? '#c9a84c' : '#2a2a3a' }}
+                                onClick={(e) => { e.stopPropagation(); onToggleFavorite(card.id); }}
+                                title={favs.has(card.id) ? t('nc.favorite.remove') : t('nc.favorite.add')}
+                              >
+                                ★
+                              </button>
+                            )}
+                            <p className="text-[10px] font-semibold truncate text-center" style={{ color: owned ? '#c0c0d0' : '#3a3a4a' }}>
+                              {t(card.nameKey)}
+                            </p>
+                          </div>
+                          {(card.id === NC_BP_FREE_EPIC_ID || card.id === NC_BP_PAID_LEGENDARY_ID) && (
+                            <span className="text-[7px] font-black uppercase tracking-wider px-1.5 py-0.5 rounded-full" style={{
+                              background: card.id === NC_BP_PAID_LEGENDARY_ID ? 'linear-gradient(135deg, #c9a84c, #b8943a)' : 'linear-gradient(135deg, #7c3aed, #5b21b6)',
+                              color: card.id === NC_BP_PAID_LEGENDARY_ID ? '#0a0a12' : '#fff',
+                              boxShadow: `0 0 6px ${card.id === NC_BP_PAID_LEGENDARY_ID ? 'rgba(201,168,76,0.3)' : 'rgba(124,58,237,0.3)'}`,
+                            }}>BP {t('nc.bp.exclusive')}</span>
+                          )}
                           {owned && (
                             <div className="flex items-center gap-1">
                               <svg viewBox="0 0 12 12" className="w-3 h-3"><circle cx="6" cy="6" r="5" fill="#16a34a" opacity="0.8"/><path d="M3.5 6L5.5 8L8.5 4.5" fill="none" stroke="white" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/></svg>
@@ -242,16 +267,25 @@ export function Collection({ profile, onClose }: CollectionProps) {
                   <h3 className="text-base font-black" style={{ color: '#e0e0e8' }}>
                     {t(selectedDef.nameKey)}
                   </h3>
-                  <span
-                    className="text-[10px] font-bold uppercase tracking-[0.1em] px-2 py-0.5 rounded inline-block mt-1"
-                    style={{
-                      color: RARITY_COLORS[selectedDef.rarity],
-                      background: `${RARITY_COLORS[selectedDef.rarity]}15`,
-                      border: `1px solid ${RARITY_COLORS[selectedDef.rarity]}30`,
-                    }}
-                  >
-                    {t(`nc.rarity.${selectedDef.rarity}`)}
-                  </span>
+                  <div className="flex items-center gap-1.5 mt-1 flex-wrap">
+                    <span
+                      className="text-[10px] font-bold uppercase tracking-[0.1em] px-2 py-0.5 rounded inline-block"
+                      style={{
+                        color: RARITY_COLORS[selectedDef.rarity],
+                        background: `${RARITY_COLORS[selectedDef.rarity]}15`,
+                        border: `1px solid ${RARITY_COLORS[selectedDef.rarity]}30`,
+                      }}
+                    >
+                      {t(`nc.rarity.${selectedDef.rarity}`)}
+                    </span>
+                    {(selectedDef.id === NC_BP_FREE_EPIC_ID || selectedDef.id === NC_BP_PAID_LEGENDARY_ID) && (
+                      <span className="text-[9px] font-black uppercase tracking-wider px-2 py-0.5 rounded inline-block" style={{
+                        background: selectedDef.id === NC_BP_PAID_LEGENDARY_ID ? 'linear-gradient(135deg, #c9a84c, #b8943a)' : 'linear-gradient(135deg, #7c3aed, #5b21b6)',
+                        color: selectedDef.id === NC_BP_PAID_LEGENDARY_ID ? '#0a0a12' : '#fff',
+                        boxShadow: `0 0 6px ${selectedDef.id === NC_BP_PAID_LEGENDARY_ID ? 'rgba(201,168,76,0.3)' : 'rgba(124,58,237,0.3)'}`,
+                      }}>{t('nc.bp.label')}</span>
+                    )}
+                  </div>
                 </div>
 
                 {/* Stats */}
@@ -270,8 +304,16 @@ export function Collection({ profile, onClose }: CollectionProps) {
                 <div>
                   <p className="text-[8px] font-bold uppercase tracking-[0.15em] mb-1" style={{ color: '#5a5a6a' }}>{t('nc.detail.tags')}</p>
                   <div className="flex flex-wrap gap-1">
-                    {selectedDef.tags.map(tag => (
-                      <span key={tag} className="text-[10px] px-2 py-0.5 rounded font-semibold" style={{ background: '#1a1a2e', border: '1px solid #2a2a3a', color: '#a0a0b0' }}>
+                    {selectedDef.tags.map((tag, i) => (
+                      <span key={tag} className="text-[10px] px-2 py-0.5 rounded font-semibold" style={i === 0 ? {
+                        background: `${TAG_COLORS[tag]}20`,
+                        border: `1px solid ${TAG_COLORS[tag]}50`,
+                        color: TAG_COLORS[tag],
+                      } : {
+                        background: '#1a1a2e',
+                        border: '1px solid #2a2a3a',
+                        color: '#6a6a7a',
+                      }}>
                         {t(`nc.tag.${tag}`)}
                       </span>
                     ))}
@@ -294,6 +336,12 @@ export function Collection({ profile, onClose }: CollectionProps) {
                     </span>
                   </div>
                   <p className="text-xs leading-relaxed" style={{ color: '#c0c0d0' }}>{t(`nc.ability.${selectedDef.id}`)}</p>
+                </div>
+
+                {/* Lore */}
+                <div className="rounded p-3" style={{ background: '#0a0a1299', border: '1px solid #1a1a2a' }}>
+                  <p className="text-[8px] font-bold uppercase tracking-[0.15em] mb-1.5" style={{ color: '#5a5a6a' }}>{t('nc.detail.lore')}</p>
+                  <p className="text-[11px] leading-relaxed italic" style={{ color: '#7a7a8a' }}>{t(`nc.lore.${selectedDef.id}`)}</p>
                 </div>
 
                 {/* Owned status */}

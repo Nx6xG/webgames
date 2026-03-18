@@ -6,8 +6,8 @@ import type {
   NexusClashState, NexusClashAction, NcLane,
   NcPendingPlay, NcLaneModifier, NcResolveEvent,
 } from 'shared';
-import { NC_CARD_MAP, NC_CARDS, NC_SHARD_PRICES, NC_MAX_COPIES, getNcDailyReward } from 'shared';
-import type { NcRarity, NcBotDifficulty } from 'shared';
+import { NC_CARD_MAP, NC_CARDS, NC_SHARD_PRICES, NC_MAX_COPIES, getNcDailyReward, NC_WIN_COINS, NC_LOSS_COINS, NC_BREAKTHROUGH_THRESHOLD, NC_BP_WIN_XP, NC_BP_LOSS_XP, NC_RANK_WIN_POINTS, NC_RANK_LOSS_POINTS } from 'shared';
+import type { NcRarity, NcBotDifficulty, NcEmoteId } from 'shared';
 import { useMultiplayer } from '@/hooks/useMultiplayer';
 import type { GameComponentProps } from '@/lib/gameRegistry';
 import { WaitingForConnectionOverlay } from '@/components/WaitingForConnectionOverlay';
@@ -23,7 +23,10 @@ import { DeckBuilder } from './DeckBuilder';
 import { PackOpening } from './PackOpening';
 import { Collection } from './Collection';
 import { QuestTracker } from './QuestTracker';
+import { BattlePass } from './BattlePass';
+import { RankDisplay, RankSeasonResetModal } from './RankDisplay';
 import { useNcProfile } from './NcProfileManager';
+import { useAuth } from '@/components/providers/AuthProvider';
 import { NexusClashTutorial } from './NexusClashTutorial';
 import { ncAudio } from './NexusClashAudio';
 
@@ -49,14 +52,23 @@ function ModifierIcon({ modifier }: { modifier: NcLaneModifier }) {
     mana_drain: (
       <svg viewBox="0 0 20 20" className="w-4 h-4"><path d="M10 3C10 3 4 8 4 12A6 6 0 0016 12C16 8 10 3 10 3Z" fill="none" stroke="#c9a84c" strokeWidth="1.5"/><line x1="6" y1="6" x2="14" y2="14" stroke="#c9a84c" strokeWidth="1.5"/></svg>
     ),
-    tag_bonus_divine: (
-      <svg viewBox="0 0 20 20" className="w-4 h-4"><polygon points="10,2 12,8 18,8 13,12 15,18 10,14 5,18 7,12 2,8 8,8" fill="none" stroke="#c9a84c" strokeWidth="1.2"/></svg>
+    fortified: (
+      <svg viewBox="0 0 20 20" className="w-4 h-4"><rect x="4" y="8" width="12" height="9" rx="1" fill="none" stroke="#c9a84c" strokeWidth="1.3"/><path d="M4 8L10 3L16 8" fill="none" stroke="#c9a84c" strokeWidth="1.3"/><rect x="8" y="12" width="4" height="5" fill="#c9a84c" opacity="0.4"/></svg>
     ),
-    tag_bonus_mech: (
-      <svg viewBox="0 0 20 20" className="w-4 h-4"><circle cx="10" cy="10" r="7" fill="none" stroke="#c9a84c" strokeWidth="1.2"/><circle cx="10" cy="10" r="3" fill="#c9a84c"/><line x1="10" y1="2" x2="10" y2="5" stroke="#c9a84c" strokeWidth="1.5"/><line x1="10" y1="15" x2="10" y2="18" stroke="#c9a84c" strokeWidth="1.5"/><line x1="2" y1="10" x2="5" y2="10" stroke="#c9a84c" strokeWidth="1.5"/><line x1="15" y1="10" x2="18" y2="10" stroke="#c9a84c" strokeWidth="1.5"/></svg>
+    echo: (
+      <svg viewBox="0 0 20 20" className="w-4 h-4"><path d="M6 10C6 7.5 8 5.5 10 5.5" fill="none" stroke="#c9a84c" strokeWidth="1.3" strokeLinecap="round"/><path d="M3 10C3 5.5 6.5 3 10 3" fill="none" stroke="#c9a84c" strokeWidth="1.3" strokeLinecap="round" opacity="0.5"/><path d="M14 10C14 12.5 12 14.5 10 14.5" fill="none" stroke="#c9a84c" strokeWidth="1.3" strokeLinecap="round"/><path d="M17 10C17 14.5 13.5 17 10 17" fill="none" stroke="#c9a84c" strokeWidth="1.3" strokeLinecap="round" opacity="0.5"/></svg>
     ),
-    tag_bonus_beast: (
-      <svg viewBox="0 0 20 20" className="w-4 h-4"><path d="M5 14C5 14 6 8 10 8C14 8 15 14 15 14" fill="none" stroke="#c9a84c" strokeWidth="1.5" strokeLinecap="round"/><circle cx="7" cy="10" r="1" fill="#c9a84c"/><circle cx="13" cy="10" r="1" fill="#c9a84c"/></svg>
+    volatile: (
+      <svg viewBox="0 0 20 20" className="w-4 h-4"><path d="M7 3L5 10H9L7 17L15 8H10L13 3H7Z" fill="#c9a84c" opacity="0.8"/></svg>
+    ),
+    silent: (
+      <svg viewBox="0 0 20 20" className="w-4 h-4"><path d="M3 8H7L12 4V16L7 12H3V8Z" fill="none" stroke="#c9a84c" strokeWidth="1.3"/><line x1="14" y1="6" x2="18" y2="14" stroke="#c9a84c" strokeWidth="1.5" strokeLinecap="round"/><line x1="18" y1="6" x2="14" y2="14" stroke="#c9a84c" strokeWidth="1.5" strokeLinecap="round"/></svg>
+    ),
+    accelerate: (
+      <svg viewBox="0 0 20 20" className="w-4 h-4"><path d="M4 16L10 4L16 16" fill="none" stroke="#c9a84c" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/><path d="M6 12H14" stroke="#c9a84c" strokeWidth="1.3" strokeLinecap="round"/><circle cx="10" cy="7" r="1.5" fill="#c9a84c"/></svg>
+    ),
+    siphon: (
+      <svg viewBox="0 0 20 20" className="w-4 h-4"><circle cx="10" cy="10" r="6" fill="none" stroke="#c9a84c" strokeWidth="1.3"/><path d="M10 5V10L13 7" fill="none" stroke="#c9a84c" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/><circle cx="10" cy="10" r="2" fill="#c9a84c" opacity="0.4"/></svg>
     ),
   };
   return <>{iconMap[modifier]}</>;
@@ -64,7 +76,7 @@ function ModifierIcon({ modifier }: { modifier: NcLaneModifier }) {
 
 // ── Hub tab type ────────────────────────────────────────────────────────────
 
-type HubTab = 'play' | 'decks' | 'shop' | 'collection' | 'quests';
+type HubTab = 'play' | 'decks' | 'shop' | 'collection' | 'quests' | 'battlepass';
 
 // ── Hub tab icons ───────────────────────────────────────────────────────────
 
@@ -81,6 +93,8 @@ function TabIcon({ tab, active }: { tab: HubTab; active: boolean }) {
       return <svg viewBox="0 0 20 20" className="w-4 h-4"><rect x="2" y="2" width="7" height="7" rx="1" fill="none" stroke={color} strokeWidth="1.3"/><rect x="11" y="2" width="7" height="7" rx="1" fill="none" stroke={color} strokeWidth="1.3"/><rect x="2" y="11" width="7" height="7" rx="1" fill="none" stroke={color} strokeWidth="1.3"/><rect x="11" y="11" width="7" height="7" rx="1" fill="none" stroke={color} strokeWidth="1.3"/></svg>;
     case 'quests':
       return <svg viewBox="0 0 20 20" className="w-4 h-4"><path d="M4 3H16V17H4V3Z" fill="none" stroke={color} strokeWidth="1.3"/><line x1="7" y1="7" x2="13" y2="7" stroke={color} strokeWidth="1.2"/><line x1="7" y1="10" x2="13" y2="10" stroke={color} strokeWidth="1.2"/><line x1="7" y1="13" x2="11" y2="13" stroke={color} strokeWidth="1.2"/></svg>;
+    case 'battlepass':
+      return <svg viewBox="0 0 20 20" className="w-4 h-4"><path d="M3 10L10 3L17 10L10 17Z" fill="none" stroke={color} strokeWidth="1.3"/><circle cx="10" cy="10" r="3" fill={color} opacity="0.5"/><polygon points="10,6 11,9 10,8.5 9,9" fill={color}/></svg>;
   }
 }
 
@@ -208,8 +222,9 @@ function CardTooltip({ cardId, t }: { cardId: string; t: (key: string) => string
 
 // ── Card with hover tooltip wrapper ──────────────────────────────────────
 
-function CardWithTooltip({ cardId, t, children, className }: {
+function CardWithTooltip({ cardId, t, children, className, draggable, onDragStart, onDragEnd }: {
   cardId: string; t: (key: string) => string; children: React.ReactNode; className?: string;
+  draggable?: boolean; onDragStart?: (e: React.DragEvent) => void; onDragEnd?: () => void;
 }) {
   const [show, setShow] = useState(false);
   return (
@@ -217,6 +232,9 @@ function CardWithTooltip({ cardId, t, children, className }: {
       className={`relative ${className ?? ''}`}
       onMouseEnter={() => setShow(true)}
       onMouseLeave={() => setShow(false)}
+      draggable={draggable}
+      onDragStart={onDragStart}
+      onDragEnd={onDragEnd}
     >
       {children}
       {show && <CardTooltip cardId={cardId} t={t} />}
@@ -321,13 +339,14 @@ interface ResolveAnimState {
 // ── Tug of war bar ──────────────────────────────────────────────────────────
 
 function TugBar({ value, locked, winner, myIdx, animating }: { value: number; locked: boolean; winner: 0 | 1 | null; myIdx: number | null; animating?: boolean }) {
-  const position = Math.max(0, Math.min(100, (value + 100) / 2));
+  const maxTug = NC_BREAKTHROUGH_THRESHOLD;
+  const position = Math.max(0, Math.min(100, (value + maxTug) / (2 * maxTug) * 100));
 
   const p0IsMe = myIdx === 0;
   const leftColor = p0IsMe ? '#4a7dff' : '#ef4444';
   const rightColor = p0IsMe ? '#ef4444' : '#4a7dff';
 
-  const isCritical = Math.abs(value) > 60;
+  const isCritical = Math.abs(value) > maxTug * 0.6;
 
   return (
     <div className={[
@@ -386,11 +405,136 @@ function TugBar({ value, locked, winner, myIdx, animating }: { value: number; lo
   );
 }
 
+// ── Trigger color helper ─────────────────────────────────────────────────────
+
+const TRIGGER_COLORS: Record<string, string> = {
+  on_reveal: '#4a7dff',
+  ongoing: '#c9a84c',
+  on_destroy: '#ef4444',
+  on_ally_played: '#22d3ee',
+};
+
+const TRIGGER_LABELS: Record<string, string> = {
+  on_reveal: 'R',
+  ongoing: 'O',
+  on_destroy: 'D',
+  on_ally_played: 'A',
+};
+
+// ── Lane card chip (replaces tiny compact cards) ─────────────────────────────
+
+function LaneCardChip({ ci, t, resolveAnim }: {
+  ci: { uid: number; cardId: string; power: number; basePower: number; shieldRounds: number };
+  t: (key: string) => string;
+  resolveAnim?: ResolveAnimState | null;
+}) {
+  const def = NC_CARD_MAP[ci.cardId];
+  if (!def) return null;
+
+  const justRevealed = resolveAnim?.revealedCards.has(ci.uid);
+  const abilityActive = resolveAnim?.triggeredCards.has(ci.uid);
+  const abilityEffect = resolveAnim?.triggeredCards.get(ci.uid);
+  const isPowerBuffed = ci.power > ci.basePower;
+  const isPowerDebuffed = ci.power < ci.basePower;
+  const triggerColor = def.ability ? (TRIGGER_COLORS[def.ability.trigger] ?? '#6a6a7a') : '#6a6a7a';
+  const triggerLabel = def.ability ? (TRIGGER_LABELS[def.ability.trigger] ?? '?') : '?';
+
+  const rarityBorderColor: Record<string, string> = {
+    common: '#3a3a4a', rare: '#4a7dff55', epic: '#7c3aed55', legendary: '#c9a84c55',
+  };
+
+  const glowClass = abilityActive
+    ? (['debuff_enemies', 'debuff_strongest_enemy', 'drain', 'destroy_weakest_enemy', 'destroy_strongest_enemy', 'destroy_random_enemy', 'return_to_hand'].includes(abilityEffect ?? '')
+        ? 'nc-ability-glow-attack'
+        : ['buff_allies', 'buff_self', 'buff_self_per_enemy', 'push_bonus', 'power_per_tag', 'tug_shift'].includes(abilityEffect ?? '')
+        ? 'nc-ability-glow-buff'
+        : ['shield', 'shield_allies'].includes(abilityEffect ?? '')
+        ? 'nc-ability-glow-shield'
+        : ['copy_strongest_ally_power', 'double_push_if'].includes(abilityEffect ?? '')
+        ? 'nc-ability-glow-gold'
+        : 'nc-ability-glow-util')
+    : '';
+
+  return (
+    <CardWithTooltip cardId={ci.cardId} t={t} className={[
+      justRevealed ? 'nc-card-reveal' : '',
+      glowClass,
+    ].join(' ')}>
+      <div
+        className="flex items-center gap-1 rounded px-1.5 py-0.5 transition-all"
+        style={{
+          background: 'linear-gradient(135deg, #18182a, #0e0e1a)',
+          border: `1px solid ${rarityBorderColor[def.rarity] ?? '#3a3a4a'}`,
+          minWidth: 0,
+        }}
+      >
+        {/* Trigger type dot */}
+        <div
+          className="flex-shrink-0 w-2.5 h-2.5 rounded-full flex items-center justify-center"
+          style={{
+            background: `${triggerColor}33`,
+            border: `1px solid ${triggerColor}`,
+          }}
+          title={def.ability ? t(`nc.trigger.${def.ability.trigger}`) : ''}
+        >
+          <span className="text-[6px] font-black leading-none" style={{ color: triggerColor }}>{triggerLabel}</span>
+        </div>
+
+        {/* Card name (abbreviated) */}
+        <span className="text-[9px] font-semibold truncate leading-tight" style={{
+          color: '#c0c0ca',
+          maxWidth: '42px',
+        }}>
+          {t(def.nameKey)}
+        </span>
+
+        {/* Shield indicator */}
+        {ci.shieldRounds > 0 && (
+          <svg viewBox="0 0 10 12" className="flex-shrink-0 w-2.5 h-3">
+            <path d="M5 1L9 3V7C9 9.5 7 11 5 11.5C3 11 1 9.5 1 7V3L5 1Z" fill="#60a5fa44" stroke="#60a5fa" strokeWidth="1"/>
+          </svg>
+        )}
+
+        {/* Power number */}
+        <span className="flex-shrink-0 text-[10px] font-black tabular-nums ml-auto" style={{
+          color: isPowerBuffed ? '#4ade80' : isPowerDebuffed ? '#fca5a5' : '#e0e0e8',
+          textShadow: isPowerBuffed ? '0 0 4px rgba(74,222,128,0.4)' : isPowerDebuffed ? '0 0 4px rgba(252,165,165,0.4)' : 'none',
+        }}>
+          {ci.power}
+        </span>
+      </div>
+    </CardWithTooltip>
+  );
+}
+
+// ── Lane power summary ──────────────────────────────────────────────────────
+
+function LanePowerSummary({ cards, color, side }: {
+  cards: { power: number }[];
+  color: string;
+  side: 'left' | 'right';
+}) {
+  if (cards.length === 0) return null;
+  const totalPower = cards.reduce((sum, c) => sum + c.power, 0);
+  return (
+    <div className="flex items-center gap-1" style={{
+      justifyContent: side === 'left' ? 'flex-start' : 'flex-end',
+    }}>
+      <span className="text-[9px] font-bold tabular-nums" style={{ color }}>
+        {totalPower}
+      </span>
+      <span className="text-[8px]" style={{ color: `${color}88` }}>
+        ({cards.length})
+      </span>
+    </div>
+  );
+}
+
 // ── Lane component ──────────────────────────────────────────────────────────
 
 function LaneView({
   lane, laneIndex, myIdx, pendingPlays, selectedCardId, onLaneClick, t,
-  resolveAnim,
+  resolveAnim, isDragOver, onDragOver, onDragLeave, onDrop,
 }: {
   lane: NcLane;
   laneIndex: number;
@@ -400,6 +544,10 @@ function LaneView({
   onLaneClick: (laneIndex: 0 | 1 | 2) => void;
   t: (key: string) => string;
   resolveAnim?: ResolveAnimState | null;
+  isDragOver?: boolean;
+  onDragOver?: (e: React.DragEvent) => void;
+  onDragLeave?: () => void;
+  onDrop?: (e: React.DragEvent) => void;
 }) {
   const [modTooltip, setModTooltip] = useState(false);
   const myCards = myIdx !== null ? lane.cards[myIdx] : [];
@@ -410,21 +558,29 @@ function LaneView({
   return (
     <div
       className={[
-        'relative flex flex-col gap-2 rounded-lg transition-all min-h-[200px] overflow-hidden',
-        selectedCardId ? 'cursor-pointer nc-lane-hover' : '',
+        'relative flex flex-col gap-1.5 rounded-lg transition-all min-h-[200px] overflow-hidden',
+        selectedCardId && !lane.locked ? 'cursor-pointer nc-lane-hover' : '',
         lane.locked ? 'nc-lane-locked' : '',
+        isDragOver && !lane.locked ? 'nc-lane-drop-target' : '',
       ].join(' ')}
       style={{
         background: lane.locked
           ? 'linear-gradient(180deg, #1a1008 0%, #12121f 100%)'
           : 'linear-gradient(180deg, #0e0e1a 0%, #12121f 100%)',
-        border: lane.locked ? '1px solid #c9a84c33' : '1px solid #1e1e3a',
-        boxShadow: lane.locked
-          ? 'inset 0 0 30px rgba(201,168,76,0.05), 0 0 20px rgba(201,168,76,0.05)'
-          : 'inset 0 0 30px rgba(0,0,0,0.3)',
-        padding: '12px',
+        border: isDragOver && !lane.locked
+          ? '1px solid #4a7dff88'
+          : lane.locked ? '1px solid #c9a84c55' : '1px solid #1e1e3a',
+        boxShadow: isDragOver && !lane.locked
+          ? 'inset 0 0 40px rgba(74,125,255,0.12), 0 0 20px rgba(74,125,255,0.1)'
+          : lane.locked
+            ? 'inset 0 0 30px rgba(201,168,76,0.05), 0 0 20px rgba(201,168,76,0.05)'
+            : 'inset 0 0 30px rgba(0,0,0,0.3)',
+        padding: '8px',
       }}
       onClick={() => onLaneClick(laneIndex as 0 | 1 | 2)}
+      onDragOver={onDragOver}
+      onDragLeave={onDragLeave}
+      onDrop={onDrop}
     >
       {/* Atmospheric background element */}
       <div className="absolute inset-0 pointer-events-none" style={{
@@ -449,8 +605,41 @@ function LaneView({
         borderRight: '1px solid #c9a84c33',
       }} />
 
+      {/* Locked lane overlay */}
+      {lane.locked && (
+        <div className="absolute inset-0 z-10 pointer-events-none nc-locked-overlay" style={{
+          background: lane.breakthroughWinner === myIdx
+            ? 'linear-gradient(135deg, rgba(74,125,255,0.08) 0%, transparent 50%, rgba(74,125,255,0.04) 100%)'
+            : 'linear-gradient(135deg, rgba(239,68,68,0.08) 0%, transparent 50%, rgba(239,68,68,0.04) 100%)',
+        }}>
+          {/* Diagonal stripes */}
+          <div className="absolute inset-0" style={{
+            backgroundImage: `repeating-linear-gradient(
+              -45deg,
+              transparent,
+              transparent 8px,
+              ${lane.breakthroughWinner === myIdx ? 'rgba(74,125,255,0.04)' : 'rgba(239,68,68,0.04)'} 8px,
+              ${lane.breakthroughWinner === myIdx ? 'rgba(74,125,255,0.04)' : 'rgba(239,68,68,0.04)'} 9px
+            )`,
+          }} />
+          {/* Center lock icon */}
+          <div className="absolute inset-0 flex items-center justify-center">
+            <div className="nc-lock-badge" style={{
+              background: lane.breakthroughWinner === myIdx
+                ? 'radial-gradient(circle, rgba(74,125,255,0.15) 0%, transparent 70%)'
+                : 'radial-gradient(circle, rgba(239,68,68,0.15) 0%, transparent 70%)',
+            }}>
+              <svg viewBox="0 0 24 24" className="w-8 h-8 opacity-20" fill="none" stroke={lane.breakthroughWinner === myIdx ? '#4a7dff' : '#ef4444'} strokeWidth="1.5">
+                <rect x="5" y="11" width="14" height="10" rx="2" />
+                <path d="M8 11V7a4 4 0 018 0v4" />
+              </svg>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Modifier rune (floating above) */}
-      <div className="flex items-center justify-center gap-1.5 relative z-10">
+      <div className="flex items-center justify-center gap-1.5 relative z-20">
         <div
           className="relative flex items-center gap-1.5 rounded-full px-2.5 py-1 cursor-help"
           style={{
@@ -478,6 +667,11 @@ function LaneView({
             </span>
           </div>
         )}
+      </div>
+
+      {/* Opponent power summary */}
+      <div className="flex justify-end px-0.5 relative z-10">
+        <LanePowerSummary cards={oppCards} color="#ef4444" side="right" />
       </div>
 
       {/* Tug bar */}
@@ -512,19 +706,13 @@ function LaneView({
       </div>
 
       {/* Opponent cards (top) */}
-      <div className="flex gap-1 justify-center min-h-[20px] flex-wrap relative z-10">
-        {oppCards.map((ci) => {
-          const justRevealed = resolveAnim?.revealedCards.has(ci.uid);
-          const abilityActive = resolveAnim?.triggeredCards.has(ci.uid);
-          return (
-            <CardWithTooltip key={ci.uid} cardId={ci.cardId} t={t} className={[
-              justRevealed ? 'nc-card-reveal' : '',
-              abilityActive ? 'nc-card-ability-glow' : '',
-            ].join(' ')}>
-              <NexusClashCard card={ci.cardId} compact displayPower={ci.power} />
-            </CardWithTooltip>
-          );
-        })}
+      <div className="flex flex-col gap-0.5 min-h-[20px] relative z-10">
+        {oppCards.map((ci) => (
+          <LaneCardChip key={ci.uid} ci={ci} t={t} resolveAnim={resolveAnim} />
+        ))}
+        {oppCards.length === 0 && (
+          <div className="text-[8px] text-center py-1" style={{ color: '#2a2a3a' }}>---</div>
+        )}
       </div>
 
       {/* Floating texts (abilities, damage, etc) */}
@@ -552,28 +740,35 @@ function LaneView({
       }} />
 
       {/* My cards (bottom) */}
-      <div className="flex gap-1 justify-center min-h-[20px] flex-wrap relative z-10">
-        {myCards.map((ci) => {
-          const justRevealed = resolveAnim?.revealedCards.has(ci.uid);
-          const abilityActive = resolveAnim?.triggeredCards.has(ci.uid);
+      <div className="flex flex-col gap-0.5 min-h-[20px] relative z-10">
+        {myCards.map((ci) => (
+          <LaneCardChip key={ci.uid} ci={ci} t={t} resolveAnim={resolveAnim} />
+        ))}
+        {/* Pending plays */}
+        {myPending.map((pp) => {
+          const pendingDef = NC_CARD_MAP[pp.cardId];
           return (
-            <CardWithTooltip key={ci.uid} cardId={ci.cardId} t={t} className={[
-              justRevealed ? 'nc-card-reveal' : '',
-              abilityActive ? 'nc-card-ability-glow' : '',
-            ].join(' ')}>
-              <NexusClashCard card={ci.cardId} compact displayPower={ci.power} />
-            </CardWithTooltip>
+            <div key={`pending-${pp.cardUid}`} className="flex items-center gap-1 rounded px-1.5 py-0.5 opacity-60" style={{
+              background: 'linear-gradient(135deg, #18182a, #0e0e1a)',
+              border: '1px dashed #3a3a4a',
+            }}>
+              <span className="text-[9px] font-semibold truncate" style={{ color: '#6a6a7a' }}>
+                {pendingDef ? t(pendingDef.nameKey) : pp.cardId}
+              </span>
+              <span className="text-[10px] font-black ml-auto tabular-nums" style={{ color: '#6a6a7a' }}>
+                {pendingDef?.power ?? '?'}
+              </span>
+            </div>
           );
         })}
-        {/* Pending plays */}
-        {myPending.map((pp) => (
-          <NexusClashCard
-            key={`pending-${pp.cardUid}`}
-            card={pp.cardId}
-            compact
-            pending
-          />
-        ))}
+        {myCards.length === 0 && myPending.length === 0 && (
+          <div className="text-[8px] text-center py-1" style={{ color: '#2a2a3a' }}>---</div>
+        )}
+      </div>
+
+      {/* My power summary */}
+      <div className="flex justify-start px-0.5 relative z-10">
+        <LanePowerSummary cards={myCards} color="#4a7dff" side="left" />
       </div>
     </div>
   );
@@ -587,27 +782,37 @@ function getEffectLabel(effect: string, value?: number): string {
   switch (effect) {
     case 'buff_allies': return `${sign}${v} ⚔️`;
     case 'buff_self': return `${sign}${v} 💪`;
+    case 'buff_self_per_enemy': return `${sign}${v}/foe 💪`;
     case 'debuff_enemies': return `${v > 0 ? '-' : ''}${Math.abs(v)} 🔻`;
+    case 'debuff_strongest_enemy': return `-${v} 🎯`;
     case 'shield': return `🛡️ ${v}`;
+    case 'shield_allies': return `🛡️ all ${v}`;
     case 'drain': return `🩸 ${v}`;
     case 'destroy_weakest_enemy': return '💀';
+    case 'destroy_strongest_enemy': return '💀⬆️';
+    case 'destroy_random_enemy': return '💀🎲';
+    case 'return_to_hand': return '↩️';
+    case 'tug_shift': return `⬆️ ${v}`;
     case 'copy_strongest_ally_power': return '📋';
     case 'move_to_lane': return '↗️';
     case 'swap_lane_positions': return '🔄';
     case 'push_bonus': return `${sign}${v} ⬆️`;
     case 'double_push_if': return 'x2 ⚡';
     case 'power_per_tag': return `${sign}${v}/tag`;
+    case 'draw_card': return `🃏 ${v}`;
+    case 'mana_boost': return `💎 ${sign}${v}`;
     default: return '✨';
   }
 }
 
 function getEffectColor(effect: string): string {
   switch (effect) {
-    case 'buff_allies': case 'buff_self': case 'push_bonus': case 'power_per_tag': return '#4ade80';
-    case 'debuff_enemies': case 'drain': case 'destroy_weakest_enemy': return '#ef4444';
-    case 'shield': return '#60a5fa';
+    case 'buff_allies': case 'buff_self': case 'buff_self_per_enemy': case 'push_bonus': case 'power_per_tag': case 'tug_shift': return '#4ade80';
+    case 'debuff_enemies': case 'debuff_strongest_enemy': case 'drain': case 'destroy_weakest_enemy': case 'destroy_strongest_enemy': case 'destroy_random_enemy': case 'return_to_hand': return '#ef4444';
+    case 'shield': case 'shield_allies': return '#60a5fa';
     case 'move_to_lane': case 'swap_lane_positions': return '#c084fc';
     case 'copy_strongest_ally_power': case 'double_push_if': return '#fbbf24';
+    case 'draw_card': case 'mana_boost': return '#c084fc';
     default: return '#c9a84c';
   }
 }
@@ -628,9 +833,22 @@ export function NexusClashGame({ wsUrl, gameId, initialRoomCode, quickPlay: isQu
   const mp = useMultiplayer<NexusClashState>(wsUrl, gameId);
   const { t } = useI18n();
   const ncProfile = useNcProfile();
+  const { user: authUser } = useAuth();
+
+  // Claim admin grants once on mount (if logged in)
+  const grantClaimedRef = useRef(false);
+  useEffect(() => {
+    if (authUser?.id && !grantClaimedRef.current) {
+      grantClaimedRef.current = true;
+      ncProfile.claimAdminGrants(authUser.id);
+    }
+  }, [authUser?.id, ncProfile.claimAdminGrants]);
 
   // UI state
   const [selectedCard, setSelectedCard] = useState<string | null>(null);
+  const [dragCard, setDragCard] = useState<string | null>(null);
+  const [dragOverLane, setDragOverLane] = useState<number | null>(null);
+  const [laneAnnouncement, setLaneAnnouncement] = useState<{ laneIndex: number; won: boolean } | null>(null);
   const [hubTab, setHubTab] = useState<HubTab>('play');
   const [joinInput, setJoinInput] = useState(initialRoomCode ?? '');
   const [copied, setCopied] = useState(false);
@@ -639,12 +857,39 @@ export function NexusClashGame({ wsUrl, gameId, initialRoomCode, quickPlay: isQu
   const [customExpanded, setCustomExpanded] = useState(false);
   const [chatVisible, setChatVisible] = useState(false);
   const [shopSubTab, setShopSubTab] = useState<'packs' | 'shards'>('packs');
+  const [shardRevealCard, setShardRevealCard] = useState<string | null>(null);
   const [showDailyCalendar, setShowDailyCalendar] = useState(false);
   const [showTutorial, setShowTutorial] = useState(false);
   const [botDifficulty, setBotDifficulty] = useState<NcBotDifficulty>('medium');
+  const [emotePickerOpen, setEmotePickerOpen] = useState(false);
+  const [emoteCooldown, setEmoteCooldown] = useState(false);
+  const [receivedEmote, setReceivedEmote] = useState<{ emoteId: NcEmoteId; key: number } | null>(null);
+  const emoteKeyRef = useRef(0);
 
   const { chatOpen, setChatOpen, unread } = useUnreadMessages(mp);
   useAutoJoin(mp, initialRoomCode, isQuickPlay, 'nexusclash');
+
+  // Emote system: listen for incoming emotes
+  useEffect(() => {
+    const sock = mp.socketRef?.current;
+    if (!sock) return;
+    const handler = (data: { emoteId: string; playerIndex: number }) => {
+      emoteKeyRef.current += 1;
+      setReceivedEmote({ emoteId: data.emoteId as NcEmoteId, key: emoteKeyRef.current });
+      // Auto-clear after animation
+      setTimeout(() => setReceivedEmote(prev => prev?.key === emoteKeyRef.current ? null : prev), 2500);
+    };
+    sock.on('nc_emote', handler);
+    return () => { sock.off('nc_emote', handler); };
+  }, [mp.socketRef]);
+
+  const sendEmote = useCallback((emoteId: NcEmoteId) => {
+    if (emoteCooldown || !mp.roomCode) return;
+    mp.sendAction({ type: 'nc_emote', emoteId } as NexusClashAction);
+    setEmotePickerOpen(false);
+    setEmoteCooldown(true);
+    setTimeout(() => setEmoteCooldown(false), 3000);
+  }, [emoteCooldown, mp.roomCode, mp.sendAction]);
 
   // Auto-show tutorial on first visit
   useEffect(() => {
@@ -700,6 +945,33 @@ export function NexusClashGame({ wsUrl, gameId, initialRoomCode, quickPlay: isQu
   const prevTugRef = useRef<[number, number, number] | null>(null);
   const prevRoundRef = useRef<number>(0);
   const floatIdRef = useRef(0);
+  const prevLockedRef = useRef<[boolean, boolean, boolean]>([false, false, false]);
+
+  // Detect new breakthroughs and show announcement
+  useEffect(() => {
+    if (!gs) return;
+    const prevLocked = prevLockedRef.current;
+    const announcements: { laneIndex: number; won: boolean }[] = [];
+    for (let i = 0; i < 3; i++) {
+      const lane = gs.lanes[i];
+      if (lane.locked && !prevLocked[i]) {
+        const won = myIdx !== null && lane.breakthroughWinner === myIdx;
+        announcements.push({ laneIndex: i, won });
+      }
+    }
+    prevLockedRef.current = [gs.lanes[0].locked, gs.lanes[1].locked, gs.lanes[2].locked];
+    if (announcements.length > 0) {
+      // Show last breakthrough announcement (if multiple, show sequentially)
+      let delay = 0;
+      for (const a of announcements) {
+        setTimeout(() => {
+          setLaneAnnouncement(a);
+          setTimeout(() => setLaneAnnouncement(prev => prev?.laneIndex === a.laneIndex ? null : prev), 2500);
+        }, delay);
+        delay += 2800;
+      }
+    }
+  }, [gs?.lanes[0]?.locked, gs?.lanes[1]?.locked, gs?.lanes[2]?.locked, gs, myIdx]); // eslint-disable-line
 
   // Snapshot tug values BEFORE each resolution so we can animate from old → new
   // Detect resolution by: round number increased AND resolveLog has card_revealed events
@@ -757,7 +1029,7 @@ export function NexusClashGame({ wsUrl, gameId, initialRoomCode, quickPlay: isQu
 
     // Group events by phase type
     const cardEvents = events.filter(e => e.type === 'card_revealed');
-    const abilityEvents = events.filter(e => e.type === 'ability_triggered' || e.type === 'card_moved' || e.type === 'card_destroyed');
+    const abilityEvents = events.filter(e => e.type === 'ability_triggered' || e.type === 'card_moved' || e.type === 'card_destroyed' || e.type === 'ability_fizzled' || e.type === 'deck_recycled' || e.type === 'modifier_rotated');
     const pushEvents = events.filter(e => e.type === 'push_calculated');
     const btEvents = events.filter(e => e.type === 'breakthrough');
 
@@ -826,6 +1098,38 @@ export function NexusClashGame({ wsUrl, gameId, initialRoomCode, quickPlay: isQu
                   return { ...prev, floatingTexts: prev.floatingTexts.filter(f => f.id !== fid) };
                 });
               }, 1200);
+            } else if (ev.type === 'ability_fizzled') {
+              const fizzleLabel = ev.reason === 'no_target' ? t('nc.fizzle.noTarget') : ev.reason === 'shielded' ? t('nc.fizzle.shielded') : t('nc.fizzle.indestructible');
+              const laneIdx = findCardLane(gs, ev.cardUid);
+              if (laneIdx !== -1) {
+                const fid = ++floatIdRef.current;
+                newFloats.push({ id: fid, laneIndex: laneIdx, text: fizzleLabel, color: '#6b7280', y: 45 });
+                setTimeout(() => {
+                  setResolveAnim(prev => {
+                    if (!prev) return null;
+                    return { ...prev, floatingTexts: prev.floatingTexts.filter(f => f.id !== fid) };
+                  });
+                }, 1200);
+              }
+            } else if (ev.type === 'deck_recycled') {
+              const fid = ++floatIdRef.current;
+              // Show at the center lane (lane 1) for visibility
+              newFloats.push({ id: fid, laneIndex: 1, text: `♻ ${t('nc.deck.recycled')}`, color: '#67e8f9', y: 35 });
+              setTimeout(() => {
+                setResolveAnim(prev => {
+                  if (!prev) return null;
+                  return { ...prev, floatingTexts: prev.floatingTexts.filter(f => f.id !== fid) };
+                });
+              }, 1800);
+            } else if (ev.type === 'modifier_rotated') {
+              const fid = ++floatIdRef.current;
+              newFloats.push({ id: fid, laneIndex: ev.laneIndex, text: `🔄 ${t(`nc.modifier.${ev.newModifier}`)}`, color: '#c9a84c', y: 30 });
+              setTimeout(() => {
+                setResolveAnim(prev => {
+                  if (!prev) return null;
+                  return { ...prev, floatingTexts: prev.floatingTexts.filter(f => f.id !== fid) };
+                });
+              }, 2000);
             }
 
             setResolveAnim(prev => prev ? {
@@ -943,6 +1247,66 @@ export function NexusClashGame({ wsUrl, gameId, initialRoomCode, quickPlay: isQu
     setSelectedCard(null);
   }, [haveConfirmed, gs, mp]);
 
+  // Drag and drop
+  const handleDragStart = useCallback((e: React.DragEvent, cardId: string) => {
+    if (haveConfirmed || mp.phase !== 'playing' || mp.isSpectator) return;
+    if (gs?.phase !== 'placing') return;
+    const def = NC_CARD_MAP[cardId];
+    if (!def || def.cost > availableMana) { e.preventDefault(); return; }
+    setDragCard(cardId);
+    setSelectedCard(null);
+    e.dataTransfer.effectAllowed = 'move';
+    e.dataTransfer.setData('text/plain', cardId);
+  }, [haveConfirmed, mp.phase, mp.isSpectator, gs?.phase, availableMana]);
+
+  const handleDragEnd = useCallback(() => {
+    setDragCard(null);
+    setDragOverLane(null);
+  }, []);
+
+  const handleLaneDragOver = useCallback((e: React.DragEvent, laneIndex: number) => {
+    if (!dragCard || !gs) return;
+    if (gs.lanes[laneIndex].locked) return;
+    e.preventDefault();
+    e.dataTransfer.dropEffect = 'move';
+    setDragOverLane(laneIndex);
+  }, [dragCard, gs]);
+
+  const handleLaneDragLeave = useCallback(() => {
+    setDragOverLane(null);
+  }, []);
+
+  const handleLaneDrop = useCallback((e: React.DragEvent, laneIndex: 0 | 1 | 2) => {
+    e.preventDefault();
+    if (!dragCard || !gs || haveConfirmed || mp.isSpectator) return;
+    if (gs.phase !== 'placing') return;
+    if (gs.lanes[laneIndex].locked) return;
+    const def = NC_CARD_MAP[dragCard];
+    if (!def || def.cost > availableMana) return;
+    mp.sendAction({ type: 'nc_place', cardId: dragCard, laneIndex } as NexusClashAction);
+    ncAudio.cardPlace();
+    setDragCard(null);
+    setDragOverLane(null);
+    setSelectedCard(null);
+  }, [dragCard, gs, haveConfirmed, mp, availableMana]);
+
+  // Match stats for end screen
+  const [matchStats, setMatchStats] = useState<{
+    won: boolean;
+    draw: boolean;
+    coins: number;
+    bpXp: number;
+    rankDelta: number;
+    cardsPlayed: number;
+    cardsDestroyed: number;
+    breakthroughs: [number, number];
+    lanesWon: number;
+    totalPower: number;
+    abilitiesTriggered: number;
+    rounds: number;
+    questsProgressed: string[];
+  } | null>(null);
+
   // Track match end for profile
   const prevStatusRef = useRef(gs?.status);
   useEffect(() => {
@@ -964,6 +1328,9 @@ export function NexusClashGame({ wsUrl, gameId, initialRoomCode, quickPlay: isQu
         }
         if (ev.type === 'card_destroyed' && ev.owner !== myIdx) destroyedCards++;
       }
+      const selectedDeck = ncProfile.profile.decks.find(d => d.id === ncProfile.profile.selectedDeckId);
+      const isDraw = gs.status === 'draw';
+      const oppName = gs.botDifficulty ? 'Bot' : (oppIdx !== null ? (mp.players.find(p => p.index === oppIdx)?.nickname ?? 'Opponent') : 'Opponent');
       ncProfile.trackMatchEnd(
         won,
         gs.breakthroughs[myIdx],
@@ -971,7 +1338,72 @@ export function NexusClashGame({ wsUrl, gameId, initialRoomCode, quickPlay: isQu
         [...tagSet],
         destroyedCards,
         uniqueCardSet.size,
+        {
+          isDraw,
+          opponent: oppName,
+          oppBreakthroughs: oppIdx !== null ? gs.breakthroughs[oppIdx] : 0,
+          rounds: gs.round,
+          deckName: selectedDeck?.name ?? 'Unknown',
+        },
       );
+
+      // Compute detailed match stats for end screen
+      let totalCardsPlayed = 0;
+      let totalCardsDestroyed = 0;
+      let totalAbilities = 0;
+      for (const h of gs.history) {
+        totalCardsPlayed += h.plays[myIdx].length;
+      }
+      for (const ev of gs.resolveLog) {
+        if (ev.type === 'card_revealed' && ev.owner === myIdx) totalCardsPlayed++;
+        if (ev.type === 'card_destroyed' && ev.owner !== myIdx) totalCardsDestroyed++;
+        if (ev.type === 'ability_triggered') totalAbilities++;
+      }
+      let totalPower = 0;
+      let lanesWon = 0;
+      for (const lane of gs.lanes) {
+        for (const card of lane.cards[myIdx]) {
+          totalPower += card.power;
+        }
+        if (lane.breakthroughWinner === myIdx) lanesWon++;
+      }
+      const questsProgressed: string[] = [];
+      const preQuests = ncProfile.profile.quests;
+      for (const q of preQuests) {
+        if (q.completed) continue;
+        let inc = 0;
+        switch (q.goalType) {
+          case 'play_matches': inc = 1; break;
+          case 'win_matches': inc = won ? 1 : 0; break;
+          case 'place_cards': inc = cardsPlayed; break;
+          case 'achieve_breakthrough': inc = gs.breakthroughs[myIdx]; break;
+          case 'destroy_enemy_cards': inc = destroyedCards; break;
+          case 'play_unique_cards': inc = uniqueCardSet.size; break;
+          case 'play_tag_cards': inc = [...tagSet].filter(tg => tg === q.goalParam).length; break;
+          default: break;
+        }
+        if (inc > 0 && !questsProgressed.includes(q.goalType)) {
+          questsProgressed.push(q.goalType);
+        }
+      }
+      const matchCoins = won ? NC_WIN_COINS : NC_LOSS_COINS;
+      const matchBpXp = won ? NC_BP_WIN_XP : NC_BP_LOSS_XP;
+      const matchRankDelta = won ? NC_RANK_WIN_POINTS : -NC_RANK_LOSS_POINTS;
+      setMatchStats({
+        won,
+        draw: isDraw,
+        coins: isDraw ? NC_LOSS_COINS : matchCoins,
+        bpXp: matchBpXp,
+        rankDelta: isDraw ? 0 : matchRankDelta,
+        cardsPlayed: totalCardsPlayed,
+        cardsDestroyed: totalCardsDestroyed,
+        breakthroughs: gs.breakthroughs,
+        lanesWon,
+        totalPower,
+        abilitiesTriggered: totalAbilities,
+        rounds: gs.round,
+        questsProgressed,
+      });
     }
     prevStatusRef.current = gs.status;
   }, [gs?.status]); // eslint-disable-line
@@ -1069,6 +1501,53 @@ export function NexusClashGame({ wsUrl, gameId, initialRoomCode, quickPlay: isQu
                 {mp.connection === 'connected' ? 'LIVE' : mp.connection === 'connecting' ? '...' : 'OFF'}
               </span>
             </div>
+            {/* Emote toggle */}
+            {!mp.isSpectator && (
+              <div className="relative">
+                <button
+                  onClick={() => setEmotePickerOpen(v => !v)}
+                  className="nc-btn-ghost px-3 py-1.5 rounded text-sm transition-all"
+                  style={{
+                    color: emoteCooldown ? '#4a4a5a' : '#c9a84c',
+                    border: '1px solid #2a2a3a',
+                    background: '#0a0a1299',
+                    cursor: emoteCooldown ? 'not-allowed' : 'pointer',
+                  }}
+                  disabled={emoteCooldown}
+                  title="Emotes"
+                >
+                  <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <circle cx="12" cy="12" r="10"/>
+                    <path d="M8 14s1.5 2 4 2 4-2 4-2"/>
+                    <line x1="9" y1="9" x2="9.01" y2="9"/>
+                    <line x1="15" y1="9" x2="15.01" y2="9"/>
+                  </svg>
+                </button>
+                {emotePickerOpen && (
+                  <div className="absolute top-full right-0 mt-1.5 flex gap-1 p-1.5 rounded-lg z-50 nc-emote-picker-enter" style={{
+                    background: 'linear-gradient(135deg, #1a1a2e, #12121f)',
+                    border: '1px solid #c9a84c44',
+                    boxShadow: '0 8px 32px rgba(0,0,0,0.6)',
+                  }}>
+                    {(['gg', 'wow', 'thanks', 'oops', 'strong', 'no'] as NcEmoteId[]).map(eid => (
+                      <button
+                        key={eid}
+                        onClick={() => sendEmote(eid)}
+                        className="px-2.5 py-1.5 rounded text-xs font-bold uppercase tracking-wider transition-all hover:scale-110 active:scale-95"
+                        style={{
+                          color: '#e8d48b',
+                          background: '#0a0a1299',
+                          border: '1px solid #2a2a3a',
+                          whiteSpace: 'nowrap',
+                        }}
+                      >
+                        {t(`nc.emote.${eid}`)}
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </div>
+            )}
             {/* Chat toggle */}
             <button
               onClick={() => setChatVisible(v => !v)}
@@ -1099,6 +1578,29 @@ export function NexusClashGame({ wsUrl, gameId, initialRoomCode, quickPlay: isQu
           label={t('game.ready.waiting')}
         />
         <ReconnectBanner mp={mp} />
+
+        {/* Received emote floating overlay */}
+        {receivedEmote && (
+          <div
+            key={receivedEmote.key}
+            className="fixed top-1/4 left-1/2 -translate-x-1/2 z-50 pointer-events-none nc-emote-float"
+          >
+            <div className="px-6 py-3 rounded-xl text-2xl font-black uppercase tracking-[0.15em]" style={{
+              background: 'linear-gradient(135deg, #1a1a2eee, #12121fee)',
+              border: '2px solid #c9a84c88',
+              color: '#e8d48b',
+              boxShadow: '0 0 40px rgba(201,168,76,0.3), 0 12px 40px rgba(0,0,0,0.5)',
+              textShadow: '0 0 12px rgba(201,168,76,0.4)',
+            }}>
+              {t(`nc.emote.${receivedEmote.emoteId}`)}
+            </div>
+          </div>
+        )}
+
+        {/* Close emote picker on outside click */}
+        {emotePickerOpen && (
+          <div className="fixed inset-0 z-40" onClick={() => setEmotePickerOpen(false)} />
+        )}
 
         {/* Error */}
         {mp.error && (
@@ -1251,9 +1753,43 @@ export function NexusClashGame({ wsUrl, gameId, initialRoomCode, quickPlay: isQu
                   onLaneClick={handleLaneClick}
                   t={t}
                   resolveAnim={resolveAnim}
+                  isDragOver={dragOverLane === i}
+                  onDragOver={(e) => handleLaneDragOver(e, i)}
+                  onDragLeave={handleLaneDragLeave}
+                  onDrop={(e) => handleLaneDrop(e, i as 0 | 1 | 2)}
                 />
               ))}
             </div>
+
+            {/* Breakthrough announcement */}
+            {laneAnnouncement && (
+              <div className="nc-lane-announcement" style={{
+                background: laneAnnouncement.won
+                  ? 'linear-gradient(135deg, rgba(74,125,255,0.15), rgba(74,125,255,0.05))'
+                  : 'linear-gradient(135deg, rgba(239,68,68,0.15), rgba(239,68,68,0.05))',
+                border: `1px solid ${laneAnnouncement.won ? '#4a7dff44' : '#ef444444'}`,
+                borderRadius: '8px',
+                padding: '8px 16px',
+                textAlign: 'center',
+              }}>
+                <div className="flex items-center justify-center gap-2">
+                  <svg viewBox="0 0 16 16" className="w-4 h-4">
+                    <polygon points="8,1 10,6 15,6 11,9 12,14 8,11 4,14 5,9 1,6 6,6"
+                      fill={laneAnnouncement.won ? '#4a7dff' : '#ef4444'} />
+                  </svg>
+                  <span className="text-sm font-black uppercase tracking-wider" style={{
+                    color: laneAnnouncement.won ? '#4a7dff' : '#ef4444',
+                    textShadow: `0 0 12px ${laneAnnouncement.won ? 'rgba(74,125,255,0.5)' : 'rgba(239,68,68,0.5)'}`,
+                  }}>
+                    {t('nc.lane')} {laneAnnouncement.laneIndex + 1} {laneAnnouncement.won ? t('nc.laneCaptured') : t('nc.laneLost')}
+                  </span>
+                  <svg viewBox="0 0 16 16" className="w-4 h-4">
+                    <polygon points="8,1 10,6 15,6 11,9 12,14 8,11 4,14 5,9 1,6 6,6"
+                      fill={laneAnnouncement.won ? '#4a7dff' : '#ef4444'} />
+                  </svg>
+                </div>
+              </div>
+            )}
 
             {/* Pending plays undo area */}
             {myPending && myPending.length > 0 && !haveConfirmed && !resolveAnim && (
@@ -1295,6 +1831,27 @@ export function NexusClashGame({ wsUrl, gameId, initialRoomCode, quickPlay: isQu
                     ))}
                   </div>
                   <span className="text-xs font-bold tabular-nums" style={{ color: '#4a7dff' }}>{availableMana}/{myMaxMana}</span>
+                  {/* Deck & Discard counters */}
+                  {gs.decks?.[myIdx] != null && (
+                    <div className="flex items-center gap-3 ml-3 pl-3" style={{ borderLeft: '1px solid #1e1e3a' }}>
+                      <div className="flex items-center gap-1" title={t('nc.deck.remaining')}>
+                        <svg viewBox="0 0 16 16" className="w-3.5 h-3.5">
+                          <rect x="3" y="2" width="10" height="12" rx="1.5" fill="none" stroke="#4a7dff" strokeWidth="1.2"/>
+                          <rect x="5" y="4" width="6" height="1" rx="0.5" fill="#4a7dff" opacity="0.4"/>
+                          <rect x="5" y="6.5" width="6" height="1" rx="0.5" fill="#4a7dff" opacity="0.3"/>
+                          <rect x="5" y="9" width="4" height="1" rx="0.5" fill="#4a7dff" opacity="0.2"/>
+                        </svg>
+                        <span className="text-[10px] font-bold tabular-nums" style={{ color: '#4a7dff88' }}>{gs.decks[myIdx].length}</span>
+                      </div>
+                      <div className="flex items-center gap-1" title={t('nc.deck.discard')}>
+                        <svg viewBox="0 0 16 16" className="w-3.5 h-3.5">
+                          <rect x="3" y="2" width="10" height="12" rx="1.5" fill="none" stroke="#5a5a6a" strokeWidth="1.2" strokeDasharray="2 1"/>
+                          <path d="M6 7L8 9.5L10 7" fill="none" stroke="#5a5a6a" strokeWidth="1" strokeLinecap="round"/>
+                        </svg>
+                        <span className="text-[10px] font-bold tabular-nums" style={{ color: '#4a4a5a' }}>{gs.discardPiles[myIdx].length}</span>
+                      </div>
+                    </div>
+                  )}
                 </div>
 
                 {!mp.isSpectator && (
@@ -1385,17 +1942,27 @@ export function NexusClashGame({ wsUrl, gameId, initialRoomCode, quickPlay: isQu
                 }}>
                   <div className="h-px" style={{ background: 'linear-gradient(to right, transparent, #c9a84c33, transparent)' }} />
                 </div>
-                <p className="text-[10px] font-bold uppercase tracking-[0.2em] px-2" style={{ color: '#c9a84c55' }}>{t('nc.yourHand')}</p>
+                <div className="flex items-center gap-2 px-2">
+                  <p className="text-[10px] font-bold uppercase tracking-[0.2em]" style={{ color: '#c9a84c55' }}>{t('nc.yourHand')}</p>
+                  <span className="text-[10px] font-bold tabular-nums" style={{ color: '#4a7dff66' }}>({myHand.length})</span>
+                </div>
                 <div className="flex gap-3 flex-wrap justify-center pb-4">
                   {myHand.map((cardId, i) => {
                     const def = NC_CARD_MAP[cardId];
                     const canAfford = def ? def.cost <= availableMana : false;
                     const isSelected = selectedCard === cardId;
+                    const isDragging = dragCard === cardId;
                     return (
                       <CardWithTooltip key={`${cardId}-${i}`} cardId={cardId} t={t} className={[
                         'transition-all duration-200',
                         isSelected ? 'nc-hand-card-selected' : 'nc-hand-card',
-                      ].join(' ')}>
+                        isDragging ? 'nc-hand-card-dragging' : '',
+                        canAfford && !haveConfirmed ? 'cursor-grab' : '',
+                      ].join(' ')}
+                        draggable={canAfford && !haveConfirmed}
+                        onDragStart={(e: React.DragEvent) => handleDragStart(e, cardId)}
+                        onDragEnd={handleDragEnd}
+                      >
                         <NexusClashCard
                           card={cardId}
                           selected={isSelected}
@@ -1417,9 +1984,10 @@ export function NexusClashGame({ wsUrl, gameId, initialRoomCode, quickPlay: isQu
         )}
 
         {/* ── Ended phase ────────────────────────────────────────────────── */}
-        {mp.phase === 'ended' && gs && (
-          <div className="flex flex-col items-center gap-8 py-12 relative z-10">
-            {gs.status === 'win' && gs.winner === (myIdx !== null ? gs.playerIds[myIdx] : null) && (
+        {mp.phase === 'ended' && gs && matchStats && (
+          <div className="flex flex-col items-center gap-6 py-8 relative z-10 nc-phase-enter">
+            {/* Confetti on win */}
+            {matchStats.won && (
               <div className="fixed inset-0 pointer-events-none z-[60]">
                 {Array.from({ length: 30 }).map((_, i) => (
                   <div
@@ -1438,67 +2006,94 @@ export function NexusClashGame({ wsUrl, gameId, initialRoomCode, quickPlay: isQu
                 ))}
               </div>
             )}
-            {gs.status === 'win' && myIdx !== null && (
-              <div className="flex flex-col items-center gap-3">
-                {gs.winner === gs.playerIds[myIdx] ? (
-                  <>
-                    <div className="nc-victory-text text-5xl font-black uppercase tracking-[0.15em]" style={{
-                      background: 'linear-gradient(to bottom, #e8d48b, #c9a84c)',
-                      WebkitBackgroundClip: 'text',
-                      WebkitTextFillColor: 'transparent',
-                      textShadow: 'none',
-                      filter: 'drop-shadow(0 0 20px rgba(201,168,76,0.5))',
-                    }}>
-                      {t('nc.win')}
-                    </div>
-                    <div className="flex items-center gap-1.5 text-sm" style={{ color: '#c9a84c88' }}>
-                      <span>+30</span>
-                      <CoinIcon size={14} />
-                    </div>
-                  </>
-                ) : (
-                  <>
-                    <div className="text-5xl font-black uppercase tracking-[0.15em] nc-defeat-text" style={{
-                      color: '#3a3a4a',
-                    }}>
-                      {t('nc.lose')}
-                    </div>
-                    <div className="flex items-center gap-1.5 text-sm" style={{ color: '#4a4a5a' }}>
-                      <span>+10</span>
-                      <CoinIcon size={14} />
-                    </div>
-                  </>
-                )}
-              </div>
-            )}
-            {gs.status === 'draw' && (
-              <div className="text-4xl font-black uppercase tracking-[0.15em]" style={{ color: '#6a6a7a' }}>
-                {t('nc.draw')}
-              </div>
-            )}
 
-            {/* Final breakthroughs */}
-            <div className="flex items-center gap-8">
-              <div className="flex flex-col items-center gap-2 px-6 py-4 rounded-lg" style={{
-                background: 'linear-gradient(135deg, #0a0a2a, #12121f)',
-                border: '1px solid #1a1a4a',
-              }}>
-                <span className="text-xs uppercase tracking-wider font-semibold" style={{ color: '#4a7dff88' }}>{p0nick}</span>
-                <span className="text-3xl font-black" style={{ color: '#4a7dff' }}>{gs.breakthroughs[0]}</span>
-              </div>
-              <div className="flex flex-col items-center gap-1">
-                <svg viewBox="0 0 20 10" className="w-6 h-3" style={{ color: '#3a3a4a' }}>
-                  <line x1="2" y1="5" x2="18" y2="5" stroke="currentColor" strokeWidth="1"/>
-                </svg>
-              </div>
-              <div className="flex flex-col items-center gap-2 px-6 py-4 rounded-lg" style={{
-                background: 'linear-gradient(135deg, #2a0a0a, #12121f)',
-                border: '1px solid #4a1a1a',
-              }}>
-                <span className="text-xs uppercase tracking-wider font-semibold" style={{ color: '#ef444488' }}>{p1nick}</span>
-                <span className="text-3xl font-black" style={{ color: '#ef4444' }}>{gs.breakthroughs[1]}</span>
+            {/* Result banner */}
+            <div className="flex flex-col items-center gap-2">
+              {matchStats.draw ? (
+                <div className="text-4xl font-black uppercase tracking-[0.15em]" style={{ color: '#6a6a7a' }}>{t('nc.draw')}</div>
+              ) : matchStats.won ? (
+                <div className="nc-victory-text text-4xl font-black uppercase tracking-[0.15em]">{t('nc.win')}</div>
+              ) : (
+                <div className="text-4xl font-black uppercase tracking-[0.15em] nc-defeat-text">{t('nc.lose')}</div>
+              )}
+              {/* Coin reward */}
+              <div className="flex items-center gap-3">
+                <div className="flex items-center gap-1.5 text-lg font-bold" style={{ color: matchStats.won ? '#c9a84c' : '#4a4a5a' }}>
+                  <span>+{matchStats.coins}</span>
+                  <CoinIcon size={18} />
+                </div>
+                <div className="flex items-center gap-1.5 text-base font-bold" style={{ color: '#4a7dff' }}>
+                  <span>+{matchStats.bpXp}</span>
+                  <span className="text-xs font-black uppercase">{t('nc.bp.bpXp')}</span>
+                </div>
+                <div className="flex items-center gap-1.5 text-base font-bold" style={{ color: matchStats.rankDelta > 0 ? '#4ade80' : '#ef4444' }}>
+                  <span>{matchStats.rankDelta > 0 ? '+' : ''}{matchStats.rankDelta}</span>
+                  <span className="text-xs font-black uppercase">RP</span>
+                </div>
               </div>
             </div>
+
+            {/* Stats grid */}
+            <div className="grid grid-cols-2 gap-3 w-full max-w-sm">
+              {[
+                { label: t('nc.stats.rounds'), value: matchStats.rounds, icon: '\u2694' },
+                { label: t('nc.stats.cardsPlayed'), value: matchStats.cardsPlayed, icon: '\uD83C\uDCA0' },
+                { label: t('nc.stats.cardsDestroyed'), value: matchStats.cardsDestroyed, icon: '\uD83D\uDCA5' },
+                { label: t('nc.stats.abilitiesUsed'), value: matchStats.abilitiesTriggered, icon: '\u2726' },
+                { label: t('nc.stats.totalPower'), value: matchStats.totalPower, icon: '\u26A1' },
+                { label: t('nc.stats.lanesWon'), value: `${matchStats.lanesWon}/3`, icon: '\uD83C\uDFC6' },
+              ].map((stat, si) => (
+                <div key={si} className="flex items-center gap-2.5 px-3 py-2.5 rounded-lg" style={{
+                  background: 'linear-gradient(135deg, #12121f, #0e0e1a)',
+                  border: '1px solid #1e1e3a',
+                }}>
+                  <span className="text-base">{stat.icon}</span>
+                  <div className="flex flex-col">
+                    <span className="text-xs font-bold tabular-nums" style={{ color: '#e0e0ea' }}>{stat.value}</span>
+                    <span className="text-[9px] uppercase tracking-wider" style={{ color: '#4a4a5a' }}>{stat.label}</span>
+                  </div>
+                </div>
+              ))}
+            </div>
+
+            {/* Breakthrough lane results */}
+            <div className="flex gap-3">
+              {gs.lanes.map((lane, li) => {
+                const laneWon = lane.breakthroughWinner === myIdx;
+                const laneLost = lane.breakthroughWinner !== null && lane.breakthroughWinner !== myIdx;
+                return (
+                  <div key={li} className="flex flex-col items-center gap-1 px-4 py-2 rounded" style={{
+                    background: laneWon ? '#1a1a0822' : laneLost ? '#1a0a0a22' : '#12121f',
+                    border: `1px solid ${laneWon ? '#c9a84c44' : laneLost ? '#ff4a4a22' : '#1e1e3a'}`,
+                  }}>
+                    <span className="text-[10px] uppercase tracking-wider" style={{ color: '#5a5a6a' }}>{t('nc.lane')} {li + 1}</span>
+                    <div className="text-xs font-bold" style={{
+                      color: laneWon ? '#c9a84c' : laneLost ? '#ff6b6b' : '#3a3a4a',
+                    }}>
+                      {laneWon ? '\u2713' : laneLost ? '\u2717' : '\u2014'}
+                    </div>
+                    <span className="text-[9px] tabular-nums" style={{ color: '#4a4a5a' }}>
+                      {Math.round(lane.tugValue)}%
+                    </span>
+                  </div>
+                );
+              })}
+            </div>
+
+            {/* Quest progress hints */}
+            {matchStats.questsProgressed.length > 0 && (
+              <div className="flex flex-wrap gap-1.5 justify-center">
+                {matchStats.questsProgressed.map((goal, qi) => (
+                  <span key={qi} className="text-[10px] px-2 py-0.5 rounded-full" style={{
+                    background: '#7c3aed22',
+                    border: '1px solid #7c3aed33',
+                    color: '#a78bfa',
+                  }}>
+                    {t(`nc.quest.goal.${goal}`)} &uarr;
+                  </span>
+                ))}
+              </div>
+            )}
 
             {/* Rematch */}
             {!mp.isSpectator && mp.playerCount === 2 && (
@@ -1558,10 +2153,96 @@ export function NexusClashGame({ wsUrl, gameId, initialRoomCode, quickPlay: isQu
 
           /* ── Card animations ──*/
           @keyframes nc-legendary-pulse {
-            0%, 100% { box-shadow: 0 0 12px rgba(201,168,76,0.3), inset 0 0 8px rgba(201,168,76,0.1); }
-            50% { box-shadow: 0 0 24px rgba(201,168,76,0.6), inset 0 0 16px rgba(201,168,76,0.15); }
+            0%, 100% { box-shadow: 0 0 16px rgba(201,168,76,0.4), 0 0 40px rgba(201,168,76,0.1), inset 0 0 10px rgba(201,168,76,0.1); }
+            50% { box-shadow: 0 0 30px rgba(201,168,76,0.7), 0 0 60px rgba(201,168,76,0.2), inset 0 0 20px rgba(201,168,76,0.15); }
           }
-          .nc-legendary-pulse { animation: nc-legendary-pulse 2s ease-in-out infinite; }
+          .nc-legendary-pulse { animation: nc-legendary-pulse 2.5s ease-in-out infinite; }
+
+          /* Legendary holographic sweep */
+          @keyframes nc-holo-sweep {
+            0% { transform: translateX(-100%) rotate(-15deg); }
+            100% { transform: translateX(200%) rotate(-15deg); }
+          }
+          .nc-legendary-holo-sweep {
+            background: linear-gradient(
+              105deg,
+              transparent 20%,
+              rgba(201,168,76,0.06) 35%,
+              rgba(255,255,255,0.1) 42%,
+              rgba(201,168,76,0.08) 48%,
+              rgba(124,58,237,0.04) 55%,
+              transparent 70%
+            );
+            animation: nc-holo-sweep 4s ease-in-out infinite;
+          }
+
+          /* Legendary sparkle particles */
+          @keyframes nc-sparkle-anim {
+            0%, 100% { opacity: 0; transform: scale(0); }
+            50% { opacity: 1; transform: scale(1); }
+          }
+          .nc-sparkle {
+            position: absolute;
+            width: 3px;
+            height: 3px;
+            background: #c9a84c;
+            border-radius: 50%;
+            box-shadow: 0 0 4px #c9a84c, 0 0 8px rgba(201,168,76,0.5);
+            animation: nc-sparkle-anim 2s ease-in-out infinite;
+          }
+
+          /* Legendary animated border glow */
+          @keyframes nc-border-glow-rotate {
+            0% { background-position: 0% 50%; }
+            100% { background-position: 200% 50%; }
+          }
+          .nc-legendary-border-glow {
+            background: linear-gradient(90deg, transparent, rgba(201,168,76,0.3), rgba(255,215,0,0.15), rgba(201,168,76,0.3), transparent);
+            background-size: 200% 100%;
+            animation: nc-border-glow-rotate 3s linear infinite;
+            mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
+            mask-composite: exclude;
+            -webkit-mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
+            -webkit-mask-composite: xor;
+            padding: 2px;
+          }
+
+          /* Legendary preview conic animated border */
+          @keyframes nc-conic-spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+          }
+          .nc-legendary-conic-border {
+            overflow: hidden;
+          }
+          .nc-legendary-conic-border::before {
+            content: '';
+            position: absolute;
+            inset: -50%;
+            background: conic-gradient(
+              from 0deg,
+              #c9a84c00, #c9a84c, #ffd700, #c9a84caa, #c9a84c00,
+              #c9a84c00, #7c3aed88, #c9a84c00,
+              #c9a84c00, #c9a84c, #ffd700, #c9a84caa, #c9a84c00
+            );
+            animation: nc-conic-spin 3s linear infinite;
+          }
+          .nc-legendary-conic-border::after {
+            content: '';
+            position: absolute;
+            inset: 3px;
+            border-radius: 11px;
+            background: #15100a;
+          }
+
+          /* Legendary preview aura pulse */
+          @keyframes nc-aura-pulse {
+            0%, 100% { opacity: 0.5; transform: scale(1); }
+            50% { opacity: 1; transform: scale(1.05); }
+          }
+          .nc-legendary-preview-aura {
+            animation: nc-aura-pulse 2s ease-in-out infinite;
+          }
 
           @keyframes nc-epic-shimmer {
             0% { background-position: -200% center; }
@@ -1573,17 +2254,27 @@ export function NexusClashGame({ wsUrl, gameId, initialRoomCode, quickPlay: isQu
           }
 
           @keyframes nc-legendary-reveal {
-            0% { transform: scale(0.5) rotate(-5deg); filter: brightness(3); }
-            50% { transform: scale(1.15) rotate(2deg); filter: brightness(2); }
+            0% { transform: scale(0.5) rotate(-5deg); filter: brightness(3) saturate(2); }
+            30% { transform: scale(1.2) rotate(2deg); filter: brightness(2.5) saturate(1.5); }
+            60% { transform: scale(0.95) rotate(-1deg); filter: brightness(1.5); }
             100% { transform: scale(1) rotate(0deg); filter: brightness(1); }
           }
-          .nc-legendary-reveal { animation: nc-legendary-reveal 0.8s ease-out; }
+          .nc-legendary-reveal { animation: nc-legendary-reveal 1s ease-out; }
 
           @keyframes nc-epic-reveal {
             0% { transform: scale(0.5); filter: brightness(2); }
             100% { transform: scale(1); filter: brightness(1); }
           }
           .nc-epic-reveal { animation: nc-epic-reveal 0.6s ease-out; }
+
+          /* ── Shard shop purchase reveal ──*/
+          @keyframes nc-shard-reveal {
+            0% { transform: scale(0.3) rotateZ(-5deg); opacity: 0; filter: brightness(3); }
+            40% { transform: scale(1.1) rotateZ(1deg); opacity: 1; filter: brightness(1.6); }
+            60% { transform: scale(0.96) rotateZ(-0.5deg); filter: brightness(1.2); }
+            80% { transform: scale(1.02) rotateZ(0deg); filter: brightness(1.05); }
+            100% { transform: scale(1) rotateZ(0deg); filter: brightness(1); }
+          }
 
           /* ── Confirm button glow ──*/
           @keyframes nc-confirm-glow-anim {
@@ -1607,7 +2298,28 @@ export function NexusClashGame({ wsUrl, gameId, initialRoomCode, quickPlay: isQu
 
           /* ── Lane hover ──*/
           .nc-lane-hover:hover { border-color: #4a7dff44 !important; box-shadow: inset 0 0 30px rgba(74,125,255,0.05) !important; }
-          .nc-lane-locked { }
+          .nc-lane-locked { opacity: 0.75; }
+          .nc-lane-locked::after {
+            content: '';
+            position: absolute;
+            inset: 0;
+            border-radius: inherit;
+            pointer-events: none;
+            z-index: 5;
+          }
+
+          /* ── Drag-and-drop ── */
+          .nc-hand-card-dragging { opacity: 0.4; transform: scale(0.95); }
+          .nc-lane-drop-target { transform: scale(1.02); }
+
+          /* ── Lane announcement ── */
+          @keyframes nc-announce-in {
+            0% { opacity: 0; transform: translateY(-8px) scale(0.95); }
+            15% { opacity: 1; transform: translateY(0) scale(1); }
+            85% { opacity: 1; transform: translateY(0) scale(1); }
+            100% { opacity: 0; transform: translateY(4px) scale(0.98); }
+          }
+          .nc-lane-announcement { animation: nc-announce-in 2.5s ease-out forwards; }
 
           /* ── Timer critical ──*/
           @keyframes nc-timer-pulse {
@@ -1692,12 +2404,36 @@ export function NexusClashGame({ wsUrl, gameId, initialRoomCode, quickPlay: isQu
           }
           .nc-card-reveal { animation: nc-card-reveal-anim 0.5s ease-out; }
 
-          @keyframes nc-ability-glow-anim {
-            0% { box-shadow: 0 0 0 rgba(192,132,252,0); }
-            30% { box-shadow: 0 0 16px rgba(192,132,252,0.7), 0 0 32px rgba(192,132,252,0.3); }
-            100% { box-shadow: 0 0 4px rgba(192,132,252,0.2); }
+          @keyframes nc-glow-attack {
+            0% { box-shadow: 0 0 0 rgba(239,68,68,0); }
+            20% { box-shadow: 0 0 18px rgba(239,68,68,0.8), 0 0 36px rgba(239,68,68,0.3); }
+            100% { box-shadow: 0 0 4px rgba(239,68,68,0.15); }
           }
-          .nc-card-ability-glow { animation: nc-ability-glow-anim 0.8s ease-out; border-radius: 6px; }
+          @keyframes nc-glow-buff {
+            0% { box-shadow: 0 0 0 rgba(74,222,128,0); }
+            20% { box-shadow: 0 0 18px rgba(74,222,128,0.8), 0 0 36px rgba(74,222,128,0.3); }
+            100% { box-shadow: 0 0 4px rgba(74,222,128,0.15); }
+          }
+          @keyframes nc-glow-shield {
+            0% { box-shadow: 0 0 0 rgba(96,165,250,0); }
+            20% { box-shadow: 0 0 18px rgba(96,165,250,0.8), 0 0 36px rgba(96,165,250,0.3); }
+            100% { box-shadow: 0 0 4px rgba(96,165,250,0.15); }
+          }
+          @keyframes nc-glow-gold {
+            0% { box-shadow: 0 0 0 rgba(251,191,36,0); }
+            20% { box-shadow: 0 0 18px rgba(251,191,36,0.8), 0 0 36px rgba(251,191,36,0.3); }
+            100% { box-shadow: 0 0 4px rgba(251,191,36,0.15); }
+          }
+          @keyframes nc-glow-util {
+            0% { box-shadow: 0 0 0 rgba(192,132,252,0); }
+            20% { box-shadow: 0 0 18px rgba(192,132,252,0.8), 0 0 36px rgba(192,132,252,0.3); }
+            100% { box-shadow: 0 0 4px rgba(192,132,252,0.15); }
+          }
+          .nc-ability-glow-attack { animation: nc-glow-attack 0.8s ease-out; border-radius: 6px; }
+          .nc-ability-glow-buff { animation: nc-glow-buff 0.8s ease-out; border-radius: 6px; }
+          .nc-ability-glow-shield { animation: nc-glow-shield 0.8s ease-out; border-radius: 6px; }
+          .nc-ability-glow-gold { animation: nc-glow-gold 0.8s ease-out; border-radius: 6px; }
+          .nc-ability-glow-util { animation: nc-glow-util 0.8s ease-out; border-radius: 6px; }
 
           @keyframes nc-floating-text-anim {
             0% { opacity: 0; transform: translateX(-50%) translateY(0); }
@@ -1739,6 +2475,22 @@ export function NexusClashGame({ wsUrl, gameId, initialRoomCode, quickPlay: isQu
             50% { text-shadow: 0 0 20px rgba(251,191,36,0.8), 0 0 40px rgba(251,191,36,0.3); }
           }
           .nc-bt-text { animation: nc-bt-text-glow 1s ease-in-out infinite; }
+
+          /* ── Emote animations ──*/
+          @keyframes nc-emote-float-in {
+            0% { opacity: 0; transform: translate(-50%, 20px) scale(0.7); }
+            15% { opacity: 1; transform: translate(-50%, 0) scale(1.1); }
+            25% { transform: translate(-50%, 0) scale(1); }
+            75% { opacity: 1; transform: translate(-50%, 0) scale(1); }
+            100% { opacity: 0; transform: translate(-50%, -30px) scale(0.8); }
+          }
+          .nc-emote-float { animation: nc-emote-float-in 2.5s ease-out forwards; }
+
+          @keyframes nc-emote-picker-enter {
+            0% { opacity: 0; transform: translateY(-4px) scale(0.95); }
+            100% { opacity: 1; transform: translateY(0) scale(1); }
+          }
+          .nc-emote-picker-enter { animation: nc-emote-picker-enter 0.15s ease-out; }
         `}</style>
       </div>
     );
@@ -1752,12 +2504,14 @@ export function NexusClashGame({ wsUrl, gameId, initialRoomCode, quickPlay: isQu
     { id: 'shop', labelKey: 'nc.hub.shop' },
     { id: 'collection', labelKey: 'nc.hub.collection' },
     { id: 'quests', labelKey: 'nc.hub.quests' },
+    { id: 'battlepass', labelKey: 'nc.bp.title' },
   ];
 
   return (
-    <div className="nc-hub-bg w-full flex flex-col gap-0 min-h-[600px]" style={{
+    <div className="nc-hub-bg w-full flex flex-col gap-0" style={{
       minHeight: '100vh',
       color: '#e0e0e8',
+      background: '#0a0a12',
     }}>
       {/* Atmospheric noise overlay */}
       <div className="fixed inset-0 pointer-events-none z-0 nc-noise-overlay" style={{ opacity: 0.02 }} />
@@ -1943,14 +2697,14 @@ export function NexusClashGame({ wsUrl, gameId, initialRoomCode, quickPlay: isQu
 
         {/* ── PLAY TAB ──────────────────────────────────────────────────── */}
         {hubTab === 'play' && (
-          <div className="flex flex-col items-center gap-8 max-w-xl mx-auto nc-play-tab-enter">
+          <div className="flex flex-col items-center gap-8 max-w-2xl mx-auto nc-play-tab-enter">
             {/* Atmospheric center glow */}
             <div className="absolute top-0 left-1/2 -translate-x-1/2 w-[700px] h-[500px] pointer-events-none" style={{
               background: 'radial-gradient(ellipse at 50% 30%, rgba(124,58,237,0.08) 0%, rgba(74,125,255,0.03) 40%, transparent 70%)',
             }} />
 
             {/* ── Hero Play Button Section ── */}
-            <div className="relative w-full flex flex-col items-center py-4">
+            <div className="relative w-full flex flex-col items-center py-4 nc-phase-enter" style={{ animationDelay: '0s' }}>
               {/* Ornamental rune circle behind button */}
               <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[280px] h-[280px] pointer-events-none">
                 <div className="absolute inset-0 nc-rune-circle rounded-full" style={{
@@ -2004,11 +2758,16 @@ export function NexusClashGame({ wsUrl, gameId, initialRoomCode, quickPlay: isQu
               </p>
             </div>
 
+            {/* ── Bot + Deck Grid ── */}
+            <div className="w-full grid grid-cols-1 md:grid-cols-2 gap-4">
+
             {/* ── VS Bot Section ── */}
-            <div className="w-full rounded-xl overflow-hidden" style={{
+            <div className="w-full rounded-xl overflow-hidden nc-phase-enter" style={{
               background: 'linear-gradient(135deg, #0e0e1a 0%, #12121f 50%, #0e0e1a 100%)',
               border: '1px solid #1e1e3a',
               boxShadow: '0 4px 24px rgba(0,0,0,0.3), inset 0 1px 0 rgba(255,255,255,0.02)',
+              animationDelay: '0.1s',
+              animationFillMode: 'backwards',
             }}>
               <div className="flex items-center gap-3 px-5 py-3" style={{ borderBottom: '1px solid #1a1a2a' }}>
                 <svg viewBox="0 0 20 20" className="w-5 h-5 shrink-0">
@@ -2051,8 +2810,9 @@ export function NexusClashGame({ wsUrl, gameId, initialRoomCode, quickPlay: isQu
                 {/* Start button */}
                 <button
                   onClick={() => {
+                    const selectedDeckObj = ncProfile.profile.decks.find(d => d.id === ncProfile.profile.selectedDeckId);
                     mp.createRoom({
-                      ncConfig: { botDifficulty },
+                      ncConfig: { botDifficulty, deckCards: selectedDeckObj?.cards },
                     });
                   }}
                   disabled={mp.connection !== 'connected' || mp.phase === 'waiting'}
@@ -2073,10 +2833,12 @@ export function NexusClashGame({ wsUrl, gameId, initialRoomCode, quickPlay: isQu
             </div>
 
             {/* ── Deck & Stats Card ── */}
-            <div className="w-full rounded-xl overflow-hidden" style={{
+            <div className="w-full rounded-xl overflow-hidden nc-phase-enter" style={{
               background: 'linear-gradient(135deg, #0e0e1a 0%, #12121f 50%, #0e0e1a 100%)',
               border: '1px solid #1e1e3a',
               boxShadow: '0 4px 24px rgba(0,0,0,0.3), inset 0 1px 0 rgba(255,255,255,0.02)',
+              animationDelay: '0.15s',
+              animationFillMode: 'backwards',
             }}>
               {/* Deck selection row */}
               <div className="flex items-center gap-4 px-5 py-4" style={{
@@ -2134,9 +2896,14 @@ export function NexusClashGame({ wsUrl, gameId, initialRoomCode, quickPlay: isQu
               </div>
             </div>
 
+            {/* Ranked Ladder */}
+            <RankDisplay ranked={ncProfile.profile.ranked} />
+
+            </div>{/* end Bot + Deck Grid */}
+
             {/* Active quests preview */}
             {activeQuests.length > 0 && (
-              <div className="w-full flex flex-col gap-2">
+              <div className="w-full flex flex-col gap-2 nc-phase-enter" style={{ animationDelay: '0.2s', animationFillMode: 'backwards' }}>
                 <div className="flex items-center justify-between">
                   <span className="text-[9px] uppercase tracking-[0.15em] font-bold" style={{ color: '#6a6a7a' }}>{t('nc.hub.quests')}</span>
                   <button
@@ -2187,26 +2954,37 @@ export function NexusClashGame({ wsUrl, gameId, initialRoomCode, quickPlay: isQu
             )}
 
             {/* Custom Game section */}
-            <div className="w-full">
+            <div className="w-full rounded-xl overflow-hidden nc-phase-enter" style={{
+              background: 'linear-gradient(135deg, #0e0e1a 0%, #12121f 50%, #0e0e1a 100%)',
+              border: '1px solid #1e1e3a',
+              boxShadow: '0 4px 24px rgba(0,0,0,0.3), inset 0 1px 0 rgba(255,255,255,0.02)',
+              animationDelay: '0.25s',
+              animationFillMode: 'backwards',
+            }}>
               <button
                 onClick={() => setCustomExpanded(v => !v)}
-                className="flex items-center gap-2 text-xs font-semibold uppercase tracking-wider transition-all nc-btn-ghost"
-                style={{ color: '#5a5a6a' }}
+                className="flex items-center gap-3 px-5 py-3 w-full transition-all"
+                style={{ borderBottom: customExpanded ? '1px solid #1a1a2a' : 'none' }}
               >
+                <svg viewBox="0 0 20 20" className="w-5 h-5 shrink-0">
+                  <circle cx="10" cy="10" r="7" fill="none" stroke="#6a6a7a" strokeWidth="1.3"/>
+                  <line x1="10" y1="6" x2="10" y2="14" stroke="#6a6a7a" strokeWidth="1.3" strokeLinecap="round"/>
+                  <line x1="6" y1="10" x2="14" y2="10" stroke="#6a6a7a" strokeWidth="1.3" strokeLinecap="round"/>
+                </svg>
+                <span className="text-xs font-black uppercase tracking-[0.15em]" style={{ color: '#6a6a7a' }}>
+                  {t('nc.hub.customGame')}
+                </span>
+                <div className="flex-1" />
                 <svg
-                  className={`w-3 h-3 transition-transform ${customExpanded ? 'rotate-90' : ''}`}
-                  fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}
+                  className={`w-4 h-4 transition-transform ${customExpanded ? 'rotate-90' : ''}`}
+                  fill="none" viewBox="0 0 24 24" stroke="#5a5a6a" strokeWidth={2}
                 >
                   <path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" />
                 </svg>
-                {t('nc.hub.customGame')}
               </button>
 
               {customExpanded && (
-                <div className="mt-3 flex flex-col gap-3 p-4 rounded-lg" style={{
-                  background: 'linear-gradient(135deg, #12121f, #0e0e1a)',
-                  border: '1px solid #1e1e3a',
-                }}>
+                <div className="px-5 py-4 flex flex-col gap-3">
                   {/* Visibility */}
                   <div className="flex gap-1 p-1 rounded" style={{ background: '#0a0a12', border: '1px solid #1e1e3a' }}>
                     {(['private', 'public'] as const).map(v => (
@@ -2240,9 +3018,11 @@ export function NexusClashGame({ wsUrl, gameId, initialRoomCode, quickPlay: isQu
 
                   <button
                     onClick={() => {
+                      const selDeck = ncProfile.profile.decks.find(d => d.id === ncProfile.profile.selectedDeckId);
                       mp.createRoom({
                         visibility: roomVisibility,
                         roomName: roomName.trim() || undefined,
+                        ncConfig: { deckCards: selDeck?.cards },
                       });
                     }}
                     disabled={mp.connection !== 'connected'}
@@ -2280,7 +3060,10 @@ export function NexusClashGame({ wsUrl, gameId, initialRoomCode, quickPlay: isQu
                       }}
                     />
                     <button
-                      onClick={() => mp.joinRoom(joinInput)}
+                      onClick={() => {
+                        const jDeck = ncProfile.profile.decks.find(d => d.id === ncProfile.profile.selectedDeckId);
+                        mp.joinRoom(joinInput, { ncDeckCards: jDeck?.cards });
+                      }}
                       disabled={joinInput.length < 4 || mp.connection !== 'connected'}
                       className="px-4 py-2 rounded font-semibold text-sm transition-all"
                       style={{
@@ -2297,6 +3080,9 @@ export function NexusClashGame({ wsUrl, gameId, initialRoomCode, quickPlay: isQu
                 </div>
               )}
             </div>
+
+            {/* Bottom breathing room */}
+            <div className="h-20 pointer-events-none" />
           </div>
         )}
 
@@ -2307,6 +3093,7 @@ export function NexusClashGame({ wsUrl, gameId, initialRoomCode, quickPlay: isQu
               profile={ncProfile.profile}
               onSave={ncProfile.saveDecks}
               onClose={() => setHubTab('play')}
+              onToggleFavorite={ncProfile.toggleFavorite}
             />
           </div>
         )}
@@ -2476,6 +3263,7 @@ export function NexusClashGame({ wsUrl, gameId, initialRoomCode, quickPlay: isQu
                                           },
                                         },
                                       });
+                                      setShardRevealCard(card.id);
                                     }}
                                     className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[10px] font-bold uppercase tracking-wider transition-all hover:scale-[1.03] active:scale-[0.98]"
                                     style={{
@@ -2511,6 +3299,7 @@ export function NexusClashGame({ wsUrl, gameId, initialRoomCode, quickPlay: isQu
             <Collection
               profile={ncProfile.profile}
               onClose={() => setHubTab('play')}
+              onToggleFavorite={ncProfile.toggleFavorite}
             />
           </div>
         )}
@@ -2524,6 +3313,16 @@ export function NexusClashGame({ wsUrl, gameId, initialRoomCode, quickPlay: isQu
               onClose={() => setHubTab('play')}
             />
           </div>
+        )}
+
+        {/* ── BATTLE PASS TAB ────────────────────────────────────────────── */}
+        {hubTab === 'battlepass' && (
+          <BattlePass
+            profile={ncProfile.profile}
+            onClose={() => setHubTab('play')}
+            onClaimReward={ncProfile.claimBpReward}
+            onUnlockPremium={ncProfile.unlockBpPremium}
+          />
         )}
       </div>
 
@@ -2612,6 +3411,16 @@ export function NexusClashGame({ wsUrl, gameId, initialRoomCode, quickPlay: isQu
             </button>
           </div>
         </div>
+      )}
+
+      {/* ── Rank Season Reset Reward ────────────────────────────────── */}
+      {ncProfile.rankSeasonReward && (
+        <RankSeasonResetModal
+          peakTier={ncProfile.rankSeasonReward.peakTier}
+          reward={ncProfile.rankSeasonReward.reward}
+          prevPoints={ncProfile.rankSeasonReward.prevPoints}
+          onDismiss={ncProfile.dismissRankReward}
+        />
       )}
 
       {/* ── Daily Login Calendar (auto-claim or manual view) ─────────── */}
@@ -2753,6 +3562,189 @@ export function NexusClashGame({ wsUrl, gameId, initialRoomCode, quickPlay: isQu
         );
       })()}
 
+      {/* Shard shop purchase reveal */}
+      {shardRevealCard && (() => {
+        const def = NC_CARD_MAP[shardRevealCard];
+        if (!def) { setShardRevealCard(null); return null; }
+        const rc: Record<string, string> = { common: '#71717a', rare: '#3b82f6', epic: '#a855f7', legendary: '#c9a84c' };
+        const color = rc[def.rarity] ?? '#71717a';
+        return (
+          <div className="fixed inset-0 z-50 flex items-center justify-center" style={{
+            background: `radial-gradient(ellipse at center, ${color}15, #0a0a12ee, #050510ff)`,
+            backdropFilter: 'blur(6px)',
+          }} onClick={() => setShardRevealCard(null)}>
+            <div className="flex flex-col items-center gap-4" onClick={e => e.stopPropagation()} style={{
+              animation: 'nc-shard-reveal 0.7s ease-out',
+            }}>
+              {/* Glow behind card */}
+              <div className="relative">
+                <div className="absolute -inset-6 rounded-2xl pointer-events-none" style={{
+                  background: `radial-gradient(circle, ${color}30, transparent 70%)`,
+                  animation: def.rarity === 'legendary' ? 'nc-legendary-pulse 2s infinite' : undefined,
+                }} />
+                <NexusClashCard card={def} showNew showPreview={false} />
+              </div>
+              <p className="text-sm font-black uppercase tracking-widest" style={{
+                color,
+                textShadow: `0 0 12px ${color}66`,
+              }}>
+                {t(def.nameKey)}
+              </p>
+              <p className="text-[10px] font-bold uppercase tracking-wider" style={{ color }}>{def.rarity}</p>
+              <button
+                onClick={() => setShardRevealCard(null)}
+                className="mt-2 px-6 py-2 rounded-lg text-sm font-bold uppercase tracking-wider transition-all hover:scale-[1.02]"
+                style={{
+                  background: `linear-gradient(135deg, ${color}33, ${color}11)`,
+                  border: `1px solid ${color}55`,
+                  color,
+                }}
+              >
+                {t('nc.pack.done')}
+              </button>
+            </div>
+          </div>
+        );
+      })()}
+
+      {/* Admin grant reward popup */}
+      {ncProfile.adminGrantReward && (() => {
+        const g = ncProfile.adminGrantReward;
+        const hasRemovals = g.coins < 0 || g.gems < 0 || g.shards < 0 || (g.removedCards?.length ?? 0) > 0;
+        const hasGrants = g.coins > 0 || g.gems > 0 || g.shards > 0 || g.cards.length > 0;
+        const accentColor = hasRemovals && !hasGrants ? '#f87171' : '#4ade80';
+        const grantedCards = g.cards.map(id => {
+          const def = NC_CARD_MAP[id];
+          return { id, name: def ? t(def.nameKey) : id, rarity: def?.rarity ?? 'common' };
+        });
+        const removedCardsList = (g.removedCards ?? []).map(id => {
+          const def = NC_CARD_MAP[id];
+          return { id, name: def ? t(def.nameKey) : id, rarity: def?.rarity ?? 'common' };
+        });
+        const rarityBorder: Record<string, string> = {
+          common: '#71717a', rare: '#3b82f6', epic: '#a855f7', legendary: '#c9a84c',
+        };
+        return (
+          <div className="fixed inset-0 z-50 flex items-center justify-center" style={{
+            background: 'radial-gradient(ellipse at center, #0a0a12dd, #050510ee)',
+            backdropFilter: 'blur(4px)',
+          }}>
+            <div className="nc-daily-login flex flex-col items-center gap-5 p-6 rounded-xl max-w-md w-full mx-4" style={{
+              background: 'linear-gradient(135deg, #1a1a2e 0%, #12121f 50%, #0e0e1a 100%)',
+              border: `1px solid ${accentColor}44`,
+              boxShadow: `0 0 60px ${accentColor}15, 0 8px 32px rgba(0,0,0,0.5)`,
+            }} onClick={e => e.stopPropagation()}>
+              <div className="text-center">
+                <div className="text-3xl mb-2">{hasRemovals && !hasGrants ? '📋' : '🎁'}</div>
+                <p className="text-xl font-black uppercase tracking-[0.15em]" style={{ color: accentColor }}>
+                  {t('nc.adminGrant.title')}
+                </p>
+                <p className="text-xs mt-1" style={{ color: '#6a6a7a' }}>
+                  {t('nc.adminGrant.message')}
+                </p>
+              </div>
+
+              {g.note && (
+                <div className="w-full px-4 py-2.5 rounded-lg text-center" style={{
+                  background: 'linear-gradient(135deg, #1a1a08, #12120a)',
+                  border: '1px solid #c9a84c33',
+                }}>
+                  <p className="text-xs italic" style={{ color: '#c9a84c' }}>
+                    &quot;{g.note}&quot;
+                  </p>
+                </div>
+              )}
+
+              {/* Currencies (positive = granted, negative = removed) */}
+              {(g.coins !== 0 || g.gems !== 0 || g.shards !== 0) && (
+                <div className="flex items-center gap-5 px-4 py-3 rounded-lg w-full justify-center" style={{
+                  background: '#0e0e16',
+                  border: '1px solid #2a2a3a',
+                }}>
+                  {g.coins !== 0 && (
+                    <div className="flex items-center gap-1.5">
+                      <CoinIcon size={20} />
+                      <span className="text-lg font-black" style={{ color: g.coins > 0 ? '#e8d48b' : '#f87171' }}>
+                        {g.coins > 0 ? '+' : ''}{g.coins}
+                      </span>
+                    </div>
+                  )}
+                  {g.gems !== 0 && (
+                    <div className="flex items-center gap-1.5">
+                      <GemIcon size={20} />
+                      <span className="text-lg font-black" style={{ color: g.gems > 0 ? '#a78bfa' : '#f87171' }}>
+                        {g.gems > 0 ? '+' : ''}{g.gems}
+                      </span>
+                    </div>
+                  )}
+                  {g.shards !== 0 && (
+                    <div className="flex items-center gap-1.5">
+                      <ShardIcon size={20} />
+                      <span className="text-lg font-black" style={{ color: g.shards > 0 ? '#67e8f9' : '#f87171' }}>
+                        {g.shards > 0 ? '+' : ''}{g.shards}
+                      </span>
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {/* Added cards */}
+              {grantedCards.length > 0 && (
+                <div className="w-full">
+                  <p className="text-[10px] uppercase tracking-wider font-bold mb-2 text-center" style={{ color: '#5a5a6a' }}>
+                    {t('nc.adminGrant.cards')}
+                  </p>
+                  <div className="grid grid-cols-2 gap-1.5">
+                    {grantedCards.map(card => (
+                      <div key={card.id} className="flex items-center gap-2 px-2.5 py-1.5 rounded-lg" style={{
+                        background: '#0e0e16',
+                        border: `1px solid ${rarityBorder[card.rarity]}44`,
+                      }}>
+                        <span className="text-xs font-bold" style={{ color: rarityBorder[card.rarity] }}>{card.name}</span>
+                        <span className="text-[9px] ml-auto" style={{ color: '#4a4a5a' }}>{card.rarity}</span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* Removed cards */}
+              {removedCardsList.length > 0 && (
+                <div className="w-full">
+                  <p className="text-[10px] uppercase tracking-wider font-bold mb-2 text-center" style={{ color: '#f8717188' }}>
+                    {t('nc.adminGrant.removedCards')}
+                  </p>
+                  <div className="grid grid-cols-2 gap-1.5">
+                    {removedCardsList.map(card => (
+                      <div key={card.id} className="flex items-center gap-2 px-2.5 py-1.5 rounded-lg" style={{
+                        background: '#160e0e',
+                        border: '1px solid #f8717122',
+                      }}>
+                        <span className="text-xs font-bold" style={{ color: '#f87171' }}>{card.name}</span>
+                        <span className="text-[9px] ml-auto" style={{ color: '#4a4a5a' }}>{card.rarity}</span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              <button
+                onClick={() => ncProfile.dismissAdminGrant()}
+                className="w-full py-3 rounded-lg font-black text-sm uppercase tracking-wider transition-all hover:scale-[1.02]"
+                style={{
+                  background: `linear-gradient(135deg, ${accentColor}, ${accentColor}cc)`,
+                  border: `1px solid ${accentColor}`,
+                  color: hasRemovals && !hasGrants ? '#fff' : '#052e16',
+                  boxShadow: `0 0 20px ${accentColor}33`,
+                }}
+              >
+                OK
+              </button>
+            </div>
+          </div>
+        );
+      })()}
+
       {/* Tutorial overlay */}
       {showTutorial && <NexusClashTutorial onClose={() => setShowTutorial(false)} />}
 
@@ -2763,21 +3755,62 @@ export function NexusClashGame({ wsUrl, gameId, initialRoomCode, quickPlay: isQu
           background-repeat: repeat;
         }
         @keyframes nc-legendary-pulse {
-          0%, 100% { box-shadow: 0 0 12px rgba(201,168,76,0.3), inset 0 0 8px rgba(201,168,76,0.1); }
-          50% { box-shadow: 0 0 24px rgba(201,168,76,0.6), inset 0 0 16px rgba(201,168,76,0.15); }
+          0%, 100% { box-shadow: 0 0 16px rgba(201,168,76,0.4), 0 0 40px rgba(201,168,76,0.1), inset 0 0 10px rgba(201,168,76,0.1); }
+          50% { box-shadow: 0 0 30px rgba(201,168,76,0.7), 0 0 60px rgba(201,168,76,0.2), inset 0 0 20px rgba(201,168,76,0.15); }
         }
-        .nc-legendary-pulse { animation: nc-legendary-pulse 2s ease-in-out infinite; }
+        .nc-legendary-pulse { animation: nc-legendary-pulse 2.5s ease-in-out infinite; }
+        @keyframes nc-holo-sweep {
+          0% { transform: translateX(-100%) rotate(-15deg); }
+          100% { transform: translateX(200%) rotate(-15deg); }
+        }
+        .nc-legendary-holo-sweep {
+          background: linear-gradient(105deg, transparent 20%, rgba(201,168,76,0.06) 35%, rgba(255,255,255,0.1) 42%, rgba(201,168,76,0.08) 48%, rgba(124,58,237,0.04) 55%, transparent 70%);
+          animation: nc-holo-sweep 4s ease-in-out infinite;
+        }
+        @keyframes nc-sparkle-anim {
+          0%, 100% { opacity: 0; transform: scale(0); }
+          50% { opacity: 1; transform: scale(1); }
+        }
+        .nc-sparkle {
+          position: absolute; width: 3px; height: 3px; background: #c9a84c;
+          border-radius: 50%; box-shadow: 0 0 4px #c9a84c, 0 0 8px rgba(201,168,76,0.5);
+          animation: nc-sparkle-anim 2s ease-in-out infinite;
+        }
+        @keyframes nc-border-glow-rotate {
+          0% { background-position: 0% 50%; }
+          100% { background-position: 200% 50%; }
+        }
+        .nc-legendary-border-glow {
+          background: linear-gradient(90deg, transparent, rgba(201,168,76,0.3), rgba(255,215,0,0.15), rgba(201,168,76,0.3), transparent);
+          background-size: 200% 100%; animation: nc-border-glow-rotate 3s linear infinite;
+          mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
+          mask-composite: exclude; -webkit-mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
+          -webkit-mask-composite: xor; padding: 2px;
+        }
+        @keyframes nc-conic-spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+        .nc-legendary-conic-border { overflow: hidden; }
+        .nc-legendary-conic-border::before {
+          content: ''; position: absolute; inset: -50%;
+          background: conic-gradient(from 0deg, #c9a84c00, #c9a84c, #ffd700, #c9a84caa, #c9a84c00, #c9a84c00, #7c3aed88, #c9a84c00, #c9a84c00, #c9a84c, #ffd700, #c9a84caa, #c9a84c00);
+          animation: nc-conic-spin 3s linear infinite;
+        }
+        .nc-legendary-conic-border::after {
+          content: ''; position: absolute; inset: 3px; border-radius: 11px; background: #15100a;
+        }
+        @keyframes nc-aura-pulse { 0%, 100% { opacity: 0.5; transform: scale(1); } 50% { opacity: 1; transform: scale(1.05); } }
+        .nc-legendary-preview-aura { animation: nc-aura-pulse 2s ease-in-out infinite; }
         @keyframes nc-epic-shimmer {
           0% { background-position: -200% center; }
           100% { background-position: 200% center; }
         }
         .nc-epic-shimmer { background-size: 200% 100%; animation: nc-epic-shimmer 3s linear infinite; }
         @keyframes nc-legendary-reveal {
-          0% { transform: scale(0.5) rotate(-5deg); filter: brightness(3); }
-          50% { transform: scale(1.15) rotate(2deg); filter: brightness(2); }
+          0% { transform: scale(0.5) rotate(-5deg); filter: brightness(3) saturate(2); }
+          30% { transform: scale(1.2) rotate(2deg); filter: brightness(2.5) saturate(1.5); }
+          60% { transform: scale(0.95) rotate(-1deg); filter: brightness(1.5); }
           100% { transform: scale(1) rotate(0deg); filter: brightness(1); }
         }
-        .nc-legendary-reveal { animation: nc-legendary-reveal 0.8s ease-out; }
+        .nc-legendary-reveal { animation: nc-legendary-reveal 1s ease-out; }
         @keyframes nc-epic-reveal {
           0% { transform: scale(0.5); filter: brightness(2); }
           100% { transform: scale(1); filter: brightness(1); }

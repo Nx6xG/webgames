@@ -13,6 +13,7 @@ import type {
 import {
   NC_CARD_MAP,
   NC_STARTER_CARDS,
+  NC_DECK_SIZE,
   NC_LANE_MODIFIERS,
   NC_START_HAND,
   NC_START_MANA,
@@ -20,12 +21,19 @@ import {
   NC_MANA_PER_ROUND,
   NC_DRAW_PER_ROUND,
   NC_PUSH_PER_POWER,
+  NC_ONGOING_PUSH_RATIO,
+  NC_DESTROY_TUG_REFUND,
   NC_BREAKTHROUGH_THRESHOLD,
   NC_BREAKTHROUGHS_TO_WIN,
   NC_MAX_ROUNDS,
   NC_TURN_TIME_MS,
   NC_BOT_TOKEN_PREFIX,
   isNcBotToken,
+  NC_MIN_HAND_SIZE,
+  NC_RESONANCE_BONUS,
+  NC_DOMINANCE_THRESHOLD,
+  NC_DOMINANCE_BONUS,
+  NC_MODIFIER_ROTATION_ROUND,
 } from 'shared';
 import type { NcBotDifficulty } from 'shared';
 
@@ -87,21 +95,23 @@ function computeSpentMana(pendingPlays: NcPendingPlay[], lanes: [NcLane, NcLane,
 
 // ── Draw cards helper ────────────────────────────────────────────────────────
 
-function drawCards(deck: string[], hand: string[], count: number, discardPile: string[]): { deck: string[]; hand: string[]; discardPile: string[] } {
+function drawCards(deck: string[], hand: string[], count: number, discardPile: string[]): { deck: string[]; hand: string[]; discardPile: string[]; recycled: number } {
   const newDeck = [...deck];
   const newHand = [...hand];
   const newDiscard = [...discardPile];
+  let recycled = 0;
   for (let i = 0; i < count; i++) {
     // If deck is empty, reshuffle discard pile into deck
     if (newDeck.length === 0 && newDiscard.length > 0) {
       const reshuffled = shuffle(newDiscard);
+      recycled += reshuffled.length;
       newDeck.push(...reshuffled);
       newDiscard.length = 0;
     }
     if (newDeck.length === 0) break;
     newHand.push(newDeck.shift()!);
   }
-  return { deck: newDeck, hand: newHand, discardPile: newDiscard };
+  return { deck: newDeck, hand: newHand, discardPile: newDiscard, recycled };
 }
 
 // ── Find all cards on all lanes for a player ─────────────────────────────────
@@ -192,7 +202,7 @@ function resolveRound(state: NexusClashState): NexusClashState {
     }
   }
 
-  // ── 2. Apply lane modifiers ─────────────────────────────────────────────
+  // ── 2. Apply lane modifiers + tag resonance ────────────────────────────
 
   for (let li = 0; li < 3; li++) {
     const lane = s.lanes[li];
@@ -208,18 +218,29 @@ function resolveRound(state: NexusClashState): NexusClashState {
           card.basePower += 1;
         }
 
-        const def = getCardDef(card.cardId);
-        if (mod === 'tag_bonus_divine' && def.tags.includes('divine')) {
-          card.power += 2;
-          card.basePower += 2;
+        // Fortified: new cards get +1 shield round
+        if (mod === 'fortified') {
+          card.shieldRounds = Math.max(card.shieldRounds, 1);
         }
-        if (mod === 'tag_bonus_mech' && def.tags.includes('mech')) {
-          card.power += 2;
-          card.basePower += 2;
+
+        // Accelerate: playing a card here grants +1 mana next round
+        if (mod === 'accelerate') {
+          s.manaBoost[side] += 1;
         }
-        if (mod === 'tag_bonus_beast' && def.tags.includes('beast')) {
-          card.power += 2;
-          card.basePower += 2;
+
+        // Tag Resonance: +1 power per friendly card in lane that shares a tag
+        const newDef = getCardDef(card.cardId);
+        const allies = lane.cards[side].filter(c => c.uid !== card.uid);
+        let resonance = 0;
+        for (const ally of allies) {
+          const allyDef = getCardDef(ally.cardId);
+          if (newDef.tags.some(tag => allyDef.tags.includes(tag))) {
+            resonance += NC_RESONANCE_BONUS;
+          }
+        }
+        if (resonance > 0) {
+          card.power += resonance;
+          card.basePower += resonance;
         }
       }
     }
@@ -250,6 +271,12 @@ function resolveRound(state: NexusClashState): NexusClashState {
     const card = s.lanes[cardLane].cards[rc.owner].find(c => c.uid === rc.uid);
     if (!card) continue;
 
+    // Silent modifier: no abilities trigger on this lane
+    if (s.lanes[cardLane].modifier === 'silent') {
+      log.push({ type: 'ability_fizzled', cardUid: rc.uid, reason: 'no_target' });
+      continue;
+    }
+
     log.push({
       type: 'ability_triggered',
       cardUid: rc.uid,
@@ -258,7 +285,20 @@ function resolveRound(state: NexusClashState): NexusClashState {
       value: ability.value,
     });
 
-    applyEffect(ability, card, rc.owner, cardLane, s.lanes, log, pushBonuses, newCardUids);
+    applyEffect(ability, card, rc.owner, cardLane, s.lanes, log, pushBonuses, newCardUids, s.hands);
+
+    // Echo modifier: on-reveal effects trigger twice
+    if (s.lanes[cardLane].modifier === 'echo' && ability.trigger === 'on_reveal') {
+      // Re-find card in case it was moved
+      const echoLane = findCardLane(s.lanes, rc.uid);
+      if (echoLane !== -1) {
+        const echoCard = s.lanes[echoLane].cards[rc.owner].find(c => c.uid === rc.uid);
+        if (echoCard) {
+          log.push({ type: 'ability_triggered', cardUid: rc.uid, trigger: 'on_reveal', effect: ability.effect, value: ability.value });
+          applyEffect(ability, echoCard, rc.owner, echoLane, s.lanes, log, pushBonuses, newCardUids, s.hands);
+        }
+      }
+    }
   }
 
   // ── 3b. Handle draw_card and mana_boost effects from newly placed cards ──
@@ -266,15 +306,23 @@ function resolveRound(state: NexusClashState): NexusClashState {
     const ability = rc.def.ability;
     if (ability.trigger !== 'on_reveal') continue;
 
+    // Determine how many times this fires (echo modifier = 2x)
+    const cardLane3b = findCardLane(s.lanes, rc.uid);
+    const echoCount = (cardLane3b !== -1 && s.lanes[cardLane3b].modifier === 'echo') ? 2 : 1;
+
     if (ability.effect === 'draw_card' && ability.value) {
-      const drawn = drawCards(s.decks[rc.owner], s.hands[rc.owner], ability.value, s.discardPiles[rc.owner]);
+      const totalDraw = ability.value * echoCount;
+      const drawn = drawCards(s.decks[rc.owner], s.hands[rc.owner], totalDraw, s.discardPiles[rc.owner]);
       s.decks[rc.owner] = drawn.deck;
       s.hands[rc.owner] = drawn.hand;
       s.discardPiles[rc.owner] = drawn.discardPile;
+      if (drawn.recycled > 0) {
+        log.push({ type: 'deck_recycled', owner: rc.owner, cardsRecycled: drawn.recycled });
+      }
     }
 
     if (ability.effect === 'mana_boost' && ability.value) {
-      s.manaBoost[rc.owner] += ability.value;
+      s.manaBoost[rc.owner] += ability.value * echoCount;
     }
   }
 
@@ -283,6 +331,9 @@ function resolveRound(state: NexusClashState): NexusClashState {
   for (let li = 0; li < 3; li++) {
     const lane = s.lanes[li];
     if (lane.locked) continue;
+
+    // Silent modifier: skip all ability triggers
+    if (lane.modifier === 'silent') continue;
 
     for (const side of [0, 1] as const) {
       // Check if any new allied card was placed in this lane
@@ -302,9 +353,7 @@ function resolveRound(state: NexusClashState): NexusClashState {
           value: def.ability.value,
         });
 
-        if (def.ability.effect === 'buff_self' && def.ability.value) {
-          card.power += def.ability.value;
-        }
+        applyEffect(def.ability, card, side, li, s.lanes, log, pushBonuses, newCardUids, s.hands);
       }
     }
   }
@@ -363,6 +412,37 @@ function resolveRound(state: NexusClashState): NexusClashState {
     }
   }
 
+  // Tag Dominance: 3+ cards of the same tag in a lane → +NC_DOMINANCE_BONUS power
+  for (let li = 0; li < 3; li++) {
+    const lane = s.lanes[li];
+    if (lane.locked) continue;
+
+    for (const side of [0, 1] as const) {
+      // Count tags
+      const tagCounts = new Map<string, number>();
+      for (const card of lane.cards[side]) {
+        const def = getCardDef(card.cardId);
+        for (const tag of def.tags) {
+          tagCounts.set(tag, (tagCounts.get(tag) ?? 0) + 1);
+        }
+      }
+      // Find dominant tags (3+)
+      const dominantTags = new Set<string>();
+      for (const [tag, count] of tagCounts) {
+        if (count >= NC_DOMINANCE_THRESHOLD) dominantTags.add(tag);
+      }
+      // Apply bonus to cards that have a dominant tag
+      if (dominantTags.size > 0) {
+        for (const card of lane.cards[side]) {
+          const def = getCardDef(card.cardId);
+          if (def.tags.some(tag => dominantTags.has(tag))) {
+            card.power += NC_DOMINANCE_BONUS;
+          }
+        }
+      }
+    }
+  }
+
   // ── 6. Push calculation per lane ────────────────────────────────────────
 
   for (let li = 0; li < 3; li++) {
@@ -372,11 +452,15 @@ function resolveRound(state: NexusClashState): NexusClashState {
     let p0Push = 0;
     let p1Push = 0;
 
-    // Sum power of NEW cards only
+    // New cards push at full power
     const p0NewCards = lane.cards[0].filter(c => c.playedThisRound);
     const p1NewCards = lane.cards[1].filter(c => c.playedThisRound);
 
-    // double_first modifier: first card played has double push
+    // Existing cards push at reduced rate (ongoing presence)
+    const p0OldCards = lane.cards[0].filter(c => !c.playedThisRound);
+    const p1OldCards = lane.cards[1].filter(c => !c.playedThisRound);
+
+    // double_first modifier: first NEW card played has double push
     if (lane.modifier === 'double_first') {
       for (let i = 0; i < p0NewCards.length; i++) {
         p0Push += i === 0 ? p0NewCards[i].power * 2 : p0NewCards[i].power;
@@ -388,6 +472,10 @@ function resolveRound(state: NexusClashState): NexusClashState {
       for (const c of p0NewCards) p0Push += c.power;
       for (const c of p1NewCards) p1Push += c.power;
     }
+
+    // Ongoing push from existing cards (50% of power)
+    for (const c of p0OldCards) p0Push += Math.floor(c.power * NC_ONGOING_PUSH_RATIO);
+    for (const c of p1OldCards) p1Push += Math.floor(c.power * NC_ONGOING_PUSH_RATIO);
 
     // Apply push bonuses from this round
     p0Push += pushBonuses[li][0];
@@ -407,14 +495,17 @@ function resolveRound(state: NexusClashState): NexusClashState {
       }
     }
 
+    // volatile: both sides' push doubled
+    if (lane.modifier === 'volatile') {
+      p0Push *= 2;
+      p1Push *= 2;
+    }
+
     // inverted_power: lower total wins
     let delta: number;
     if (lane.modifier === 'inverted_power') {
-      delta = (p1Push - p0Push) * NC_PUSH_PER_POWER; // inverted: p1 advantage moves toward positive (p0 side)
-      // Actually inverted means lower total wins, so the smaller push value wins
-      // Re-interpret: the player with LESS push gets the advantage
       const rawDelta = (p0Push - p1Push) * NC_PUSH_PER_POWER;
-      delta = -rawDelta; // invert the outcome
+      delta = -rawDelta;
     } else {
       delta = (p0Push - p1Push) * NC_PUSH_PER_POWER;
     }
@@ -427,7 +518,7 @@ function resolveRound(state: NexusClashState): NexusClashState {
       delta,
     });
 
-    lane.tugValue = clamp(lane.tugValue + delta, -100, 100);
+    lane.tugValue = clamp(lane.tugValue + delta, -NC_BREAKTHROUGH_THRESHOLD, NC_BREAKTHROUGH_THRESHOLD);
 
     // ── 7. Breakthrough check ───────────────────────────────────────────
 
@@ -522,6 +613,20 @@ function resolveRound(state: NexusClashState): NexusClashState {
   // Advance round
   s.round++;
 
+  // ── Modifier rotation ─────────────────────────────────────────────────
+  if (NC_MODIFIER_ROTATION_ROUND > 0 && s.round === NC_MODIFIER_ROTATION_ROUND) {
+    const currentMods = new Set(s.lanes.map(l => l.modifier));
+    const newMods = pickUniqueModifiers(3);
+    for (let li = 0; li < 3; li++) {
+      if (s.lanes[li].locked) continue; // don't rotate locked lanes
+      const oldMod = s.lanes[li].modifier;
+      s.lanes[li].modifier = newMods[li];
+      if (oldMod !== newMods[li]) {
+        log.push({ type: 'modifier_rotated', laneIndex: li, oldModifier: oldMod, newModifier: newMods[li] });
+      }
+    }
+  }
+
   // Increase mana
   s.maxMana = [
     Math.min(NC_MAX_MANA, s.maxMana[0] + NC_MANA_PER_ROUND),
@@ -533,18 +638,120 @@ function resolveRound(state: NexusClashState): NexusClashState {
   ];
   s.manaBoost = [0, 0]; // reset after applying
 
+  // Underdog bonus: player with fewer breakthroughs gets +1 mana
+  if (s.breakthroughs[0] !== s.breakthroughs[1]) {
+    const underdog: 0 | 1 = s.breakthroughs[0] < s.breakthroughs[1] ? 0 : 1;
+    s.mana[underdog] = Math.min(NC_MAX_MANA, s.mana[underdog] + 1);
+  }
+
   // Draw cards (reshuffle discard pile into deck if empty)
   for (const pIdx of [0, 1] as const) {
-    const drawn = drawCards(s.decks[pIdx], s.hands[pIdx], NC_DRAW_PER_ROUND, s.discardPiles[pIdx]);
+    // Draw normal amount, plus extra if below min hand size
+    const drawCount = Math.max(NC_DRAW_PER_ROUND, NC_MIN_HAND_SIZE - s.hands[pIdx].length);
+    const drawn = drawCards(s.decks[pIdx], s.hands[pIdx], drawCount, s.discardPiles[pIdx]);
     s.decks[pIdx] = drawn.deck;
     s.hands[pIdx] = drawn.hand;
     s.discardPiles[pIdx] = drawn.discardPile;
+    if (drawn.recycled > 0) {
+      log.push({ type: 'deck_recycled', owner: pIdx, cardsRecycled: drawn.recycled });
+    }
   }
 
   s.resolveLog = log;
   s.turnDeadline = Date.now() + NC_TURN_TIME_MS;
 
   return s;
+}
+
+// ── Handle on_destroy trigger for a destroyed card ──────────────────────────
+
+function handleOnDestroy(
+  destroyed: NcCardInstance,
+  destroyedOwner: 0 | 1,
+  laneIndex: number,
+  lanes: [NcLane, NcLane, NcLane],
+  log: NcResolveEvent[],
+  pushBonuses: [number, number][],
+): void {
+  const destroyedDef = getCardDef(destroyed.cardId);
+  if (destroyedDef.ability.trigger !== 'on_destroy') return;
+
+  log.push({
+    type: 'ability_triggered',
+    cardUid: destroyed.uid,
+    trigger: 'on_destroy',
+    effect: destroyedDef.ability.effect,
+    value: destroyedDef.ability.value,
+  });
+
+  const ability = destroyedDef.ability;
+  const lane = lanes[laneIndex];
+  const oppOfDestroyed: 0 | 1 = destroyedOwner === 0 ? 1 : 0;
+
+  // Phoenix special: respawn with 3 power
+  if (ability.effect === 'buff_self' && ability.value === -1) {
+    lane.cards[destroyedOwner].push({
+      ...destroyed,
+      power: 3,
+      basePower: 3,
+      playedThisRound: true,
+    });
+    return;
+  }
+
+  // Generic on_destroy effects (card is already removed from lane)
+  switch (ability.effect) {
+    case 'buff_allies': {
+      const val = ability.value ?? 0;
+      for (const ally of lane.cards[destroyedOwner]) {
+        if (ability.tagFilter) {
+          const d = getCardDef(ally.cardId);
+          if (!d.tags.includes(ability.tagFilter)) continue;
+        }
+        ally.power += val;
+        ally.basePower += val;
+      }
+      break;
+    }
+    case 'drain': {
+      const val = ability.value ?? 0;
+      const enemies = lane.cards[oppOfDestroyed];
+      if (enemies.length === 0) break;
+      let strongest = enemies[0];
+      for (const e of enemies) {
+        if (e.power > strongest.power) strongest = e;
+      }
+      const drained = Math.min(val, strongest.power);
+      strongest.power -= drained;
+      strongest.basePower -= drained;
+      // Power is lost (card is dead), but enemy still weakened
+      break;
+    }
+    case 'debuff_enemies': {
+      const val = ability.value ?? 0;
+      for (const enemy of lane.cards[oppOfDestroyed]) {
+        enemy.power = Math.max(0, enemy.power - val);
+        enemy.basePower = Math.max(0, enemy.basePower - val);
+      }
+      break;
+    }
+    case 'shield': {
+      // Shield self doesn't make sense for destroyed card, but
+      // could shield allies if shield_allies is the effect
+      break;
+    }
+    case 'shield_allies': {
+      const val = ability.value ?? 1;
+      for (const ally of lane.cards[destroyedOwner]) {
+        ally.shieldRounds = Math.max(ally.shieldRounds, val);
+      }
+      break;
+    }
+    case 'push_bonus': {
+      pushBonuses[laneIndex][destroyedOwner] += (ability.value ?? 0);
+      break;
+    }
+  }
 }
 
 // ── Apply a single effect ────────────────────────────────────────────────────
@@ -558,6 +765,7 @@ function applyEffect(
   log: NcResolveEvent[],
   pushBonuses: [number, number][],
   newCardUids: Set<number>,
+  hands?: [string[], string[]],
 ): void {
   const lane = lanes[cardLane];
   const oppSide: 0 | 1 = owner === 0 ? 1 : 0;
@@ -648,12 +856,27 @@ function applyEffect(
         if (lane.modifier === 'indestructible') return false;
         return true;
       });
-      if (enemies.length === 0) break;
+      if (enemies.length === 0) {
+        // Determine reason: are there enemies at all but they're protected?
+        const allEnemies = lane.cards[oppSide];
+        if (allEnemies.length === 0) {
+          log.push({ type: 'ability_fizzled', cardUid: card.uid, reason: 'no_target' });
+        } else if (lane.modifier === 'indestructible') {
+          log.push({ type: 'ability_fizzled', cardUid: card.uid, reason: 'indestructible' });
+        } else {
+          log.push({ type: 'ability_fizzled', cardUid: card.uid, reason: 'shielded' });
+        }
+        break;
+      }
       enemies.sort((a, b) => a.power - b.power);
       const weakest = enemies[0];
       const idx = lane.cards[oppSide].findIndex(c => c.uid === weakest.uid);
       if (idx !== -1) {
         const destroyed = lane.cards[oppSide].splice(idx, 1)[0];
+        // Refund tug: destroying an enemy card pulls the tug back toward the destroyer
+        const siphonMult = lane.modifier === 'siphon' ? 1.5 : 1;
+        const tugRefund = Math.round(destroyed.power * NC_PUSH_PER_POWER * NC_DESTROY_TUG_REFUND * siphonMult);
+        lane.tugValue = clamp(lane.tugValue + (owner === 0 ? tugRefund : -tugRefund), -NC_BREAKTHROUGH_THRESHOLD, NC_BREAKTHROUGH_THRESHOLD);
         log.push({
           type: 'card_destroyed',
           laneIndex: cardLane,
@@ -661,28 +884,7 @@ function applyEffect(
           owner: oppSide,
         });
 
-        // Trigger on_destroy effect
-        const destroyedDef = getCardDef(destroyed.cardId);
-        if (destroyedDef.ability.trigger === 'on_destroy') {
-          log.push({
-            type: 'ability_triggered',
-            cardUid: destroyed.uid,
-            trigger: 'on_destroy',
-            effect: destroyedDef.ability.effect,
-            value: destroyedDef.ability.value,
-          });
-          // Phoenix special: on_destroy with buff_self value -1 means respawn with reduced power
-          // Respawn the card with power 3 (phoenix special case)
-          if (destroyedDef.ability.effect === 'buff_self' && destroyedDef.ability.value === -1) {
-            const respawned: NcCardInstance = {
-              ...destroyed,
-              power: 3,
-              basePower: 3,
-              playedThisRound: true,
-            };
-            lane.cards[oppSide].push(respawned);
-          }
-        }
+        handleOnDestroy(destroyed, oppSide, cardLane, lanes, log, pushBonuses);
       }
       break;
     }
@@ -704,7 +906,10 @@ function applyEffect(
     case 'drain': {
       const val = ability.value ?? 0;
       const enemies = lane.cards[oppSide];
-      if (enemies.length === 0) break;
+      if (enemies.length === 0) {
+        log.push({ type: 'ability_fizzled', cardUid: card.uid, reason: 'no_target' });
+        break;
+      }
       // Find strongest enemy
       let strongest = enemies[0];
       for (const e of enemies) {
@@ -759,38 +964,147 @@ function applyEffect(
         if (lane.modifier === 'indestructible') return false;
         return true;
       });
-      if (enemies.length === 0) break;
+      if (enemies.length === 0) {
+        const allEnemies = lane.cards[oppSide];
+        if (allEnemies.length === 0) {
+          log.push({ type: 'ability_fizzled', cardUid: card.uid, reason: 'no_target' });
+        } else if (lane.modifier === 'indestructible') {
+          log.push({ type: 'ability_fizzled', cardUid: card.uid, reason: 'indestructible' });
+        } else {
+          log.push({ type: 'ability_fizzled', cardUid: card.uid, reason: 'shielded' });
+        }
+        break;
+      }
       enemies.sort((a, b) => b.power - a.power);
       const strongest = enemies[0];
       const idx = lane.cards[oppSide].findIndex(c => c.uid === strongest.uid);
       if (idx !== -1) {
         const destroyed = lane.cards[oppSide].splice(idx, 1)[0];
+        // Refund tug: destroying an enemy card pulls the tug back toward the destroyer
+        const siphonMult2 = lane.modifier === 'siphon' ? 1.5 : 1;
+        const tugRefund = Math.round(destroyed.power * NC_PUSH_PER_POWER * NC_DESTROY_TUG_REFUND * siphonMult2);
+        lane.tugValue = clamp(lane.tugValue + (owner === 0 ? tugRefund : -tugRefund), -NC_BREAKTHROUGH_THRESHOLD, NC_BREAKTHROUGH_THRESHOLD);
         log.push({
           type: 'card_destroyed',
           laneIndex: cardLane,
           cardUid: destroyed.uid,
           owner: oppSide,
         });
-        const destroyedDef = getCardDef(destroyed.cardId);
-        if (destroyedDef.ability.trigger === 'on_destroy') {
-          log.push({
-            type: 'ability_triggered',
-            cardUid: destroyed.uid,
-            trigger: 'on_destroy',
-            effect: destroyedDef.ability.effect,
-            value: destroyedDef.ability.value,
-          });
-          if (destroyedDef.ability.effect === 'buff_self' && destroyedDef.ability.value === -1) {
-            const respawned: NcCardInstance = {
-              ...destroyed,
-              power: 3,
-              basePower: 3,
-              playedThisRound: true,
-            };
-            lane.cards[oppSide].push(respawned);
-          }
-        }
+
+        handleOnDestroy(destroyed, oppSide, cardLane, lanes, log, pushBonuses);
       }
+      break;
+    }
+
+    case 'buff_self_per_enemy': {
+      const val = ability.value ?? 0;
+      const enemyCount = lane.cards[oppSide].length;
+      const bonus = val * enemyCount;
+      card.power += bonus;
+      card.basePower += bonus;
+      break;
+    }
+
+    case 'debuff_strongest_enemy': {
+      const val = ability.value ?? 0;
+      const enemies = lane.cards[oppSide];
+      if (enemies.length === 0) {
+        log.push({ type: 'ability_fizzled', cardUid: card.uid, reason: 'no_target' });
+        break;
+      }
+      let strongest = enemies[0];
+      for (const e of enemies) {
+        if (e.power > strongest.power) strongest = e;
+      }
+      strongest.power = Math.max(0, strongest.power - val);
+      strongest.basePower = Math.max(0, strongest.basePower - val);
+      break;
+    }
+
+    case 'shield_allies': {
+      const val = ability.value ?? 1;
+      for (const ally of lane.cards[owner]) {
+        if (ally.uid === card.uid) continue;
+        ally.shieldRounds = Math.max(ally.shieldRounds, val);
+      }
+      break;
+    }
+
+    case 'destroy_random_enemy': {
+      const enemies = lane.cards[oppSide].filter(c => {
+        if (c.shieldRounds > 0) return false;
+        if (lane.modifier === 'indestructible') return false;
+        return true;
+      });
+      if (enemies.length === 0) {
+        const allEnemies = lane.cards[oppSide];
+        if (allEnemies.length === 0) {
+          log.push({ type: 'ability_fizzled', cardUid: card.uid, reason: 'no_target' });
+        } else if (lane.modifier === 'indestructible') {
+          log.push({ type: 'ability_fizzled', cardUid: card.uid, reason: 'indestructible' });
+        } else {
+          log.push({ type: 'ability_fizzled', cardUid: card.uid, reason: 'shielded' });
+        }
+        break;
+      }
+      const target = enemies[Math.floor(Math.random() * enemies.length)];
+      const idx = lane.cards[oppSide].findIndex(c => c.uid === target.uid);
+      if (idx !== -1) {
+        const destroyed = lane.cards[oppSide].splice(idx, 1)[0];
+        const siphonMult = lane.modifier === 'siphon' ? 1.5 : 1;
+        const tugRefund = Math.round(destroyed.power * NC_PUSH_PER_POWER * NC_DESTROY_TUG_REFUND * siphonMult);
+        lane.tugValue = clamp(lane.tugValue + (owner === 0 ? tugRefund : -tugRefund), -NC_BREAKTHROUGH_THRESHOLD, NC_BREAKTHROUGH_THRESHOLD);
+        log.push({
+          type: 'card_destroyed',
+          laneIndex: cardLane,
+          cardUid: destroyed.uid,
+          owner: oppSide,
+        });
+        handleOnDestroy(destroyed, oppSide, cardLane, lanes, log, pushBonuses);
+      }
+      break;
+    }
+
+    case 'return_to_hand': {
+      const enemies = lane.cards[oppSide];
+      if (enemies.length === 0) {
+        log.push({ type: 'ability_fizzled', cardUid: card.uid, reason: 'no_target' });
+        break;
+      }
+      let target: NcCardInstance;
+      if (ability.laneTarget === 'strongest') {
+        target = enemies.reduce((a, b) => b.power > a.power ? b : a);
+      } else if (ability.laneTarget === 'random') {
+        target = enemies[Math.floor(Math.random() * enemies.length)];
+      } else {
+        // weakest (default)
+        target = enemies.reduce((a, b) => b.power < a.power ? b : a);
+      }
+      const idx = lane.cards[oppSide].findIndex(c => c.uid === target.uid);
+      if (idx !== -1) {
+        const bounced = lane.cards[oppSide].splice(idx, 1)[0];
+        // Return to opponent's hand (no tug refund — not a destroy)
+        if (hands) {
+          hands[oppSide].push(bounced.cardId);
+        }
+        log.push({
+          type: 'card_destroyed', // reuse event type for visual
+          laneIndex: cardLane,
+          cardUid: bounced.uid,
+          owner: oppSide,
+        });
+      }
+      break;
+    }
+
+    case 'tug_shift': {
+      const val = ability.value ?? 0;
+      const shift = val * NC_PUSH_PER_POWER;
+      lane.tugValue = clamp(
+        lane.tugValue + (owner === 0 ? shift : -shift),
+        -NC_BREAKTHROUGH_THRESHOLD,
+        NC_BREAKTHROUGH_THRESHOLD,
+      );
       break;
     }
 
@@ -882,7 +1196,7 @@ export const nexusClashEngine: GameEngine<NexusClashState, NexusClashAction> = {
   initialState(playerIds: string[], _startingPlayerIndex?: number, config?: unknown): NexusClashState {
     const p0 = playerIds[0];
     const p1 = playerIds[1];
-    const gameConfig = config as { botDifficulty?: NcBotDifficulty } | undefined;
+    const gameConfig = config as { botDifficulty?: NcBotDifficulty; playerDecks?: Record<string, string[]> } | undefined;
 
     // Pick 3 unique lane modifiers
     const modifiers = pickUniqueModifiers(3);
@@ -896,13 +1210,29 @@ export const nexusClashEngine: GameEngine<NexusClashState, NexusClashAction> = {
       breakthroughWinner: null,
     })) as [NcLane, NcLane, NcLane];
 
-    // Build decks: 12 unique cards (1 copy each)
-    const buildDeck = (): string[] => {
-      return shuffle([...NC_STARTER_CARDS]);
+    // Build decks from player's chosen deck, or fallback to starter cards
+    const buildDeck = (playerToken: string): string[] => {
+      const chosenCards = gameConfig?.playerDecks?.[playerToken];
+      if (chosenCards && chosenCards.length === NC_DECK_SIZE) {
+        // Validate all cards exist, deduplicate, enforce NC_MAX_COPIES
+        const validated: string[] = [];
+        const seen = new Set<string>();
+        for (const cardId of chosenCards) {
+          if (!NC_CARD_MAP[cardId]) continue;
+          if (seen.has(cardId)) continue;
+          seen.add(cardId);
+          validated.push(cardId);
+        }
+        if (validated.length === NC_DECK_SIZE) {
+          return shuffle(validated);
+        }
+      }
+      // Fallback: random starter deck
+      return shuffle([...NC_STARTER_CARDS]).slice(0, NC_DECK_SIZE);
     };
 
-    const deck0 = buildDeck();
-    const deck1 = buildDeck();
+    const deck0 = buildDeck(p0);
+    const deck1 = buildDeck(p1);
 
     // Draw initial hands (with reshuffle support)
     const discard0: string[] = [];
