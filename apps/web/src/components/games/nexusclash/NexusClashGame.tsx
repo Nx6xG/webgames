@@ -7,7 +7,7 @@ import type {
   NcPendingPlay, NcLaneModifier, NcResolveEvent,
 } from 'shared';
 import { NC_CARD_MAP, NC_CARDS, NC_SHARD_PRICES, NC_MAX_COPIES, getNcDailyReward, NC_WIN_COINS, NC_LOSS_COINS, NC_BREAKTHROUGH_THRESHOLD, NC_BP_WIN_XP, NC_BP_LOSS_XP, NC_RANK_WIN_POINTS, NC_RANK_LOSS_POINTS } from 'shared';
-import type { NcRarity, NcBotDifficulty, NcEmoteId } from 'shared';
+import type { NcRarity, NcEmoteId } from 'shared';
 import { useMultiplayer } from '@/hooks/useMultiplayer';
 import type { GameComponentProps } from '@/lib/gameRegistry';
 import { WaitingForConnectionOverlay } from '@/components/WaitingForConnectionOverlay';
@@ -860,7 +860,7 @@ export function NexusClashGame({ wsUrl, gameId, initialRoomCode, quickPlay: isQu
   const [shardRevealCard, setShardRevealCard] = useState<string | null>(null);
   const [showDailyCalendar, setShowDailyCalendar] = useState(false);
   const [showTutorial, setShowTutorial] = useState(false);
-  const [botDifficulty, setBotDifficulty] = useState<NcBotDifficulty>('medium');
+  // Bot difficulty removed — randomized per round on server
   const [emotePickerOpen, setEmotePickerOpen] = useState(false);
   const [emoteCooldown, setEmoteCooldown] = useState(false);
   const [receivedEmote, setReceivedEmote] = useState<{ emoteId: NcEmoteId; key: number } | null>(null);
@@ -2781,38 +2781,15 @@ export function NexusClashGame({ wsUrl, gameId, initialRoomCode, quickPlay: isQu
                 </span>
               </div>
               <div className="px-5 py-4 flex flex-col gap-3">
-                {/* Difficulty selector */}
-                <div className="flex gap-2">
-                  {(['easy', 'medium', 'hard'] as const).map(diff => {
-                    const isActive = botDifficulty === diff;
-                    const colors: Record<string, { bg: string; border: string; text: string }> = {
-                      easy: { bg: '#1a2a1a', border: '#4ade8044', text: '#4ade80' },
-                      medium: { bg: '#1a1a2a', border: '#c9a84c44', text: '#c9a84c' },
-                      hard: { bg: '#2a1a1a', border: '#ef444444', text: '#ef4444' },
-                    };
-                    const c = colors[diff];
-                    return (
-                      <button
-                        key={diff}
-                        onClick={() => setBotDifficulty(diff)}
-                        className="flex-1 py-2 rounded text-xs font-bold uppercase tracking-wider transition-all"
-                        style={{
-                          background: isActive ? c.bg : '#0a0a12',
-                          border: `1px solid ${isActive ? c.border : '#1e1e3a'}`,
-                          color: isActive ? c.text : '#4a4a5a',
-                        }}
-                      >
-                        {t(`nc.bot.${diff}`)}
-                      </button>
-                    );
-                  })}
-                </div>
+                <p className="text-[11px] leading-relaxed" style={{ color: '#5a5a6a' }}>
+                  {t('nc.bot.desc')}
+                </p>
                 {/* Start button */}
                 <button
                   onClick={() => {
                     const selectedDeckObj = ncProfile.profile.decks.find(d => d.id === ncProfile.profile.selectedDeckId);
                     mp.createRoom({
-                      ncConfig: { botDifficulty, deckCards: selectedDeckObj?.cards },
+                      ncConfig: { deckCards: selectedDeckObj?.cards },
                     });
                   }}
                   disabled={mp.connection !== 'connected' || mp.phase === 'waiting'}

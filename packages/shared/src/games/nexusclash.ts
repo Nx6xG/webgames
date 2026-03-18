@@ -486,6 +486,7 @@ export function getNcCurrentSeason(): string {
 
 // ── Constants ───────────────────────────────────────────────────────────────
 
+/** @deprecated kept for compat — difficulty is now randomized per round */
 export type NcBotDifficulty = 'easy' | 'medium' | 'hard';
 export const NC_BOT_TOKEN_PREFIX = 'nc-bot-';
 export function isNcBotToken(token: string): boolean {

@@ -11,6 +11,7 @@ import type {
   NcAbility,
 } from 'shared';
 import {
+  NC_CARDS,
   NC_CARD_MAP,
   NC_STARTER_CARDS,
   NC_DECK_SIZE,
@@ -35,7 +36,7 @@ import {
   NC_DOMINANCE_BONUS,
   NC_MODIFIER_ROTATION_ROUND,
 } from 'shared';
-import type { NcBotDifficulty } from 'shared';
+// NcBotDifficulty no longer used — bot skill randomized per round
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -1117,13 +1118,51 @@ function applyEffect(
 
 // ── Bot AI ────────────────────────────────────────────────────────────────────
 
+/** Pick a random "skill level" for this round — the bot varies like a real player */
+function randomBotSkill(): 'sloppy' | 'decent' | 'sharp' {
+  const r = Math.random();
+  if (r < 0.25) return 'sloppy';
+  if (r < 0.65) return 'decent';
+  return 'sharp';
+}
+
+/** Build a random bot deck from all available cards */
+function generateRandomBotDeck(): string[] {
+  // Pick NC_DECK_SIZE unique cards, weighted toward cheaper cards for variety
+  const pool = shuffle([...NC_CARDS]);
+  const picked = new Set<string>();
+  // Ensure a reasonable mana curve: pick some from each cost bracket
+  const byCost: Record<number, typeof NC_CARDS> = {};
+  for (const c of pool) {
+    const bucket = Math.min(c.cost, 6);
+    (byCost[bucket] ??= []).push(c);
+  }
+  // Target: 3x 1-cost, 3x 2-cost, 3x 3-cost, 2x 4-cost, 1x 5+ cost
+  const targets = [[1, 3], [2, 3], [3, 3], [4, 2], [5, 1]] as const;
+  for (const [cost, count] of targets) {
+    const bucket = cost >= 5
+      ? pool.filter(c => c.cost >= 5 && !picked.has(c.id))
+      : (byCost[cost] ?? []).filter(c => !picked.has(c.id));
+    for (let i = 0; i < count && i < bucket.length; i++) {
+      picked.add(bucket[i].id);
+    }
+  }
+  // Fill remaining slots randomly
+  for (const c of pool) {
+    if (picked.size >= NC_DECK_SIZE) break;
+    if (!picked.has(c.id)) picked.add(c.id);
+  }
+  return shuffle([...picked]).slice(0, NC_DECK_SIZE);
+}
+
 function computeBotPlays(
   state: NexusClashState,
   botIdx: 0 | 1,
-  difficulty: NcBotDifficulty,
 ): Array<{ cardId: string; laneIndex: 0 | 1 | 2 }> {
   const hand = state.hands[botIdx];
   if (hand.length === 0) return [];
+
+  const skill = randomBotSkill();
 
   const plays: Array<{ cardId: string; laneIndex: 0 | 1 | 2 }> = [];
   let remainingMana = state.mana[botIdx] - computeSpentMana(state.pendingPlays[botIdx], state.lanes as [NcLane, NcLane, NcLane]);
@@ -1138,33 +1177,27 @@ function computeBotPlays(
   for (const card of sortedCards) {
     if (remainingMana < card.def.cost) continue;
 
-    // Pick target lane
+    // Pick target lane based on current "skill roll"
     let targetLane: 0 | 1 | 2;
+    const unlocked = ([0, 1, 2] as const).filter(i => !state.lanes[i].locked);
+    if (unlocked.length === 0) break;
 
-    if (difficulty === 'easy') {
+    if (skill === 'sloppy') {
       // Random lane
-      const unlocked = ([0, 1, 2] as const).filter(i => !state.lanes[i].locked);
-      if (unlocked.length === 0) break;
       targetLane = unlocked[Math.floor(Math.random() * unlocked.length)];
-    } else if (difficulty === 'medium') {
+    } else if (skill === 'decent') {
       // Play to weakest lane (where bot is losing most)
-      const unlocked = ([0, 1, 2] as const).filter(i => !state.lanes[i].locked);
-      if (unlocked.length === 0) break;
       const perspective = botIdx === 0 ? 1 : -1;
       unlocked.sort((a, b) => (state.lanes[a].tugValue * perspective) - (state.lanes[b].tugValue * perspective));
       targetLane = unlocked[0];
     } else {
-      // Hard: play to lane closest to breakthrough for bot, or defend weakest
-      const unlocked = ([0, 1, 2] as const).filter(i => !state.lanes[i].locked);
-      if (unlocked.length === 0) break;
+      // Sharp: play to lane closest to breakthrough for bot, or defend weakest
       const perspective = botIdx === 0 ? 1 : -1;
-      // Prioritize lanes close to winning (positive tug for bot)
       const laneScores = unlocked.map(i => {
         const tug = state.lanes[i].tugValue * perspective;
-        // High score = good for bot (close to breakthrough)
-        if (tug > 60) return { lane: i, score: 100 + tug }; // almost winning, push to finish
-        if (tug < -60) return { lane: i, score: 90 - tug }; // almost losing, defend
-        return { lane: i, score: 50 + tug }; // neutral
+        if (tug > 60) return { lane: i, score: 100 + tug };
+        if (tug < -60) return { lane: i, score: 90 - tug };
+        return { lane: i, score: 50 + tug };
       });
       laneScores.sort((a, b) => b.score - a.score);
       targetLane = laneScores[0].lane;
@@ -1177,11 +1210,11 @@ function computeBotPlays(
     plays.push({ cardId: card.id, laneIndex: targetLane });
     remainingMana -= effectiveCost;
 
-    // Easy bot: only plays 1 card per round
-    if (difficulty === 'easy' && plays.length >= 1) break;
-    // Medium: plays up to 2
-    if (difficulty === 'medium' && plays.length >= 2) break;
-    // Hard: plays as many as possible (no break)
+    // Sloppy: sometimes stops early (1-2 cards)
+    if (skill === 'sloppy' && plays.length >= 1 && Math.random() < 0.5) break;
+    // Decent: plays up to 2-3
+    if (skill === 'decent' && plays.length >= 2 && Math.random() < 0.4) break;
+    // Sharp: plays as many as possible (no break)
   }
 
   return plays;
@@ -1196,7 +1229,7 @@ export const nexusClashEngine: GameEngine<NexusClashState, NexusClashAction> = {
   initialState(playerIds: string[], _startingPlayerIndex?: number, config?: unknown): NexusClashState {
     const p0 = playerIds[0];
     const p1 = playerIds[1];
-    const gameConfig = config as { botDifficulty?: NcBotDifficulty; playerDecks?: Record<string, string[]> } | undefined;
+    const gameConfig = config as { botDifficulty?: unknown; playerDecks?: Record<string, string[]> } | undefined;
 
     // Pick 3 unique lane modifiers
     const modifiers = pickUniqueModifiers(3);
@@ -1212,6 +1245,8 @@ export const nexusClashEngine: GameEngine<NexusClashState, NexusClashAction> = {
 
     // Build decks from player's chosen deck, or fallback to starter cards
     const buildDeck = (playerToken: string): string[] => {
+      // Bots always get a fresh random deck
+      if (isNcBotToken(playerToken)) return generateRandomBotDeck();
       const chosenCards = gameConfig?.playerDecks?.[playerToken];
       if (chosenCards && chosenCards.length === NC_DECK_SIZE) {
         // Validate all cards exist, deduplicate, enforce NC_MAX_COPIES
@@ -1262,7 +1297,7 @@ export const nexusClashEngine: GameEngine<NexusClashState, NexusClashAction> = {
       turnDeadline: Date.now() + NC_TURN_TIME_MS,
       history: [],
       mulliganDecisions: [null, null] as [('keep' | 'redraw' | null), ('keep' | 'redraw' | null)],
-      botDifficulty: gameConfig?.botDifficulty,
+      botDifficulty: undefined,
     };
   },
 
@@ -1476,8 +1511,7 @@ export const nexusClashEngine: GameEngine<NexusClashState, NexusClashAction> = {
       // Bot places cards and confirms
       let s = { ...state, hands: [[...state.hands[0]], [...state.hands[1]]] as [string[], string[]], pendingPlays: [[...state.pendingPlays[0]], [...state.pendingPlays[1]]] as [NcPendingPlay[], NcPendingPlay[]] };
 
-      const difficulty = state.botDifficulty ?? 'medium';
-      const botPlays = computeBotPlays(s, pIdx, difficulty);
+      const botPlays = computeBotPlays(s, pIdx);
 
       for (const play of botPlays) {
         const def = getCardDef(play.cardId);

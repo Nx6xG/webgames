@@ -2868,11 +2868,8 @@ export const messages: Record<Lang, Record<string, string>> = {
     'nc.mulligan.redrawn':     'Neu gezogen',
     // Bot
     'nc.bot.title':            'Gegen Bot spielen',
-    'nc.bot.easy':             'Einfach',
-    'nc.bot.medium':           'Mittel',
-    'nc.bot.hard':             'Schwer',
+    'nc.bot.desc':             'Der Bot spielt mit einem zufälligen Deck und variierender Spielstärke — wie ein echter Gegner.',
     'nc.bot.start':            'Spiel starten',
-    'nc.bot.difficulty':       'Schwierigkeit',
     // Tutorial
     'nc.tutorial.title':       'Spielregeln',
     'nc.tutorial.next':        'Weiter',
@@ -5798,11 +5795,8 @@ export const messages: Record<Lang, Record<string, string>> = {
     'nc.mulligan.redrawn':     'Redrawn',
     // Bot
     'nc.bot.title':            'Play vs Bot',
-    'nc.bot.easy':             'Easy',
-    'nc.bot.medium':           'Medium',
-    'nc.bot.hard':             'Hard',
+    'nc.bot.desc':             'The bot plays with a random deck and varying skill — like a real opponent.',
     'nc.bot.start':            'Start Game',
-    'nc.bot.difficulty':       'Difficulty',
     // Tutorial
     'nc.tutorial.title':       'How to Play',
     'nc.tutorial.next':        'Next',
