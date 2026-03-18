@@ -12,6 +12,7 @@ import {
   NC_STANDARD_RATES, NC_CARDS_BY_RARITY,
   NC_RANK_WIN_POINTS, NC_RANK_LOSS_POINTS, NC_RANK_REWARDS,
   getNcRank, getNcCurrentSeason,
+  NC_STARTER_CARDS,
 } from 'shared';
 
 import { getSupabase } from '@/lib/supabaseClient';
@@ -33,6 +34,12 @@ function loadProfile(): NcPlayerProfile {
       // Migrate: add battlePass if missing or outdated season
       if (!p.battlePass || p.battlePass.seasonId !== NC_BP_SEASON_ID) {
         p.battlePass = createDefaultBattlePass();
+      }
+      // Migrate: grant any new starter commons not yet in collection
+      for (const id of NC_STARTER_CARDS) {
+        if (!p.collection.cards[id]) {
+          p.collection.cards[id] = 1;
+        }
       }
       return p;
     }
