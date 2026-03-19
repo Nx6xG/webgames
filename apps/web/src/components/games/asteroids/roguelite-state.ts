@@ -1,5 +1,6 @@
 import type {
   PermanentUpgradeId,
+  AnyUpgradeId,
   RogueliteSave,
   ActiveBuff,
   TempBuffDef,
@@ -8,7 +9,7 @@ import type {
   RunStats,
   DailyRunResult,
 } from './roguelite-types';
-import { PERMANENT_UPGRADES, TEMP_BUFFS, MILESTONES, isPrestigeUnlocked } from './roguelite-data';
+import { PERMANENT_UPGRADES, POWERUP_UPGRADES, ALL_BUYABLE_UPGRADES, TEMP_BUFFS, MILESTONES, isPrestigeUnlocked } from './roguelite-data';
 
 // ---------------------------------------------------------------------------
 // LocalStorage persistence
@@ -77,23 +78,23 @@ export function saveRogueliteSave(save: RogueliteSave): void {
 
 export function getUpgradeLevel(
   save: RogueliteSave,
-  id: PermanentUpgradeId,
+  id: AnyUpgradeId,
 ): number {
   return save.upgrades[id] ?? 0;
 }
 
 /**
- * Attempt to buy the next tier of a permanent upgrade.
+ * Attempt to buy the next tier of any upgrade (permanent or power-up).
  * Returns the updated save, or null if the player can't afford it or it's maxed.
  */
 export function buyUpgrade(
   save: RogueliteSave,
-  id: PermanentUpgradeId,
+  id: AnyUpgradeId,
 ): RogueliteSave | null {
-  const def = PERMANENT_UPGRADES.find((u) => u.id === id);
+  const def = ALL_BUYABLE_UPGRADES.find((u) => u.id === id);
   if (!def) return null;
 
-  const currentTier = getUpgradeLevel(save, id);
+  const currentTier = save.upgrades[id] ?? 0;
   if (currentTier >= def.maxTier) return null;
 
   const cost = def.costs[currentTier];

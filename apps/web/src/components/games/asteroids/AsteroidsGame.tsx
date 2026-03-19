@@ -10,10 +10,11 @@ import type { AsteroidsStats } from './stats';
 import * as sfx from './sound';
 
 // Roguelite imports
-import type { AsteroidVariant, BossVariant, ScrapDrop, ActiveBuff, Drone, TempBuffDef, ArtifactId, EliteModifier, WaveEvent, MidWaveEvent, MidWaveEventType, RunStats, ShipId, CurseId, MilestoneId, MegaBossData, MegaBossPhase, DailyModifierId } from './roguelite-types';
-import type { PermanentUpgradeId, MilestoneDef } from './roguelite-types';
+import type { AsteroidVariant, BossVariant, ScrapDrop, ActiveBuff, Drone, TempBuffDef, ArtifactId, EliteModifier, WaveEvent, MidWaveEvent, MidWaveEventType, RunStats, ShipId, CurseId, MilestoneId, MegaBossData, MegaBossPhase, DailyModifierId, PowerUpType as PUType } from './roguelite-types';
+import type { PermanentUpgradeId, AnyUpgradeId, MilestoneDef } from './roguelite-types';
 import {
   PERMANENT_UPGRADES,
+  POWERUP_UPGRADES,
   ASTEROID_VARIANT_CONFIG,
   BOSS_VARIANT_CONFIG,
   BASE_SCRAP_VALUES,
@@ -45,6 +46,8 @@ import {
   getEventWaveScale,
   getPowerupDropScale,
   getMegaBossHpScale,
+  getPowerUpParams,
+  getPuUpgradeTier,
 } from './roguelite-data';
 import type { AppliedStats } from './roguelite-data';
 import type { ArtifactDef } from './roguelite-types';
@@ -105,7 +108,7 @@ interface Particle {
   color: string;
 }
 
-type PowerUpType = 'double' | 'triple' | 'rapid' | 'shield' | 'bigbullet' | 'homing' | 'multishot' | 'timeslow';
+type PowerUpType = PUType;
 
 interface PowerUp {
   pos: Vec2;
@@ -119,6 +122,7 @@ interface PowerUp {
 interface ActivePower {
   type: PowerUpType;
   timeLeft: number; // ms remaining
+  maxTime: number;  // original duration (for HUD bar)
 }
 
 function hasPower(powers: ActivePower[], type: PowerUpType): boolean {
@@ -204,6 +208,11 @@ interface GameState {
   rlMidWaveTimer?: number; // ms until next mid-wave event roll
   rlRaider?: Raider | null;
   rlMiniBosses?: Boss[];
+  rlOrbitalStrikeTimer?: number; // ms until next orbital strike
+  rlVoidShieldActive?: boolean;  // void shield absorb available
+  rlVoidShieldCooldown?: number; // ms until void shield recharges
+  rlChainLightningFx?: Array<{ x1: number; y1: number; x2: number; y2: number; life: number }>; // visual fx
+  rlOrbitalStrikeFx?: Array<{ x: number; y: number; life: number; radius: number }>; // visual fx
 }
 
 // ── Constants ────────────────────────────────────────────────────────────────
@@ -219,9 +228,9 @@ const BULLET_LIFE = 800; // ms
 const MAX_BULLETS = 5;
 const INVULN_TIME = 2500; // ms
 const STAR_COUNT = 120;
-const POWERUP_SPAWN_CHANCE = 0.15; // 15% from large asteroids
-const POWERUP_MEDIUM_CHANCE = 0.10; // 10% from medium asteroids
-const POWERUP_SMALL_CHANCE = 0.04; // 4% from small asteroids
+const POWERUP_SPAWN_CHANCE = 0.08; // 8% from large asteroids
+const POWERUP_MEDIUM_CHANCE = 0.05; // 5% from medium asteroids
+const POWERUP_SMALL_CHANCE = 0.02; // 2% from small asteroids
 const POWERUP_LIFETIME = 8000; // ms before despawn
 const POWERUP_ACTIVE_DURATION = 10000; // ms active
 const POWERUP_RADIUS = 14;
@@ -384,7 +393,9 @@ function assignRogueliteAsteroidData(a: Asteroid, wave: number, dMods?: DailyMod
   const cfg = ASTEROID_VARIANT_CONFIG[variant];
   const si = sizeIndex(a.radius);
   const baseHp = si === 0 ? 3 : si === 1 ? 2 : 1;
-  const hpMult = dMods?.includes('titanAsteroids') ? 2 : 1;
+  // HP scales with wave: +15% per 5 waves, accelerating after wave 20
+  const waveHpScale = 1 + Math.floor(wave / 5) * 0.15 + (wave > 20 ? (wave - 20) * 0.03 : 0);
+  const hpMult = (dMods?.includes('titanAsteroids') ? 2 : 1) * waveHpScale;
   a.rlVariant = variant;
   a.rlHp = Math.ceil(baseHp * cfg.hpMultiplier * hpMult);
   a.rlMaxHp = a.rlHp;
@@ -421,8 +432,9 @@ function assignChildRogueliteData(child: Asteroid, parentVariant: AsteroidVarian
   const cfg = ASTEROID_VARIANT_CONFIG[variant];
   const si = sizeIndex(child.radius);
   const baseHp = si === 0 ? 3 : si === 1 ? 2 : 1;
+  const waveHpScale = 1 + Math.floor(wave / 5) * 0.15 + (wave > 20 ? (wave - 20) * 0.03 : 0);
   child.rlVariant = variant;
-  child.rlHp = Math.ceil(baseHp * cfg.hpMultiplier);
+  child.rlHp = Math.ceil(baseHp * cfg.hpMultiplier * waveHpScale);
   child.rlMaxHp = child.rlHp;
   const baseScrap = si === 0 ? BASE_SCRAP_VALUES.large : si === 1 ? BASE_SCRAP_VALUES.medium : BASE_SCRAP_VALUES.small;
   child.rlScrapValue = Math.ceil(baseScrap * cfg.scrapMultiplier);
@@ -1133,6 +1145,64 @@ export function AsteroidsGame() {
         }
       }
 
+      // ── Orbital strike buff: AoE damage every 4 seconds on asteroid clusters ──
+      if (isRL && game.rlActiveBuffs?.some(b => b.id === 'orbitalStrike') && rlStats) {
+        game.rlOrbitalStrikeTimer = (game.rlOrbitalStrikeTimer ?? 4000) - dt;
+        if (game.rlOrbitalStrikeTimer <= 0) {
+          game.rlOrbitalStrikeTimer = 4000;
+          // Find densest cluster center among asteroids
+          let bestTarget: Vec2 | null = null;
+          let bestCount = 0;
+          const strikeRadius = 100;
+          for (const a of game.asteroids) {
+            let count = 0;
+            for (const other of game.asteroids) {
+              if (dist(a.pos, other.pos) < strikeRadius) count++;
+            }
+            if (count > bestCount) { bestCount = count; bestTarget = { ...a.pos }; }
+          }
+          if (bestTarget && bestCount > 0) {
+            const strikeDmg = rlStats.bulletDamage * 3;
+            for (const a of game.asteroids) {
+              if (dist(a.pos, bestTarget) < strikeRadius && a.rlHp != null) {
+                a.rlHp -= strikeDmg;
+              }
+            }
+            game.particles.push(...makeParticles(bestTarget, 25, '#f97316'));
+            if (!game.rlOrbitalStrikeFx) game.rlOrbitalStrikeFx = [];
+            game.rlOrbitalStrikeFx.push({ x: bestTarget.x, y: bestTarget.y, life: 400, radius: strikeRadius });
+          }
+        }
+      }
+
+      // ── Void shield buff: absorb one hit, recharges every 15 seconds ──
+      if (isRL && game.rlActiveBuffs?.some(b => b.id === 'voidShield')) {
+        if (game.rlVoidShieldActive === undefined) game.rlVoidShieldActive = true;
+        if (!game.rlVoidShieldActive) {
+          game.rlVoidShieldCooldown = (game.rlVoidShieldCooldown ?? 15000) - dt;
+          if (game.rlVoidShieldCooldown <= 0) {
+            game.rlVoidShieldActive = true;
+            game.rlVoidShieldCooldown = 15000;
+          }
+        }
+      }
+
+      // ── Update orbital strike fx ──
+      if (game.rlOrbitalStrikeFx) {
+        for (let i = game.rlOrbitalStrikeFx.length - 1; i >= 0; i--) {
+          game.rlOrbitalStrikeFx[i].life -= dt;
+          if (game.rlOrbitalStrikeFx[i].life <= 0) game.rlOrbitalStrikeFx.splice(i, 1);
+        }
+      }
+
+      // ── Update chain lightning fx ──
+      if (game.rlChainLightningFx) {
+        for (let i = game.rlChainLightningFx.length - 1; i >= 0; i--) {
+          game.rlChainLightningFx[i].life -= dt;
+          if (game.rlChainLightningFx[i].life <= 0) game.rlChainLightningFx.splice(i, 1);
+        }
+      }
+
       // ── Stellar forge artifact: scrap drops worth +50% ──
       // (applied at drop time, see scrap drop creation)
 
@@ -1140,8 +1210,11 @@ export function AsteroidsGame() {
       const isRapid = hasPower(game.activePowers, 'rapid');
       const hasOverdrive = isRL && game.rlActiveBuffs?.some(b => b.id === 'overdrive');
       const hasPowerSurge = game.rlMidWaveEvent?.type === 'powerSurge' || game.rlMidWaveEvent?.type === 'overdrivePulse';
-      const cooldown = (isRapid || hasOverdrive || hasPowerSurge) ? Math.min(fireCool * 0.5, 60) : fireCool;
-      const maxBullets = isRapid ? 10 : MAX_BULLETS;
+      const puUpgrades = rlSaveRef.current?.upgrades ?? {};
+      const rapidParams = isRapid ? getPowerUpParams('rapid', isRL ? getPuUpgradeTier('rapid', puUpgrades) : 3) : null;
+      const rapidCooldownMult = rapidParams?.cooldownMult ?? 0.5;
+      const cooldown = (isRapid || hasOverdrive || hasPowerSurge) ? Math.min(fireCool * rapidCooldownMult, 60) : fireCool;
+      const maxBullets = isRapid ? (rapidParams?.maxBullets ?? 10) : MAX_BULLETS;
       shootCooldownRef.current -= dt;
       const shooting = keys.has(' ') || mouseDownRef.current;
       if (shooting && game.bullets.length < maxBullets && shootCooldownRef.current <= 0) {
@@ -1150,8 +1223,8 @@ export function AsteroidsGame() {
         const shipVelFactor = 0.5;
 
         if (hasPower(game.activePowers, 'multishot')) {
-          // 5 bullets in a spread: -30, -15, 0, +15, +30 degrees
-          const offsets = [-0.524, -0.262, 0, 0.262, 0.524]; // radians
+          const msParams = getPowerUpParams('multishot', isRL ? getPuUpgradeTier('multishot', puUpgrades) : 3);
+          const offsets = msParams.bulletAngles ?? [-0.524, -0.262, 0, 0.262, 0.524];
           for (const off of offsets) {
             const a = baseAngle + off;
             game.bullets.push({
@@ -1164,7 +1237,8 @@ export function AsteroidsGame() {
             });
           }
         } else if (hasPower(game.activePowers, 'double')) {
-          const spread = 0.08; // ~4.5 degrees
+          const dbParams = getPowerUpParams('double', isRL ? getPuUpgradeTier('double', puUpgrades) : 3);
+          const spread = dbParams.spread ?? 0.08;
           for (const off of [-spread, spread]) {
             const a = baseAngle + off;
             game.bullets.push({
@@ -1177,7 +1251,8 @@ export function AsteroidsGame() {
             });
           }
         } else if (hasPower(game.activePowers, 'triple')) {
-          const spread = 0.15; // ~8.6 degrees
+          const trParams = getPowerUpParams('triple', isRL ? getPuUpgradeTier('triple', puUpgrades) : 3);
+          const spread = trParams.spread ?? 0.15;
           for (const off of [-spread, 0, spread]) {
             const a = baseAngle + off;
             game.bullets.push({
@@ -1239,7 +1314,8 @@ export function AsteroidsGame() {
             let angleDiff = targetAngle - currentAngle;
             while (angleDiff > Math.PI) angleDiff -= Math.PI * 2;
             while (angleDiff < -Math.PI) angleDiff += Math.PI * 2;
-            const turnRate = 0.06; // radians per frame
+            const hmParams = getPowerUpParams('homing', isRL ? getPuUpgradeTier('homing', puUpgrades) : 3);
+            const turnRate = hmParams.homingTurnRate ?? 0.06;
             const steer = Math.max(-turnRate, Math.min(turnRate, angleDiff));
             const newAngle = currentAngle + steer;
             const speed = Math.sqrt(b.vel.x * b.vel.x + b.vel.y * b.vel.y);
@@ -1265,7 +1341,8 @@ export function AsteroidsGame() {
       // ── Time slow ──
       const hasTimeSlow = hasPower(game.activePowers, 'timeslow') || (isRL && game.rlActiveBuffs?.some(b => b.id === 'timeSlow'));
       const hasTimeCrystal = hasArt('timeCrystal');
-      const timeSlowMult = hasTimeSlow ? 0.3 : hasTimeCrystal ? 0.8 : 1;
+      const tsParams = getPowerUpParams('timeslow', isRL ? getPuUpgradeTier('timeslow', puUpgrades) : 3);
+      const timeSlowMult = hasTimeSlow ? (tsParams.timeSlowMult ?? 0.3) : hasTimeCrystal ? 0.8 : 1;
 
       // ── Update asteroids ──
       const velocityCurseMult = isRL && game.rlCurses?.includes('velocity') ? 1.4 : 1;
@@ -1348,12 +1425,16 @@ export function AsteroidsGame() {
 
         // Collision with ship
         if (dist(game.ship.pos, pu.pos) < POWERUP_RADIUS + SHIP_SIZE * 0.6) {
-          // Activate power-up (stacks with existing)
+          // Activate power-up with upgrade-scaled duration
+          const puTier = isRL && rlSaveRef.current ? getPuUpgradeTier(pu.type, rlSaveRef.current.upgrades) : 3;
+          const puParams = getPowerUpParams(pu.type, isRL ? puTier : 3);
+          const dur = puParams.duration;
           const existing = game.activePowers.find(p => p.type === pu.type);
           if (existing) {
-            existing.timeLeft = POWERUP_ACTIVE_DURATION; // refresh timer
+            existing.timeLeft = dur;
+            existing.maxTime = dur;
           } else {
-            game.activePowers.push({ type: pu.type, timeLeft: POWERUP_ACTIVE_DURATION });
+            game.activePowers.push({ type: pu.type, timeLeft: dur, maxTime: dur });
           }
           if (pu.type === 'shield') game.hasShield = true;
           // Collect particles
@@ -1366,7 +1447,8 @@ export function AsteroidsGame() {
       // ── Bullet-asteroid collision ──
       const newAsteroids: Asteroid[] = [];
       const bulletsToRemove = new Set<number>();
-      const bulletHitRadius = hasPower(game.activePowers, 'bigbullet') ? 6 : 2;
+      const bgParams = getPowerUpParams('bigbullet', isRL ? getPuUpgradeTier('bigbullet', puUpgrades) : 3);
+      const bulletHitRadius = hasPower(game.activePowers, 'bigbullet') ? (bgParams.hitRadius ?? 6) : 2;
       const hasPiercingBuff = isRL && game.rlActiveBuffs?.some(b => b.id === 'piercing');
       const hasExplosiveBullets = isRL && game.rlActiveBuffs?.some(b => b.id === 'explosiveBullets');
 
@@ -1498,6 +1580,25 @@ export function AsteroidsGame() {
                     if (dist(a.pos, other.pos) < 60 && other.rlHp) {
                       other.rlHp -= 1;
                       game.particles.push(...makeParticles(other.pos, 3, '#f97316'));
+                    }
+                  }
+                }
+
+                // Chain lightning buff: damage chains to nearby asteroids
+                if (isRL && game.rlActiveBuffs?.some(b => b.id === 'chainLightning') && rlStats) {
+                  const chainRadius = 120;
+                  const chainDmg = Math.ceil(rlStats.bulletDamage * 0.6);
+                  let chainCount = 0;
+                  for (const other of game.asteroids) {
+                    if (other === a || chainCount >= 3) break;
+                    if (dist(a.pos, other.pos) < chainRadius && other.rlHp != null) {
+                      other.rlHp -= chainDmg;
+                      chainCount++;
+                      if (!game.rlChainLightningFx) game.rlChainLightningFx = [];
+                      game.rlChainLightningFx.push({
+                        x1: a.pos.x, y1: a.pos.y, x2: other.pos.x, y2: other.pos.y, life: 150,
+                      });
+                      game.particles.push(...makeParticles(other.pos, 3, '#60a5fa'));
                     }
                   }
                 }
@@ -1676,6 +1777,14 @@ export function AsteroidsGame() {
               game.ship.invulnerable = 200;
               break;
             }
+            // Void shield buff: absorb one hit
+            if (isRL && game.rlVoidShieldActive) {
+              game.rlVoidShieldActive = false;
+              game.rlVoidShieldCooldown = 15000;
+              game.particles.push(...makeParticles(game.ship.pos, 15, '#7c3aed'));
+              game.ship.invulnerable = 500;
+              break;
+            }
             // Shield absorbs the hit
             if (game.hasShield) {
               game.hasShield = false;
@@ -1693,6 +1802,10 @@ export function AsteroidsGame() {
             if (game.rlRunStats) game.rlRunStats.damageTaken++;
             game.particles.push(...makeParticles(game.ship.pos, 20, '#f87171'));
             sfx.deathSound();
+            // Void armor artifact: grant extra invulnerability after first hit per life
+            if (hasArt('voidArmor')) {
+              game.ship.invulnerable = Math.max(game.ship.invulnerable, 3000);
+            }
 
             // Lose all active powers on death
             game.activePowers = [];
@@ -1944,7 +2057,8 @@ export function AsteroidsGame() {
               continue;
             }
 
-            const dmg = (isRL && rlStats) ? Math.ceil(rlStats.bulletDamage * bulletDmgMult) : 1;
+            let dmg = (isRL && rlStats) ? Math.ceil(rlStats.bulletDamage * bulletDmgMult) : 1;
+            if (hasArt('bossSlayer')) dmg = Math.ceil(dmg * 1.5);
             boss.hp -= dmg;
             game.particles.push(...makeParticles({ x: boss.x, y: boss.y }, 5, '#ef4444'));
             sfx.explosionSound();
@@ -2077,8 +2191,9 @@ export function AsteroidsGame() {
           for (let bi = game.bullets.length - 1; bi >= 0; bi--) {
             if (dist(game.bullets[bi].pos, { x: mb.x, y: mb.y }) < 30) {
               game.bullets.splice(bi, 1);
-              const dmg = (isRL && rlStats) ? Math.ceil(rlStats.bulletDamage * bulletDmgMult) : 1;
-              mb.hp -= dmg;
+              let mbDmg = (isRL && rlStats) ? Math.ceil(rlStats.bulletDamage * bulletDmgMult) : 1;
+              if (hasArt('bossSlayer')) mbDmg = Math.ceil(mbDmg * 1.5);
+              mb.hp -= mbDmg;
               game.particles.push(...makeParticles({ x: mb.x, y: mb.y }, 5, '#4ade80'));
               sfx.explosionSound();
               if (mb.hp <= 0) {
@@ -2102,7 +2217,12 @@ export function AsteroidsGame() {
         for (let bi = game.bossBullets.length - 1; bi >= 0; bi--) {
           if (dist(game.bossBullets[bi].pos, game.ship.pos) < SHIP_SIZE * 0.8 * shipHitboxMult) {
             game.bossBullets.splice(bi, 1);
-            if (game.hasShield) {
+            if (isRL && game.rlVoidShieldActive) {
+              game.rlVoidShieldActive = false;
+              game.rlVoidShieldCooldown = 15000;
+              game.particles.push(...makeParticles(game.ship.pos, 15, '#7c3aed'));
+              game.ship.invulnerable = 500;
+            } else if (game.hasShield) {
               game.hasShield = false;
               game.activePowers = game.activePowers.filter(p => p.type !== 'shield');
               game.particles.push(...makeParticles(game.ship.pos, 15, '#06b6d4'));
@@ -2112,6 +2232,7 @@ export function AsteroidsGame() {
               }
             } else {
               game.lives--;
+              if (hasArt('voidArmor')) game.ship.invulnerable = Math.max(game.ship.invulnerable, 3000);
               game.particles.push(...makeParticles(game.ship.pos, 20, '#f87171'));
               sfx.deathSound();
               game.activePowers = [];
@@ -2204,7 +2325,7 @@ export function AsteroidsGame() {
                 game.particles.push(...makeParticles(b.pos, 5, '#38bdf8'));
               } else if (d < mbR - 10) {
                 // Hit core through destroyed segment
-                mb.phaseHp -= (rlStats?.bulletDamage ?? 1);
+                mb.phaseHp -= (rlStats?.bulletDamage ?? 1) * (hasArt('bossSlayer') ? 1.5 : 1);
                 game.bullets.splice(bi, 1);
                 game.particles.push(...makeParticles(b.pos, 5, '#ef4444'));
               }
@@ -2262,7 +2383,7 @@ export function AsteroidsGame() {
           // Check bullets hitting mega-boss core in swarm phase
           for (let bi = game.bullets.length - 1; bi >= 0; bi--) {
             if (dist(game.bullets[bi].pos, { x: mb.x, y: mb.y }) < mbR * 0.6) {
-              mb.phaseHp -= (rlStats?.bulletDamage ?? 1);
+              mb.phaseHp -= (rlStats?.bulletDamage ?? 1) * (hasArt('bossSlayer') ? 1.5 : 1);
               game.particles.push(...makeParticles(game.bullets[bi].pos, 3, '#ef4444'));
               game.bullets.splice(bi, 1);
             }
@@ -2292,7 +2413,7 @@ export function AsteroidsGame() {
           // Check bullets hitting core
           for (let bi = game.bullets.length - 1; bi >= 0; bi--) {
             if (dist(game.bullets[bi].pos, { x: mb.x, y: mb.y }) < mbR * 0.5) {
-              mb.phaseHp -= (rlStats?.bulletDamage ?? 1);
+              mb.phaseHp -= (rlStats?.bulletDamage ?? 1) * (hasArt('bossSlayer') ? 1.5 : 1);
               game.particles.push(...makeParticles(game.bullets[bi].pos, 3, '#ef4444'));
               game.bullets.splice(bi, 1);
             }
@@ -2864,8 +2985,18 @@ export function AsteroidsGame() {
           rlSave={rlSave} activeCurses={activeCurses} setActiveCurses={setActiveCurses}
           dailyResult={dailyResult} stats={stats}
           onStart={handleStart} onStartDaily={handleStartDaily}
-          onBuyUpgrade={(id) => { const updated = buyUpgrade(rlSave!, id as PermanentUpgradeId); if (updated) { saveRogueliteSave(updated); setRlSave(updated); } }}
-          onAscend={() => { const ascended = performAscension(rlSave!); saveRogueliteSave(ascended); setRlSave(ascended); }}
+          onBuyUpgrade={(id) => { const updated = buyUpgrade(rlSave!, id as AnyUpgradeId); if (updated) { saveRogueliteSave(updated); setRlSave(updated); } }}
+          onAscend={() => {
+            let ascended = performAscension(rlSave!);
+            const newMs = checkMilestones(ascended, defaultRunStats(), 0, false, false, false);
+            if (newMs.length > 0) {
+              ascended = applyMilestones(ascended, newMs);
+              setNewMilestones(newMs.map(id => MILESTONES.find(m => m.id === id)!).filter(Boolean));
+            }
+            saveRogueliteSave(ascended);
+            setRlSave(ascended);
+            if (newMs.length > 0) setPhase('milestones');
+          }}
           onSelectShip={(id) => { const updated = selectShip(rlSave!, id); saveRogueliteSave(updated); setRlSave(updated); }}
         />
       ) : phase === 'milestones' ? (
@@ -3330,6 +3461,65 @@ function drawGame(
       ctx.restore();
     }
 
+    // Void shield aura
+    if (isRL && game.rlVoidShieldActive) {
+      ctx.save();
+      ctx.strokeStyle = 'rgba(124, 58, 237, 0.5)';
+      ctx.fillStyle = 'rgba(124, 58, 237, 0.06)';
+      ctx.lineWidth = 1.5;
+      ctx.setLineDash([4, 4]);
+      ctx.beginPath();
+      ctx.arc(ship.pos.x, ship.pos.y, SHIP_SIZE + 6, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.stroke();
+      ctx.setLineDash([]);
+      ctx.restore();
+    }
+
+    // Orbital strike FX
+    if (game.rlOrbitalStrikeFx) {
+      for (const fx of game.rlOrbitalStrikeFx) {
+        ctx.save();
+        const alpha = fx.life / 400;
+        ctx.strokeStyle = `rgba(249, 115, 22, ${alpha * 0.8})`;
+        ctx.fillStyle = `rgba(249, 115, 22, ${alpha * 0.15})`;
+        ctx.lineWidth = 2;
+        ctx.beginPath();
+        ctx.arc(fx.x, fx.y, fx.radius * (1 - alpha * 0.3), 0, Math.PI * 2);
+        ctx.fill();
+        ctx.stroke();
+        ctx.restore();
+      }
+    }
+
+    // Chain lightning FX
+    if (game.rlChainLightningFx) {
+      for (const fx of game.rlChainLightningFx) {
+        ctx.save();
+        const alpha = fx.life / 150;
+        ctx.strokeStyle = `rgba(96, 165, 250, ${alpha})`;
+        ctx.lineWidth = 2;
+        ctx.shadowColor = '#60a5fa';
+        ctx.shadowBlur = 6;
+        ctx.beginPath();
+        // Draw jagged lightning line
+        const dx = fx.x2 - fx.x1, dy = fx.y2 - fx.y1;
+        const len = Math.sqrt(dx * dx + dy * dy);
+        const segments = 5;
+        ctx.moveTo(fx.x1, fx.y1);
+        for (let s = 1; s < segments; s++) {
+          const frac = s / segments;
+          const px = fx.x1 + dx * frac + (Math.random() - 0.5) * len * 0.15;
+          const py = fx.y1 + dy * frac + (Math.random() - 0.5) * len * 0.15;
+          ctx.lineTo(px, py);
+        }
+        ctx.lineTo(fx.x2, fx.y2);
+        ctx.stroke();
+        ctx.shadowBlur = 0;
+        ctx.restore();
+      }
+    }
+
     // Shield circle (drawn after restore so it's not rotated with ship)
     if (hasShield) {
       ctx.save();
@@ -3640,7 +3830,7 @@ function drawGame(
       const ap = activePowers[pi];
       const barX = W / 2 - barW / 2;
       const barY = startY + pi * rowHeight;
-      const fraction = ap.timeLeft / POWERUP_ACTIVE_DURATION;
+      const fraction = ap.timeLeft / (ap.maxTime || POWERUP_ACTIVE_DURATION);
       const color = POWERUP_COLORS[ap.type];
       const label = POWERUP_LABELS[ap.type];
 

@@ -2,27 +2,123 @@
 
 import { useI18n } from '@/components/providers/LanguageProvider';
 
+interface UpgradeItem {
+  id: string;
+  nameKey: string;
+  descKey: string;
+  icon: string;
+  maxTier: number;
+  costs: number[];
+}
+
 interface RogueliteUpgradesProps {
   scrap: number;
   upgrades: Partial<Record<string, number>>;
-  upgradeList: Array<{
-    id: string;
-    nameKey: string;
-    descKey: string;
-    icon: string;
-    maxTier: number;
-    costs: number[];
-  }>;
+  upgradeList: UpgradeItem[];
+  powerUpUpgradeList: UpgradeItem[];
   ascensionLevel: number;
   onBuy: (id: string) => void;
   onAscend: () => void;
   onClose: () => void;
 }
 
+function UpgradeCard({
+  upg,
+  currentTier,
+  scrap,
+  onBuy,
+  t,
+  accentColor = 'yellow',
+}: {
+  upg: UpgradeItem;
+  currentTier: number;
+  scrap: number;
+  onBuy: (id: string) => void;
+  t: (key: string) => string;
+  accentColor?: 'yellow' | 'blue';
+}) {
+  const isMaxed = currentTier >= upg.maxTier;
+  const nextCost = isMaxed ? 0 : upg.costs[currentTier] ?? 0;
+  const canAfford = scrap >= nextCost;
+
+  const colorMap = {
+    yellow: {
+      maxedBorder: 'border-yellow-500/50 shadow-sm shadow-yellow-500/10',
+      maxedBg: 'bg-yellow-500/15 text-yellow-400',
+      pip: 'bg-yellow-400 border-yellow-500 shadow-sm shadow-yellow-400/40',
+      pipNext: 'bg-transparent border-yellow-500/60',
+      maxLabel: 'text-yellow-400',
+      btnActive: 'bg-yellow-500/15 text-yellow-300 border border-yellow-500/40 hover:bg-yellow-500/25 hover:border-yellow-500/60',
+    },
+    blue: {
+      maxedBorder: 'border-blue-500/50 shadow-sm shadow-blue-500/10',
+      maxedBg: 'bg-blue-500/15 text-blue-400',
+      pip: 'bg-blue-400 border-blue-500 shadow-sm shadow-blue-400/40',
+      pipNext: 'bg-transparent border-blue-500/60',
+      maxLabel: 'text-blue-400',
+      btnActive: 'bg-blue-500/15 text-blue-300 border border-blue-500/40 hover:bg-blue-500/25 hover:border-blue-500/60',
+    },
+  };
+  const c = colorMap[accentColor];
+
+  return (
+    <div
+      className={`relative flex flex-col gap-3 rounded-xl border p-5 bg-[var(--card)] transition-all duration-200 ${isMaxed ? c.maxedBorder : 'border-[var(--border)]'}`}
+    >
+      <div className="flex items-center gap-3">
+        <div
+          className={`flex items-center justify-center w-11 h-11 rounded-lg text-lg font-bold ${isMaxed ? c.maxedBg : 'bg-zinc-700/60 text-zinc-300'}`}
+        >
+          {upg.icon}
+        </div>
+        <div className="flex-1 min-w-0">
+          <h3 className="text-base font-bold text-[var(--fg)] truncate">
+            {t(upg.nameKey)}
+          </h3>
+          <div className="flex items-center gap-1.5 mt-1">
+            {Array.from({ length: upg.maxTier }, (_, tierIdx) => {
+              const filled = tierIdx < currentTier;
+              const isNext = tierIdx === currentTier && !isMaxed;
+              return (
+                <div
+                  key={tierIdx}
+                  className={`w-3 h-3 rounded-full border transition-all duration-300 ${filled ? c.pip : isNext ? c.pipNext : 'bg-transparent border-zinc-600'}`}
+                />
+              );
+            })}
+            {isMaxed && (
+              <span className={`ml-1.5 text-xs font-semibold ${c.maxLabel} uppercase`}>
+                MAX
+              </span>
+            )}
+          </div>
+        </div>
+      </div>
+      <p className="text-sm text-[var(--muted)] leading-relaxed">
+        {t(upg.descKey)}
+      </p>
+      <div className="text-xs text-zinc-500">
+        {t('asteroids.rl.tier')} {currentTier}/{upg.maxTier}
+      </div>
+      {!isMaxed && (
+        <button
+          onClick={() => onBuy(upg.id)}
+          disabled={!canAfford}
+          className={`mt-auto flex items-center justify-center gap-2 rounded-lg px-4 py-2.5 text-sm font-bold transition-all duration-200 cursor-pointer ${canAfford ? `${c.btnActive} active:scale-[0.97]` : 'bg-zinc-800/50 text-zinc-600 border border-zinc-700/50 cursor-not-allowed'}`}
+        >
+          <span className="text-xs font-bold">[S]</span>
+          <span className="tabular-nums">{nextCost.toLocaleString()}</span>
+        </button>
+      )}
+    </div>
+  );
+}
+
 export default function RogueliteUpgrades({
   scrap,
   upgrades,
   upgradeList,
+  powerUpUpgradeList,
   ascensionLevel,
   onBuy,
   onAscend,
@@ -110,78 +206,52 @@ export default function RogueliteUpgrades({
         </div>
       )}
 
-      {/* Grid */}
+      {/* Scrollable content */}
       <div className="flex-1 overflow-y-auto px-6 py-4">
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 max-w-4xl mx-auto">
-          {upgradeList.map((upg) => {
-            const currentTier = upgrades[upg.id] ?? 0;
-            const isMaxed = currentTier >= upg.maxTier;
-            const nextCost = isMaxed ? 0 : upg.costs[currentTier] ?? 0;
-            const canAfford = scrap >= nextCost;
-
-            return (
-              <div
+        <div className="max-w-4xl mx-auto space-y-6">
+          {/* Core upgrades grid */}
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            {upgradeList.map((upg) => (
+              <UpgradeCard
                 key={upg.id}
-                className={`relative flex flex-col gap-3 rounded-xl border p-5 bg-[var(--card)] transition-all duration-200 ${isMaxed ? 'border-yellow-500/50 shadow-sm shadow-yellow-500/10' : 'border-[var(--border)]'}`}
-              >
-                {/* Top row: icon + name + tier pips */}
-                <div className="flex items-center gap-3">
-                  <div
-                    className={`flex items-center justify-center w-11 h-11 rounded-lg text-lg font-bold ${isMaxed ? 'bg-yellow-500/15 text-yellow-400' : 'bg-zinc-700/60 text-zinc-300'}`}
-                  >
-                    {upg.icon}
-                  </div>
+                upg={upg}
+                currentTier={upgrades[upg.id] ?? 0}
+                scrap={scrap}
+                onBuy={onBuy}
+                t={t}
+                accentColor="yellow"
+              />
+            ))}
+          </div>
 
-                  <div className="flex-1 min-w-0">
-                    <h3 className="text-base font-bold text-[var(--fg)] truncate">
-                      {t(upg.nameKey)}
-                    </h3>
-
-                    {/* Tier pips */}
-                    <div className="flex items-center gap-1.5 mt-1">
-                      {Array.from({ length: upg.maxTier }, (_, tierIdx) => {
-                        const filled = tierIdx < currentTier;
-                        const isNext = tierIdx === currentTier && !isMaxed;
-                        return (
-                          <div
-                            key={tierIdx}
-                            className={`w-3 h-3 rounded-full border transition-all duration-300 ${filled ? 'bg-yellow-400 border-yellow-500 shadow-sm shadow-yellow-400/40' : isNext ? 'bg-transparent border-yellow-500/60' : 'bg-transparent border-zinc-600'}`}
-                          />
-                        );
-                      })}
-                      {isMaxed && (
-                        <span className="ml-1.5 text-xs font-semibold text-yellow-400 uppercase">
-                          MAX
-                        </span>
-                      )}
-                    </div>
-                  </div>
-                </div>
-
-                {/* Description */}
-                <p className="text-sm text-[var(--muted)] leading-relaxed">
-                  {t(upg.descKey)}
-                </p>
-
-                {/* Tier info */}
-                <div className="text-xs text-zinc-500">
-                  {t('asteroids.rl.tier')} {currentTier}/{upg.maxTier}
-                </div>
-
-                {/* Buy button */}
-                {!isMaxed && (
-                  <button
-                    onClick={() => onBuy(upg.id)}
-                    disabled={!canAfford}
-                    className={`mt-auto flex items-center justify-center gap-2 rounded-lg px-4 py-2.5 text-sm font-bold transition-all duration-200 cursor-pointer ${canAfford ? 'bg-yellow-500/15 text-yellow-300 border border-yellow-500/40 hover:bg-yellow-500/25 hover:border-yellow-500/60 active:scale-[0.97]' : 'bg-zinc-800/50 text-zinc-600 border border-zinc-700/50 cursor-not-allowed'}`}
-                  >
-                    <span className="text-xs font-bold">[S]</span>
-                    <span className="tabular-nums">{nextCost.toLocaleString()}</span>
-                  </button>
-                )}
+          {/* Power-Up Upgrades section */}
+          {powerUpUpgradeList.length > 0 && (
+            <>
+              <div className="flex items-center gap-3 mt-2">
+                <div className="h-px flex-1 bg-zinc-700/50" />
+                <h2 className="text-sm font-bold text-blue-400 uppercase tracking-widest">
+                  {t('asteroids.rl.puUpgrades')}
+                </h2>
+                <div className="h-px flex-1 bg-zinc-700/50" />
               </div>
-            );
-          })}
+              <p className="text-xs text-zinc-500 text-center -mt-3">
+                {t('asteroids.rl.puUpgrades.desc')}
+              </p>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                {powerUpUpgradeList.map((upg) => (
+                  <UpgradeCard
+                    key={upg.id}
+                    upg={upg}
+                    currentTier={upgrades[upg.id] ?? 0}
+                    scrap={scrap}
+                    onBuy={onBuy}
+                    t={t}
+                    accentColor="blue"
+                  />
+                ))}
+              </div>
+            </>
+          )}
         </div>
       </div>
 

@@ -4,12 +4,23 @@ export type AsteroidVariant = 'normal' | 'armored' | 'explosive' | 'homing' | 's
 // Boss variants
 export type BossVariant = 'standard' | 'twin' | 'shield' | 'carrier' | 'bomber' | 'sniper' | 'berserker' | 'splitter';
 
+// Power-up types (in-game pickups)
+export type PowerUpType = 'double' | 'triple' | 'rapid' | 'shield' | 'bigbullet' | 'homing' | 'multishot' | 'timeslow';
+
 // Permanent upgrade IDs
 export type PermanentUpgradeId =
   | 'hull' | 'engine' | 'gyroscope' | 'caliber'
   | 'fireRate' | 'bulletSpeed' | 'magnet'
   | 'scrapBonus' | 'shieldGen' | 'critStrike'
   | 'retroThruster' | 'range';
+
+// Power-up upgrade IDs (upgrade each power-up from weak → full strength)
+export type PowerUpUpgradeId =
+  | 'pu_double' | 'pu_triple' | 'pu_rapid' | 'pu_shield'
+  | 'pu_bigbullet' | 'pu_homing' | 'pu_multishot' | 'pu_timeslow';
+
+// All upgrade IDs that can be stored in save.upgrades
+export type AnyUpgradeId = PermanentUpgradeId | PowerUpUpgradeId;
 
 // Temporary buff IDs
 export type TempBuffId =
@@ -62,7 +73,7 @@ export interface Drone {
 // Roguelite save data (persisted across runs)
 export interface RogueliteSave {
   scrap: number;
-  upgrades: Partial<Record<PermanentUpgradeId, number>>;
+  upgrades: Partial<Record<AnyUpgradeId, number>>;
   totalRuns: number;
   bestWave: number;
   bestScore: number;

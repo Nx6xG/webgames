@@ -1,6 +1,8 @@
 import type {
   PermanentUpgrade,
   PermanentUpgradeId,
+  PowerUpUpgradeId,
+  PowerUpType,
   TempBuffDef,
   TempBuffId,
   AsteroidVariant,
@@ -19,6 +21,7 @@ import type {
   CurseDef,
   DailyModifierId,
   DailyModifierDef,
+  AnyUpgradeId,
 } from './roguelite-types';
 
 // ---------------------------------------------------------------------------
@@ -31,16 +34,8 @@ export const PERMANENT_UPGRADES: PermanentUpgrade[] = [
     nameKey: 'asteroids.rl.upg.hull',
     descKey: 'asteroids.rl.upg.hull.desc',
     icon: '\u{1F6E1}',
-    maxTier: 5,
-    costs: [100, 300, 800, 1800, 3600],
-  },
-  {
-    id: 'engine',
-    nameKey: 'asteroids.rl.upg.engine',
-    descKey: 'asteroids.rl.upg.engine.desc',
-    icon: '\u{1F680}',
-    maxTier: 5,
-    costs: [80, 250, 650, 1500, 3000],
+    maxTier: 3,
+    costs: [200, 800, 2500],
   },
   {
     id: 'gyroscope',
@@ -48,7 +43,7 @@ export const PERMANENT_UPGRADES: PermanentUpgrade[] = [
     descKey: 'asteroids.rl.upg.gyroscope.desc',
     icon: '\u{1F504}',
     maxTier: 5,
-    costs: [80, 250, 650, 1500, 3000],
+    costs: [150, 450, 1200, 2800, 5500],
   },
   {
     id: 'caliber',
@@ -56,7 +51,7 @@ export const PERMANENT_UPGRADES: PermanentUpgrade[] = [
     descKey: 'asteroids.rl.upg.caliber.desc',
     icon: '\u{1F4A5}',
     maxTier: 5,
-    costs: [120, 360, 960, 2200, 4500],
+    costs: [250, 700, 1800, 4000, 8000],
   },
   {
     id: 'fireRate',
@@ -64,15 +59,15 @@ export const PERMANENT_UPGRADES: PermanentUpgrade[] = [
     descKey: 'asteroids.rl.upg.fireRate.desc',
     icon: '\u26A1',
     maxTier: 5,
-    costs: [100, 300, 800, 1800, 3600],
+    costs: [200, 600, 1500, 3500, 7000],
   },
   {
     id: 'bulletSpeed',
     nameKey: 'asteroids.rl.upg.bulletSpeed',
     descKey: 'asteroids.rl.upg.bulletSpeed.desc',
     icon: '\u{1F3AF}',
-    maxTier: 5,
-    costs: [70, 200, 550, 1200, 2500],
+    maxTier: 3,
+    costs: [150, 500, 1200],
   },
   {
     id: 'magnet',
@@ -80,7 +75,7 @@ export const PERMANENT_UPGRADES: PermanentUpgrade[] = [
     descKey: 'asteroids.rl.upg.magnet.desc',
     icon: '\u{1F9F2}',
     maxTier: 3,
-    costs: [200, 700, 1600],
+    costs: [300, 1000, 2500],
   },
   {
     id: 'scrapBonus',
@@ -88,7 +83,7 @@ export const PERMANENT_UPGRADES: PermanentUpgrade[] = [
     descKey: 'asteroids.rl.upg.scrapBonus.desc',
     icon: '\u{1F4B0}',
     maxTier: 3,
-    costs: [160, 560, 1400],
+    costs: [300, 1000, 2500],
   },
   {
     id: 'shieldGen',
@@ -96,7 +91,7 @@ export const PERMANENT_UPGRADES: PermanentUpgrade[] = [
     descKey: 'asteroids.rl.upg.shieldGen.desc',
     icon: '\u{1F50B}',
     maxTier: 3,
-    costs: [300, 1000, 2400],
+    costs: [500, 1500, 4000],
   },
   {
     id: 'critStrike',
@@ -104,7 +99,7 @@ export const PERMANENT_UPGRADES: PermanentUpgrade[] = [
     descKey: 'asteroids.rl.upg.critStrike.desc',
     icon: '\u2694\uFE0F',
     maxTier: 3,
-    costs: [250, 800, 2000],
+    costs: [400, 1200, 3500],
   },
   {
     id: 'retroThruster',
@@ -112,17 +107,100 @@ export const PERMANENT_UPGRADES: PermanentUpgrade[] = [
     descKey: 'asteroids.rl.upg.retroThruster.desc',
     icon: '\u{1F6D1}',
     maxTier: 1,
-    costs: [150],
+    costs: [250],
   },
   {
     id: 'range',
     nameKey: 'asteroids.rl.upg.range',
     descKey: 'asteroids.rl.upg.range.desc',
     icon: '\u{1F4CF}',
-    maxTier: 5,
-    costs: [80, 250, 650, 1500, 3000],
+    maxTier: 3,
+    costs: [150, 500, 1200],
   },
 ];
+
+// ---------------------------------------------------------------------------
+// Power-up upgrades (8) — upgrade each power-up from weak → full strength
+// Separate from PERMANENT_UPGRADES: NOT required for ascension, but reset on ascend
+// ---------------------------------------------------------------------------
+
+export interface PowerUpUpgradeDef {
+  id: PowerUpUpgradeId;
+  puType: PowerUpType;
+  nameKey: string;
+  descKey: string;
+  icon: string;
+  maxTier: 3;
+  costs: [number, number, number];
+}
+
+export const POWERUP_UPGRADES: PowerUpUpgradeDef[] = [
+  { id: 'pu_double', puType: 'double', nameKey: 'asteroids.rl.pu.double', descKey: 'asteroids.rl.pu.double.desc', icon: '2x', maxTier: 3, costs: [150, 500, 1200] },
+  { id: 'pu_triple', puType: 'triple', nameKey: 'asteroids.rl.pu.triple', descKey: 'asteroids.rl.pu.triple.desc', icon: '3x', maxTier: 3, costs: [150, 500, 1200] },
+  { id: 'pu_rapid', puType: 'rapid', nameKey: 'asteroids.rl.pu.rapid', descKey: 'asteroids.rl.pu.rapid.desc', icon: 'RF', maxTier: 3, costs: [200, 600, 1500] },
+  { id: 'pu_shield', puType: 'shield', nameKey: 'asteroids.rl.pu.shield', descKey: 'asteroids.rl.pu.shield.desc', icon: 'SH', maxTier: 3, costs: [150, 500, 1200] },
+  { id: 'pu_bigbullet', puType: 'bigbullet', nameKey: 'asteroids.rl.pu.bigbullet', descKey: 'asteroids.rl.pu.bigbullet.desc', icon: 'BG', maxTier: 3, costs: [150, 500, 1200] },
+  { id: 'pu_homing', puType: 'homing', nameKey: 'asteroids.rl.pu.homing', descKey: 'asteroids.rl.pu.homing.desc', icon: 'HM', maxTier: 3, costs: [200, 600, 1500] },
+  { id: 'pu_multishot', puType: 'multishot', nameKey: 'asteroids.rl.pu.multishot', descKey: 'asteroids.rl.pu.multishot.desc', icon: 'MS', maxTier: 3, costs: [250, 700, 1800] },
+  { id: 'pu_timeslow', puType: 'timeslow', nameKey: 'asteroids.rl.pu.timeslow', descKey: 'asteroids.rl.pu.timeslow.desc', icon: 'TS', maxTier: 3, costs: [200, 600, 1500] },
+];
+
+export const POWERUP_UPGRADE_MAP: Record<PowerUpUpgradeId, PowerUpUpgradeDef> = Object.fromEntries(
+  POWERUP_UPGRADES.map((u) => [u.id, u]),
+) as Record<PowerUpUpgradeId, PowerUpUpgradeDef>;
+
+/** Combined list for buy/reset purposes (not for ascension check) */
+export const ALL_BUYABLE_UPGRADES: Array<{ id: string; maxTier: number; costs: number[] }> = [
+  ...PERMANENT_UPGRADES,
+  ...POWERUP_UPGRADES,
+];
+
+// ---------------------------------------------------------------------------
+// Power-up parameter scaling per upgrade tier (tier 0 = no upgrade, tier 3 = current defaults)
+// ---------------------------------------------------------------------------
+
+export interface PowerUpParams {
+  duration: number;    // ms
+  spread?: number;     // double/triple: bullet spread angle
+  cooldownMult?: number; // rapid: fire cooldown multiplier
+  maxBullets?: number; // rapid: max simultaneous bullets
+  hitRadius?: number;  // bigbullet: collision radius
+  homingTurnRate?: number; // homing: radians per frame
+  bulletAngles?: number[]; // multishot: spread angles
+  timeSlowMult?: number;  // timeslow: speed factor
+}
+
+const PU_DURATIONS = [6000, 7500, 9000, 10000]; // per tier
+
+export function getPowerUpParams(puType: PowerUpType, tier: number): PowerUpParams {
+  const t = Math.min(tier, 3);
+  const dur = PU_DURATIONS[t];
+  switch (puType) {
+    case 'double': return { duration: dur, spread: [0.16, 0.13, 0.10, 0.08][t] };
+    case 'triple': return { duration: dur, spread: [0.25, 0.21, 0.18, 0.15][t] };
+    case 'rapid': return { duration: dur, cooldownMult: [0.70, 0.63, 0.56, 0.50][t], maxBullets: [7, 8, 9, 10][t] };
+    case 'shield': return { duration: dur };
+    case 'bigbullet': return { duration: dur, hitRadius: [3.5, 4.3, 5.2, 6][t] };
+    case 'homing': return { duration: dur, homingTurnRate: [0.025, 0.037, 0.048, 0.06][t] };
+    case 'multishot': {
+      const angles = [
+        [-0.40, 0, 0.40],
+        [-0.45, 0, 0.45],
+        [-0.50, -0.17, 0.17, 0.50],
+        [-0.524, -0.262, 0, 0.262, 0.524],
+      ];
+      return { duration: dur, bulletAngles: angles[t] };
+    }
+    case 'timeslow': return { duration: dur, timeSlowMult: [0.55, 0.47, 0.38, 0.30][t] };
+    default: return { duration: dur };
+  }
+}
+
+/** Look up the upgrade tier for a power-up type from the save */
+export function getPuUpgradeTier(puType: PowerUpType, upgrades: Partial<Record<AnyUpgradeId, number>>): number {
+  const id = `pu_${puType}` as PowerUpUpgradeId;
+  return upgrades[id] ?? 0;
+}
 
 // ---------------------------------------------------------------------------
 // Temporary buffs (12)
@@ -320,10 +398,10 @@ export function getBossVariantForWave(wave: number): BossVariant {
 /** Wave-based HP scaling for bosses — they get stronger in late game */
 export function getBossWaveHpScale(wave: number): number {
   if (wave <= 5) return 1;
-  // +20% HP per 5 waves after wave 5, accelerating in late game
-  const base = 1 + Math.floor((wave - 5) / 5) * 0.20;
-  // Extra scaling after wave 30
-  const late = wave > 30 ? (wave - 30) * 0.02 : 0;
+  // +30% HP per 5 waves after wave 5, accelerating in late game
+  const base = 1 + Math.floor((wave - 5) / 5) * 0.30;
+  // Extra scaling after wave 20
+  const late = wave > 20 ? (wave - 20) * 0.04 : 0;
   return base + late;
 }
 
@@ -358,10 +436,10 @@ export function pickSpecialVariant(): AsteroidVariant {
 // ---------------------------------------------------------------------------
 
 export const BASE_SCRAP_VALUES = {
-  large: 8,
-  medium: 5,
-  small: 3,
-  boss: 120,
+  large: 5,
+  medium: 3,
+  small: 2,
+  boss: 80,
 } as const;
 
 // ---------------------------------------------------------------------------
@@ -384,7 +462,7 @@ export interface AppliedStats {
 }
 
 export function getAppliedStats(
-  upgrades: Partial<Record<PermanentUpgradeId, number>>,
+  upgrades: Partial<Record<AnyUpgradeId, number>>,
   shipId?: ShipId,
 ): AppliedStats {
   const tier = (id: PermanentUpgradeId): number => upgrades[id] ?? 0;
@@ -393,16 +471,16 @@ export function getAppliedStats(
   const base: AppliedStats = {
     maxLives: 3 + tier('hull') + (ship?.hpMod ?? 0),
     accel: 0.12 * (1 + tier('engine') * 0.12) * (ship?.accelMod ?? 1),
-    turnSpeed: 0.065 * (1 + tier('gyroscope') * 0.12) * (ship?.turnSpeedMod ?? 1),
-    bulletDamage: (1 + tier('caliber')) * (ship?.bulletDamageMod ?? 1),
-    fireCooldown: 150 * (1 - tier('fireRate') * 0.12) * (ship?.fireRateMod ?? 1),
+    turnSpeed: 0.065 * (1 + tier('gyroscope') * 0.10) * (ship?.turnSpeedMod ?? 1),
+    bulletDamage: (1 + tier('caliber') * 0.6) * (ship?.bulletDamageMod ?? 1),
+    fireCooldown: 150 * (1 - tier('fireRate') * 0.08) * (ship?.fireRateMod ?? 1),
     bulletSpeed: 7 * (1 + tier('bulletSpeed') * 0.10),
-    magnetRange: [0, 80, 150, 250][tier('magnet')] * (ship?.scrapRadiusMod ?? 1),
-    scrapMultiplier: (1 + tier('scrapBonus') * 0.20) * (ship?.scrapMultMod ?? 1),
-    shieldRechargeMs: [Infinity, 45000, 30000, 20000][tier('shieldGen')] * (ship?.shieldRechargeMod ?? 1),
-    critChance: [0, 0.08, 0.15, 0.22][tier('critStrike')],
+    magnetRange: [0, 60, 120, 200][tier('magnet')] * (ship?.scrapRadiusMod ?? 1),
+    scrapMultiplier: (1 + tier('scrapBonus') * 0.15) * (ship?.scrapMultMod ?? 1),
+    shieldRechargeMs: [Infinity, 50000, 35000, 25000][tier('shieldGen')] * (ship?.shieldRechargeMod ?? 1),
+    critChance: [0, 0.06, 0.12, 0.18][tier('critStrike')],
     hasBrake: tier('retroThruster') >= 1,
-    bulletLifeMult: 1 + tier('range') * 0.15,
+    bulletLifeMult: 1 + tier('range') * 0.12,
   };
 
   return base;
@@ -603,9 +681,9 @@ export function isPrestigeUnlocked(id: string, ascensionLevel: number): boolean 
 
 /** Power-up drop rate multiplier — decreases in late game to prevent oversaturation */
 export function getPowerupDropScale(wave: number): number {
-  if (wave <= 10) return 1;
-  // Drops to 0.4 by wave 50
-  return Math.max(0.4, 1 - (wave - 10) * 0.015);
+  if (wave <= 5) return 1;
+  // Drops to 0.3 by wave 35
+  return Math.max(0.3, 1 - (wave - 5) * 0.023);
 }
 
 // ---------------------------------------------------------------------------

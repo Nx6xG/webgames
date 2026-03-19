@@ -8,7 +8,7 @@ import type {
   BestiaryEntry, TempBuffId, ArtifactId,
 } from './roguelite-types';
 import {
-  PERMANENT_UPGRADES, SHIPS, SHIP_MAP, CURSES, MILESTONES,
+  PERMANENT_UPGRADES, POWERUP_UPGRADES, SHIPS, SHIP_MAP, CURSES, MILESTONES,
   getCurseScrapMultiplier, ASTEROID_VARIANT_CONFIG, BOSS_VARIANT_CONFIG,
   ELITE_MODIFIER_CONFIG, getDailyModifiers, TEMP_BUFF_MAP, ARTIFACT_MAP,
 } from './roguelite-data';
@@ -570,6 +570,76 @@ export default function AsteroidsHub({
                           background: canAfford ? C.amberGlow : C.hull,
                           border: `1px solid ${canAfford ? C.amberBorder : C.border}`,
                           color: canAfford ? C.amber : C.border,
+                          clipPath: 'polygon(4px 0, 100% 0, calc(100% - 4px) 100%, 0 100%)',
+                        }}
+                      >
+                        <svg viewBox="0 0 12 12" style={{ width: 10, height: 10 }}>
+                          <polygon points="6,1 7.5,4.5 11,5 8.5,7.5 9,11 6,9.5 3,11 3.5,7.5 1,5 4.5,4.5" fill="currentColor" />
+                        </svg>
+                        {nextCost.toLocaleString()}
+                      </button>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+
+            {/* Power-up upgrade section */}
+            <div className="flex items-center gap-3 mt-4 mb-2">
+              <div className="h-px flex-1" style={{ background: C.border }} />
+              <span className="text-[10px] font-black uppercase tracking-widest" style={{ color: '#60a5fa' }}>
+                {t('asteroids.rl.puUpgrades')}
+              </span>
+              <div className="h-px flex-1" style={{ background: C.border }} />
+            </div>
+            <p className="text-[9px] text-center mb-2" style={{ color: C.muted }}>
+              {t('asteroids.rl.puUpgrades.desc')}
+            </p>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+              {POWERUP_UPGRADES.map(upg => {
+                const currentTier = rlSave.upgrades[upg.id] ?? 0;
+                const isMaxed = currentTier >= upg.maxTier;
+                const nextCost = isMaxed ? 0 : upg.costs[currentTier] ?? 0;
+                const canAfford = rlSave.scrap >= nextCost;
+                const accent = '#60a5fa';
+                const accentBorder = '#3b82f6';
+                const accentGlow = `${accent}08`;
+                return (
+                  <div key={upg.id} className="rounded-lg p-4 flex flex-col gap-2.5 transition-all" style={{
+                    background: C.surface,
+                    border: `1px solid ${isMaxed ? accentBorder : C.border}`,
+                    boxShadow: isMaxed ? `inset 0 0 20px ${accentGlow}` : 'none',
+                  }}>
+                    <div className="flex items-center gap-3">
+                      <div className="w-10 h-10 rounded flex items-center justify-center text-sm font-black" style={{
+                        background: isMaxed ? `${accent}10` : `${C.hull}`,
+                        border: `1px solid ${isMaxed ? accentBorder : C.border}`,
+                        color: isMaxed ? accent : C.textBright,
+                      }}>
+                        {upg.icon}
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <h3 className="text-sm font-black truncate" style={{ color: C.textBright }}>{t(upg.nameKey)}</h3>
+                        <div className="flex items-center gap-1 mt-1">
+                          {Array.from({ length: upg.maxTier }, (_, i) => (
+                            <div key={i} className="w-2.5 h-2.5 rounded-sm transition-all" style={{
+                              background: i < currentTier ? accent : 'transparent',
+                              border: `1px solid ${i < currentTier ? accent : i === currentTier && !isMaxed ? accentBorder + '80' : C.border}`,
+                              boxShadow: i < currentTier ? `0 0 4px ${accent}40` : 'none',
+                            }} />
+                          ))}
+                          {isMaxed && <span className="ml-1.5 text-[8px] font-black tracking-wider" style={{ color: accent }}>MAX</span>}
+                        </div>
+                      </div>
+                    </div>
+                    <p className="text-[10px] leading-relaxed" style={{ color: C.muted }}>{t(upg.descKey)}</p>
+                    {!isMaxed && (
+                      <button onClick={() => onBuyUpgrade(upg.id)} disabled={!canAfford}
+                        className="mt-auto flex items-center justify-center gap-2 py-2 text-[10px] font-black uppercase tracking-wider transition-all cursor-pointer disabled:cursor-not-allowed"
+                        style={{
+                          background: canAfford ? `${accent}10` : C.hull,
+                          border: `1px solid ${canAfford ? accentBorder : C.border}`,
+                          color: canAfford ? accent : C.border,
                           clipPath: 'polygon(4px 0, 100% 0, calc(100% - 4px) 100%, 0 100%)',
                         }}
                       >
