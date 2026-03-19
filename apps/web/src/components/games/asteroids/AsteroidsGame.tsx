@@ -217,8 +217,8 @@ interface GameState {
 
 // ── Constants ────────────────────────────────────────────────────────────────
 
-const W = 800;
-const H = 600;
+const W = 1100;
+const H = 750;
 const SHIP_SIZE = 15;
 const SHIP_ACCEL = 0.12;
 const SHIP_FRICTION = 0.985;
@@ -261,7 +261,7 @@ const BOSS_RADIUS = 60;
 const BOSS_HP = 10;
 const BOSS_POINTS = 500;
 const BOSS_FIRE_INTERVAL = 120; // frames (~2s at 60fps)
-const BOSS_BULLET_SPEED = 3;
+const BOSS_BULLET_SPEED = 4;
 const BOSS_BULLET_LIFE = 3000; // ms
 
 const DIFF_CONFIG: Record<Difficulty, { speedMult: number; startCount: number; countIncrement: number }> = {
@@ -905,6 +905,7 @@ export function AsteroidsGame() {
             // Kill raider if event expired and it's still alive
             if (game.rlRaider?.alive) {
               game.rlRaider.alive = false;
+              game.rlRaider.bullets = [];
             }
           }
         }

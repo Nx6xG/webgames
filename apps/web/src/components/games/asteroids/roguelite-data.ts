@@ -354,14 +354,14 @@ export interface BossVariantConfig {
 }
 
 export const BOSS_VARIANT_CONFIG: Record<BossVariant, BossVariantConfig> = {
-  standard:  { hp: 15, fireInterval: 90,  speed: 0.35, burstCount: 1, color: '#ef4444' },
-  twin:      { hp: 12, fireInterval: 100, speed: 0.45, burstCount: 2, spreadAngle: 0.35, color: '#f97316' },
-  shield:    { hp: 18, fireInterval: 80,  speed: 0.28, shieldHp: 8, shieldRegenRate: 0.02, burstCount: 1, color: '#06b6d4' },
-  carrier:   { hp: 22, fireInterval: 120, speed: 0.22, spawnInterval: 140, burstCount: 1, color: '#a78bfa' },
-  bomber:    { hp: 14, fireInterval: 60,  speed: 0.3,  burstCount: 1, color: '#fbbf24' },
-  sniper:    { hp: 10, fireInterval: 200, speed: 0.15, burstCount: 1, color: '#22d3ee' },
-  berserker: { hp: 25, fireInterval: 100, speed: 0.35, burstCount: 1, color: '#dc2626' },
-  splitter:  { hp: 12, fireInterval: 110, speed: 0.35, burstCount: 2, spreadAngle: 0.5, color: '#4ade80' },
+  standard:  { hp: 30, fireInterval: 70,  speed: 0.45, burstCount: 2, spreadAngle: 0.3, color: '#ef4444' },
+  twin:      { hp: 25, fireInterval: 80,  speed: 0.55, burstCount: 3, spreadAngle: 0.3, color: '#f97316' },
+  shield:    { hp: 35, fireInterval: 65,  speed: 0.35, shieldHp: 15, shieldRegenRate: 0.03, burstCount: 2, spreadAngle: 0.25, color: '#06b6d4' },
+  carrier:   { hp: 40, fireInterval: 100, speed: 0.28, spawnInterval: 100, burstCount: 1, color: '#a78bfa' },
+  bomber:    { hp: 28, fireInterval: 50,  speed: 0.38, burstCount: 1, color: '#fbbf24' },
+  sniper:    { hp: 20, fireInterval: 150, speed: 0.20, burstCount: 1, color: '#22d3ee' },
+  berserker: { hp: 50, fireInterval: 80,  speed: 0.45, burstCount: 1, color: '#dc2626' },
+  splitter:  { hp: 22, fireInterval: 90,  speed: 0.40, burstCount: 2, spreadAngle: 0.4, color: '#4ade80' },
 };
 
 // ---------------------------------------------------------------------------
@@ -371,19 +371,23 @@ export const BOSS_VARIANT_CONFIG: Record<BossVariant, BossVariantConfig> = {
 export function getBossVariantForWave(wave: number): BossVariant {
   // Early waves: introduce variants gradually
   if (wave <= 5) return 'standard';
-  if (wave <= 10) return 'twin';
-  if (wave <= 15) return Math.random() < 0.5 ? 'shield' : 'bomber';
-  if (wave <= 20) return Math.random() < 0.5 ? 'carrier' : 'sniper';
-  // Wave 25+: weighted random from full pool
+  if (wave <= 10) return Math.random() < 0.5 ? 'twin' : 'bomber';
+  if (wave <= 15) {
+    const roll = Math.random();
+    if (roll < 0.3) return 'shield';
+    if (roll < 0.6) return 'carrier';
+    return 'sniper';
+  }
+  // Wave 20+: weighted random from full pool
   const pool: Array<{ variant: BossVariant; weight: number }> = [
-    { variant: 'standard',  weight: 8 },
+    { variant: 'standard',  weight: 6 },
     { variant: 'twin',      weight: 10 },
-    { variant: 'shield',    weight: 10 },
-    { variant: 'carrier',   weight: 8 },
+    { variant: 'shield',    weight: 12 },
+    { variant: 'carrier',   weight: 10 },
     { variant: 'bomber',    weight: 12 },
     { variant: 'sniper',    weight: 10 },
-    { variant: 'berserker', weight: wave >= 30 ? 12 : 0 },
-    { variant: 'splitter',  weight: wave >= 35 ? 10 : 0 },
+    { variant: 'berserker', weight: wave >= 20 ? 14 : 0 },
+    { variant: 'splitter',  weight: wave >= 25 ? 12 : 0 },
   ];
   const eligible = pool.filter(p => p.weight > 0);
   const total = eligible.reduce((s, p) => s + p.weight, 0);
@@ -800,9 +804,9 @@ export function getCurseScrapMultiplier(curses: CurseId[]): number {
 export const MEGA_BOSS_CONFIG = {
   radius: 90,
   phases: {
-    shield: { hp: 25, fireInterval: 80, segments: 6 },
-    swarm:  { hp: 20, spawnInterval: 60, missileSpeed: 2.5 },
-    core:   { hp: 12, fireInterval: 30, teleportInterval: 3000 },
+    shield: { hp: 40, fireInterval: 60, segments: 6 },
+    swarm:  { hp: 35, spawnInterval: 45, missileSpeed: 3.0 },
+    core:   { hp: 20, fireInterval: 22, teleportInterval: 2200 },
   },
   scrapReward: 1200,
 };
