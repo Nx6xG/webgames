@@ -53,19 +53,13 @@ import type { RogueliteSave, DailyRunResult } from './roguelite-types';
 import BuffChoice from './BuffChoice';
 import ArtifactChoice from './ArtifactChoice';
 import RunStatsScreen from './RunStatsScreen';
-import RogueliteUpgrades from './RogueliteUpgrades';
-import ShipSelect from './ShipSelect';
-import CurseSelect from './CurseSelect';
-import Bestiary from './Bestiary';
 import MilestoneNotification from './MilestoneNotification';
-import MilestoneOverview from './MilestoneOverview';
-import ContentGuide from './ContentGuide';
-import DailyPreview from './DailyPreview';
+import AsteroidsHub from './AsteroidsHub';
 
 // ── Types ────────────────────────────────────────────────────────────────────
 
 type GameMode = 'endless' | 'roguelite';
-type Phase = 'menu' | 'countdown' | 'playing' | 'paused' | 'ended' | 'buff_choice' | 'artifact_choice' | 'wave_event_announce' | 'run_stats' | 'upgrades' | 'ship_select' | 'curse_select' | 'bestiary' | 'milestones' | 'milestone_overview' | 'content_guide' | 'daily_preview';
+type Phase = 'menu' | 'countdown' | 'playing' | 'paused' | 'ended' | 'buff_choice' | 'artifact_choice' | 'wave_event_announce' | 'run_stats' | 'milestones';
 type Difficulty = 'easy' | 'medium' | 'hard';
 
 interface Vec2 { x: number; y: number }
@@ -2859,191 +2853,52 @@ export function AsteroidsGame() {
 
   // ── Render ───────────────────────────────────────────────────────────────
 
-  const diffLabels: Record<Difficulty, string> = {
-    easy:   t('asteroids.easy'),
-    medium: t('asteroids.medium'),
-    hard:   t('asteroids.hard'),
-  };
-
   return (
-    <div className="flex flex-col items-center gap-3 flex-1 min-h-0">
+    <div className="flex flex-col flex-1 min-h-0" style={{
+      background: 'radial-gradient(ellipse at 50% 0%, #0d1117 0%, #0a0c10 60%)',
+    }}>
       {phase === 'menu' ? (
-        /* ── Menu ────────────────────────────────────────────────────── */
-        <div className="flex flex-col items-center justify-center flex-1 gap-6">
-          <h2 className="text-5xl font-black tracking-tight" style={{ color: 'var(--fg)' }}>
-            Asteroids
-          </h2>
-
-          {/* Mode selector */}
-          <div className="space-y-2 text-center">
-            <p className="text-sm font-medium" style={{ color: 'var(--muted)' }}>
-              {t('asteroids.rl.selectMode')}
-            </p>
-            <div className="flex gap-2">
-              <button
-                onClick={() => setMode('endless')}
-                className={`px-5 py-2.5 rounded-lg text-sm font-bold transition-colors border ${
-                  mode === 'endless'
-                    ? 'bg-indigo-600 border-indigo-500 text-white'
-                    : 'border-zinc-700 text-zinc-400 hover:text-zinc-200 hover:border-zinc-500'
-                }`}
-              >
-                {t('asteroids.rl.endless')}
-              </button>
-              <button
-                onClick={() => setMode('roguelite')}
-                className={`px-5 py-2.5 rounded-lg text-sm font-bold transition-colors border ${
-                  mode === 'roguelite'
-                    ? 'bg-yellow-600 border-yellow-500 text-white'
-                    : 'border-zinc-700 text-zinc-400 hover:text-zinc-200 hover:border-zinc-500'
-                }`}
-              >
-                {t('asteroids.rl.mode')}
-              </button>
-            </div>
-          </div>
-
-          {/* Difficulty selector (endless only — roguelite uses fixed medium) */}
-          {mode === 'endless' && (
-            <div className="space-y-2 text-center">
-              <p className="text-sm font-medium" style={{ color: 'var(--muted)' }}>
-                {t('asteroids.difficulty')}
-              </p>
-              <div className="flex gap-2">
-                {(['easy', 'medium', 'hard'] as Difficulty[]).map(d => (
-                  <button
-                    key={d}
-                    onClick={() => setDifficulty(d)}
-                    className={`px-5 py-2.5 rounded-lg text-sm font-bold transition-colors border ${
-                      difficulty === d
-                        ? 'bg-indigo-600 border-indigo-500 text-white'
-                        : 'border-zinc-700 text-zinc-400 hover:text-zinc-200 hover:border-zinc-500'
-                    }`}
-                  >
-                    {diffLabels[d]}
-                  </button>
-                ))}
-              </div>
-            </div>
-          )}
-
-          {/* Start buttons — own row */}
-          <div className="flex gap-3 items-center">
-            <button onClick={handleStart} disabled={mode === 'roguelite' && !rlSave} className="px-10 py-3.5 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-white font-bold text-lg transition-colors disabled:opacity-50 cursor-pointer">{t('asteroids.start')}</button>
-            {mode === 'roguelite' && rlSave && (
-              <button onClick={() => setPhase('daily_preview')} className="px-6 py-3.5 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-sm transition-colors cursor-pointer">🗓 {t('asteroids.rl.daily')}</button>
-            )}
-          </div>
-
-          {/* Roguelite menu buttons — separate row below start */}
-          {mode === 'roguelite' && rlSave && (
-            <div className="flex gap-2 flex-wrap justify-center">
-              <button onClick={() => setPhase('upgrades')} className="flex items-center gap-1.5 px-4 py-2 rounded-lg bg-yellow-600/90 hover:bg-yellow-500 text-white font-bold text-sm transition-colors cursor-pointer">⬆ {t('asteroids.rl.upgrades')}</button>
-              <button onClick={() => setPhase('ship_select')} className="flex items-center gap-1.5 px-4 py-2 rounded-lg border border-zinc-700 hover:border-zinc-500 text-zinc-300 hover:text-white font-bold text-sm transition-colors cursor-pointer">🚀 {t('asteroids.rl.ship.select')}</button>
-              <button onClick={() => setPhase('curse_select')} className="flex items-center gap-1.5 px-4 py-2 rounded-lg border border-red-800/60 hover:border-red-600 text-red-400 hover:text-red-300 font-bold text-sm transition-colors cursor-pointer">🔥 {t('asteroids.rl.curses')}</button>
-              <button onClick={() => setPhase('milestone_overview')} className="flex items-center gap-1.5 px-4 py-2 rounded-lg border border-amber-700/50 hover:border-amber-500 text-amber-400 hover:text-amber-300 font-bold text-sm transition-colors cursor-pointer">🏆 {t('asteroids.rl.milestones')}</button>
-              <button onClick={() => setPhase('bestiary')} className="flex items-center gap-1.5 px-4 py-2 rounded-lg border border-zinc-700 hover:border-zinc-500 text-zinc-300 hover:text-white font-bold text-sm transition-colors cursor-pointer">📖 {t('asteroids.rl.bestiary')}</button>
-            </div>
-          )}
-
-          <p className="text-xs max-sm:hidden" style={{ color: 'var(--muted)' }}>
-            Arrow Keys / WASD + Space + P
-          </p>
-
-          {/* Stats */}
-          {mode === 'endless' && stats && stats.games > 0 && (
-            <div className="text-xs space-y-1 text-center" style={{ color: 'var(--muted)' }}>
-              <p>{t('game.score')}: {stats.bestScore.toLocaleString()} (best)</p>
-              <p>{t('asteroids.wave')}: {stats.bestWave} (best)</p>
-              <p>{stats.totalAsteroids.toLocaleString()} {t('asteroids.totalDestroyed')}</p>
-            </div>
-          )}
-
-          {/* Roguelite info overview */}
-          {mode === 'roguelite' && rlSave && (
-            <div className="w-full max-w-xl space-y-3">
-              {/* Scrap + Ascension */}
-              <div className="flex items-center justify-center gap-4 text-sm">
-                <span className="text-yellow-400 font-bold">[S] {rlSave.scrap.toLocaleString()}</span>
-                {(rlSave.ascensionLevel ?? 0) > 0 && <span className="text-amber-400 font-bold">⭐ {t('asteroids.rl.ascend.level')} {rlSave.ascensionLevel}</span>}
-              </div>
-
-              {/* Current ship + curses */}
-              <div className="flex items-center justify-center gap-3 text-xs" style={{ color: 'var(--muted)' }}>
-                <span style={{ color: SHIP_MAP[rlSave.selectedShip].color }}>{SHIP_MAP[rlSave.selectedShip].icon} {t(SHIP_MAP[rlSave.selectedShip].nameKey)}</span>
-                {activeCurses.length > 0 && <span className="text-red-400">{activeCurses.map(c => CURSES.find(cc => cc.id === c)?.icon).join(' ')} x{getCurseScrapMultiplier(activeCurses).toFixed(1)}</span>}
-              </div>
-
-              {/* Content guide button */}
-              <button onClick={() => setPhase('content_guide')} className="w-full rounded-lg border border-zinc-700 hover:border-zinc-500 bg-zinc-800/40 hover:bg-zinc-800/70 px-4 py-2.5 text-sm font-bold text-zinc-300 hover:text-white transition-colors cursor-pointer flex items-center justify-center gap-2">📋 {t('asteroids.rl.guide.open')}</button>
-
-              {/* Run stats */}
-              {rlSave.totalRuns > 0 && (
-                <div className="flex items-center justify-center gap-4 text-xs" style={{ color: 'var(--muted)' }}>
-                  <span>{t('asteroids.rl.bestRun')}: {t('asteroids.wave')} {rlSave.bestWave} / {rlSave.bestScore.toLocaleString()}</span>
-                  <span>{t('asteroids.rl.totalRuns')}: {rlSave.totalRuns}</span>
-                </div>
-              )}
-
-              {/* Daily run result */}
-              {dailyResult && dailyResult.date === getDailyRunDate() && (
-                <div className="flex items-center justify-center gap-3 text-xs rounded-lg border border-emerald-700/40 bg-emerald-500/5 px-3 py-2">
-                  <span className="text-emerald-400 font-bold">🗓 {t('asteroids.rl.daily.today')}</span>
-                  <span style={{ color: 'var(--muted)' }}>{t('asteroids.wave')} {dailyResult.wave}</span>
-                  <span style={{ color: 'var(--muted)' }}>{t('game.score')}: {dailyResult.score.toLocaleString()}</span>
-                </div>
-              )}
-            </div>
-          )}
-        </div>
-      ) : phase === 'upgrades' ? (
-        rlSave && (
-          <RogueliteUpgrades scrap={rlSave.scrap} upgrades={rlSave.upgrades} upgradeList={PERMANENT_UPGRADES} ascensionLevel={rlSave.ascensionLevel ?? 0} onBuy={(id) => { const updated = buyUpgrade(rlSave, id as PermanentUpgradeId); if (updated) { saveRogueliteSave(updated); setRlSave(updated); } }} onAscend={() => { const ascended = performAscension(rlSave); saveRogueliteSave(ascended); setRlSave(ascended); }} onClose={() => setPhase('menu')} />
-        )
-      ) : phase === 'ship_select' ? (
-        rlSave && (
-          <ShipSelect ships={SHIPS} selectedShip={rlSave.selectedShip} isUnlocked={(id) => isShipUnlocked(rlSave, id)} milestones={MILESTONES} unlockedMilestones={rlSave.unlockedMilestones} onSelect={(id) => { const updated = selectShip(rlSave, id); saveRogueliteSave(updated); setRlSave(updated); }} onClose={() => setPhase('menu')} />
-        )
-      ) : phase === 'curse_select' ? (
-        <CurseSelect curses={CURSES} activeCurses={activeCurses} curseScrapMultiplier={getCurseScrapMultiplier(activeCurses)} onToggle={(id) => setActiveCurses(prev => prev.includes(id) ? prev.filter(c => c !== id) : [...prev, id])} onClose={() => setPhase('menu')} />
-      ) : phase === 'bestiary' ? (
-        rlSave && (
-          <Bestiary entries={rlSave.bestiary} onClose={() => setPhase('menu')} />
-        )
-      ) : phase === 'milestone_overview' ? (
-        rlSave && (
-          <MilestoneOverview milestones={MILESTONES} unlockedMilestones={rlSave.unlockedMilestones} onClose={() => setPhase('menu')} />
-        )
-      ) : phase === 'content_guide' ? (
-        rlSave && (
-          <ContentGuide save={rlSave} onClose={() => setPhase('menu')} />
-        )
-      ) : phase === 'daily_preview' ? (
-        <DailyPreview modifiers={getDailyModifiers()} previousResult={dailyResult} alreadyPlayed={hasDailyRunToday()} onStart={handleStartDaily} onClose={() => setPhase('menu')} />
+        <AsteroidsHub
+          mode={mode} setMode={setMode}
+          difficulty={difficulty} setDifficulty={setDifficulty}
+          rlSave={rlSave} activeCurses={activeCurses} setActiveCurses={setActiveCurses}
+          dailyResult={dailyResult} stats={stats}
+          onStart={handleStart} onStartDaily={handleStartDaily}
+          onBuyUpgrade={(id) => { const updated = buyUpgrade(rlSave!, id as PermanentUpgradeId); if (updated) { saveRogueliteSave(updated); setRlSave(updated); } }}
+          onAscend={() => { const ascended = performAscension(rlSave!); saveRogueliteSave(ascended); setRlSave(ascended); }}
+          onSelectShip={(id) => { const updated = selectShip(rlSave!, id); saveRogueliteSave(updated); setRlSave(updated); }}
+        />
       ) : phase === 'milestones' ? (
         <MilestoneNotification milestones={newMilestones} onClose={() => { setNewMilestones([]); setPhase('menu'); }} />
       ) : (
         /* ── Game area ──────────────────────────────────────────────── */
-        <div className="flex flex-col items-center gap-2 flex-1 min-h-0">
-          {/* HUD */}
-          <div className="flex gap-4 w-full max-w-[800px] justify-between text-sm font-bold">
-            <div style={{ color: 'var(--fg)' }}>
-              {t('game.score')}: <span className="tabular-nums">{displayScore.toLocaleString()}</span>
+        <div className="flex flex-col items-center gap-2 flex-1 min-h-0 px-4 pt-2">
+          {/* HUD — cockpit style */}
+          <div className="flex gap-3 w-full max-w-[800px] justify-between text-[11px] font-black uppercase tracking-[0.1em] px-3 py-2 rounded" style={{
+            background: '#141922',
+            border: '1px solid #1e2a3a',
+            color: '#c8d6e5',
+          }}>
+            <div className="flex items-center gap-1.5">
+              <span style={{ color: '#5a6a7f' }}>SCR</span>
+              <span className="tabular-nums" style={{ color: '#e8eef5' }}>{displayScore.toLocaleString()}</span>
             </div>
             {modeRef.current === 'roguelite' && (
-              <div className="text-yellow-400">
-                [S] <span className="tabular-nums">{displayScrap.toLocaleString()}</span>
-                {isDailyRun && <span className="text-emerald-400 ml-2 text-xs">🗓</span>}
+              <div className="flex items-center gap-1.5">
+                <svg viewBox="0 0 10 10" style={{ width: 10, height: 10 }}><polygon points="5,0.5 6.5,3.5 10,4 7.5,6.5 8,9.5 5,8 2,9.5 2.5,6.5 0,4 3.5,3.5" fill="#f59e0b" /></svg>
+                <span className="tabular-nums" style={{ color: '#f59e0b' }}>{displayScrap.toLocaleString()}</span>
+                {isDailyRun && <span style={{ color: '#22c55e', fontSize: 9 }}>DLY</span>}
               </div>
             )}
-            <div style={{ color: gameRef.current?.boss ? '#ef4444' : 'var(--fg)' }}>
+            <div className="flex items-center gap-1.5" style={{ color: gameRef.current?.boss ? '#ef4444' : '#c8d6e5' }}>
               {gameRef.current?.boss
-                ? <><span className="text-red-500 font-black">{t('asteroids.boss')}</span> <span className="tabular-nums">{displayWave}</span></>
-                : <>{t('asteroids.wave')}: <span className="tabular-nums">{displayWave}</span></>
+                ? <><span style={{ color: '#ef4444' }}>BOSS</span> <span className="tabular-nums">{displayWave}</span></>
+                : <><span style={{ color: '#5a6a7f' }}>WV</span> <span className="tabular-nums">{displayWave}</span></>
               }
             </div>
-            <div style={{ color: 'var(--fg)' }}>
-              {t('asteroids.lives')}: <span className="tabular-nums">{displayLives}</span>
+            <div className="flex items-center gap-1.5">
+              <span style={{ color: '#5a6a7f' }}>HP</span>
+              <span className="tabular-nums" style={{ color: displayLives <= 1 ? '#ef4444' : '#e8eef5' }}>{displayLives}</span>
             </div>
           </div>
 
@@ -3053,18 +2908,22 @@ export function AsteroidsGame() {
               ref={canvasRef}
               width={W}
               height={H}
-              className="rounded-lg border max-w-full max-h-full"
+              className="rounded max-w-full max-h-full"
               style={{
-                borderColor: 'var(--border)',
-                backgroundColor: '#09090b',
+                border: '1px solid #1e2a3a',
+                backgroundColor: '#060810',
                 aspectRatio: `${W} / ${H}`,
+                boxShadow: '0 0 30px rgba(15,240,252,0.03), inset 0 0 60px rgba(0,0,0,0.4)',
               }}
             />
 
             {/* Countdown overlay */}
             {phase === 'countdown' && (
-              <div className="absolute inset-0 flex items-center justify-center">
-                <span className="text-7xl font-black text-white tabular-nums animate-bounce">
+              <div className="absolute inset-0 flex items-center justify-center rounded" style={{ background: 'rgba(10,12,16,0.6)' }}>
+                <span className="text-7xl font-black tabular-nums animate-bounce" style={{
+                  color: '#0ff0fc',
+                  textShadow: '0 0 30px rgba(15,240,252,0.4), 0 0 60px rgba(15,240,252,0.15)',
+                }}>
                   {countdown}
                 </span>
               </div>
@@ -3072,19 +2931,19 @@ export function AsteroidsGame() {
 
             {/* Pause overlay */}
             {phase === 'paused' && (
-              <div className="absolute inset-0 bg-black/70 flex items-center justify-center rounded-lg">
-                <div className="text-center">
-                  <span className="text-3xl font-bold text-white">{t('game.paused')}</span>
-                  <div className="flex flex-col gap-2 mt-4">
-                    <button
-                      onClick={handleResume}
-                      className="px-6 py-2 bg-indigo-600 hover:bg-indigo-500 text-white rounded-lg text-sm font-medium transition-colors"
+              <div className="absolute inset-0 bg-black/80 flex items-center justify-center rounded" style={{ backdropFilter: 'blur(4px)' }}>
+                <div className="text-center p-8 rounded-lg" style={{ background: '#141922', border: '1px solid #1e2a3a', boxShadow: '0 0 40px rgba(0,0,0,0.5)' }}>
+                  <span className="text-2xl font-black uppercase tracking-[0.2em]" style={{ color: '#0ff0fc' }}>{t('game.paused')}</span>
+                  <div className="flex flex-col gap-2 mt-5">
+                    <button onClick={handleResume}
+                      className="px-8 py-2.5 text-xs font-black uppercase tracking-[0.12em] transition-all cursor-pointer hover:brightness-110"
+                      style={{ background: 'rgba(15,240,252,0.08)', border: '1px solid rgba(6,182,212,0.3)', color: '#0ff0fc', clipPath: 'polygon(6px 0, 100% 0, calc(100% - 6px) 100%, 0 100%)' }}
                     >
                       {t('game.resume')}
                     </button>
-                    <button
-                      onClick={() => setPhase('menu')}
-                      className="px-6 py-2 bg-zinc-700 hover:bg-zinc-600 text-zinc-200 rounded-lg text-sm font-medium transition-colors"
+                    <button onClick={() => setPhase('menu')}
+                      className="px-8 py-2.5 text-xs font-black uppercase tracking-[0.12em] transition-all cursor-pointer hover:brightness-110"
+                      style={{ background: '#0d1117', border: '1px solid #1e2a3a', color: '#5a6a7f' }}
                     >
                       {t('asteroids.backToMenu')}
                     </button>
@@ -3112,10 +2971,11 @@ export function AsteroidsGame() {
 
             {/* Wave event announcement overlay */}
             {phase === 'wave_event_announce' && waveEventAnnounce && (
-              <div className="absolute inset-0 bg-black/70 flex items-center justify-center rounded-lg">
+              <div className="absolute inset-0 bg-black/75 flex items-center justify-center" style={{ backdropFilter: 'blur(2px)' }}>
                 <div className="text-center" style={{ animation: 'slideUp 0.4s ease-out' }}>
-                  <p className="text-4xl font-black text-amber-400 tracking-wider uppercase">{t(waveEventAnnounce.nameKey)}</p>
-                  <p className="text-lg text-zinc-300 mt-2">{t(waveEventAnnounce.descKey)}</p>
+                  <div className="text-[10px] font-bold uppercase tracking-[0.3em] mb-3" style={{ color: '#5a6a7f' }}>/// WAVE EVENT ///</div>
+                  <p className="text-3xl font-black tracking-[0.2em] uppercase" style={{ color: '#f59e0b', textShadow: '0 0 30px rgba(245,158,11,0.4)' }}>{t(waveEventAnnounce.nameKey)}</p>
+                  <p className="text-sm mt-2" style={{ color: '#5a6a7f' }}>{t(waveEventAnnounce.descKey)}</p>
                 </div>
               </div>
             )}
@@ -3132,41 +2992,40 @@ export function AsteroidsGame() {
 
             {/* Game over overlay */}
             {phase === 'ended' && !showRunStats && (
-              <div className="absolute inset-0 bg-black/80 flex items-center justify-center rounded-lg">
-                <div className="text-center space-y-3">
-                  <p className="text-3xl font-bold text-white">{t('game.over')}</p>
-                  <p className="text-zinc-300">
-                    {t('game.score')}: <span className="font-bold text-white">{displayScore.toLocaleString()}</span>
+              <div className="absolute inset-0 bg-black/85 flex items-center justify-center rounded" style={{ backdropFilter: 'blur(4px)' }}>
+                <div className="text-center p-8 rounded-lg" style={{ background: '#141922', border: '1px solid #1e2a3a', boxShadow: '0 0 40px rgba(0,0,0,0.5)' }}>
+                  <p className="text-2xl font-black uppercase tracking-[0.2em]" style={{ color: '#ef4444', textShadow: '0 0 20px rgba(239,68,68,0.3)' }}>
+                    {t('game.over')}
                   </p>
-                  <p className="text-zinc-400 text-sm">
-                    {t('asteroids.wave')}: {displayWave}
-                  </p>
+                  <div className="grid grid-cols-2 gap-4 mt-4" style={{ color: '#c8d6e5' }}>
+                    <div>
+                      <div className="text-[9px] font-bold uppercase tracking-wider" style={{ color: '#5a6a7f' }}>{t('game.score')}</div>
+                      <div className="text-lg font-black tabular-nums">{displayScore.toLocaleString()}</div>
+                    </div>
+                    <div>
+                      <div className="text-[9px] font-bold uppercase tracking-wider" style={{ color: '#5a6a7f' }}>{t('asteroids.wave')}</div>
+                      <div className="text-lg font-black tabular-nums">{displayWave}</div>
+                    </div>
+                  </div>
                   {modeRef.current === 'roguelite' && (
-                    <p className="text-yellow-400 text-sm font-bold">
-                      {t('asteroids.rl.scrapEarned')}: {displayScrap.toLocaleString()}
-                    </p>
+                    <div className="mt-3 flex items-center justify-center gap-2">
+                      <svg viewBox="0 0 10 10" style={{ width: 10, height: 10 }}><polygon points="5,0.5 6.5,3.5 10,4 7.5,6.5 8,9.5 5,8 2,9.5 2.5,6.5 0,4 3.5,3.5" fill="#f59e0b" /></svg>
+                      <span className="text-sm font-black tabular-nums" style={{ color: '#f59e0b' }}>+{displayScrap.toLocaleString()}</span>
+                    </div>
                   )}
-                  <div className="flex gap-3 justify-center pt-2">
-                    <button
-                      onClick={handleRestart}
-                      className="px-4 py-2 bg-indigo-600 hover:bg-indigo-500 text-white rounded-lg text-sm font-medium transition-colors"
+                  <div className="flex gap-2 justify-center mt-5">
+                    <button onClick={handleRestart}
+                      className="px-6 py-2.5 text-xs font-black uppercase tracking-[0.1em] transition-all cursor-pointer hover:brightness-110"
+                      style={{ background: 'rgba(15,240,252,0.08)', border: '1px solid rgba(6,182,212,0.3)', color: '#0ff0fc', clipPath: 'polygon(5px 0, 100% 0, calc(100% - 5px) 100%, 0 100%)' }}
                     >
                       {t('game.playAgain')}
                     </button>
-                    {modeRef.current === 'roguelite' && rlSave && (
-                      <button
-                        onClick={() => setPhase('upgrades')}
-                        className="px-4 py-2 bg-yellow-600 hover:bg-yellow-500 text-white rounded-lg text-sm font-medium transition-colors"
-                      >
-                        {t('asteroids.rl.upgrades')}
-                      </button>
-                    )}
-                    <a
-                      href="/"
-                      className="px-4 py-2 bg-zinc-700 hover:bg-zinc-600 text-white rounded-lg text-sm font-medium transition-colors"
+                    <button onClick={() => setPhase('menu')}
+                      className="px-6 py-2.5 text-xs font-black uppercase tracking-[0.1em] transition-all cursor-pointer hover:brightness-110"
+                      style={{ background: '#0d1117', border: '1px solid #1e2a3a', color: '#5a6a7f' }}
                     >
-                      {t('nav.games')}
-                    </a>
+                      {t('asteroids.hub.launch')}
+                    </button>
                   </div>
                 </div>
               </div>
@@ -3181,16 +3040,17 @@ export function AsteroidsGame() {
                 return (
                   <div
                     key={buff.id}
-                    className="flex items-center gap-1.5 rounded px-2.5 py-0.5 text-xs font-bold"
+                    className="flex items-center gap-1.5 px-2.5 py-0.5 text-xs font-bold"
                     style={{
-                      backgroundColor: def.color + '22',
+                      backgroundColor: def.color + '12',
                       color: def.color,
-                      border: `1px solid ${def.color}44`,
+                      border: `1px solid ${def.color}30`,
+                      clipPath: 'polygon(3px 0, 100% 0, calc(100% - 3px) 100%, 0 100%)',
                     }}
                   >
                     <span>{def.icon}</span>
-                    <span className="text-[11px]">{t(def.nameKey)}</span>
-                    {buff.wavesRemaining > 0 && <span className="tabular-nums opacity-70">{buff.wavesRemaining}W</span>}
+                    <span className="text-[10px] uppercase tracking-wider">{t(def.nameKey)}</span>
+                    {buff.wavesRemaining > 0 && <span className="tabular-nums opacity-60 text-[10px]">{buff.wavesRemaining}W</span>}
                   </div>
                 );
               })}
@@ -3200,12 +3060,12 @@ export function AsteroidsGame() {
           {/* Mobile controls */}
           <div className="shrink-0 flex sm:hidden flex-col gap-1.5 w-full max-w-[400px]">
             <div className="flex gap-1.5 justify-center">
-              <MobileBtn label="<" onPress={() => keysRef.current.add('ArrowLeft')} onRelease={() => keysRef.current.delete('ArrowLeft')} />
-              <MobileBtn label="^" onPress={() => keysRef.current.add('ArrowUp')} onRelease={() => keysRef.current.delete('ArrowUp')} />
+              <MobileBtn label="\u25C0" onPress={() => keysRef.current.add('ArrowLeft')} onRelease={() => keysRef.current.delete('ArrowLeft')} />
+              <MobileBtn label="\u25B2" onPress={() => keysRef.current.add('ArrowUp')} onRelease={() => keysRef.current.delete('ArrowUp')} />
               {(mode !== 'roguelite' || (rlSave && getAppliedStats(rlSave.upgrades, rlSave.selectedShip).hasBrake)) && (
-                <MobileBtn label="v" onPress={() => keysRef.current.add('ArrowDown')} onRelease={() => keysRef.current.delete('ArrowDown')} />
+                <MobileBtn label="\u25BC" onPress={() => keysRef.current.add('ArrowDown')} onRelease={() => keysRef.current.delete('ArrowDown')} />
               )}
-              <MobileBtn label=">" onPress={() => keysRef.current.add('ArrowRight')} onRelease={() => keysRef.current.delete('ArrowRight')} />
+              <MobileBtn label="\u25B6" onPress={() => keysRef.current.add('ArrowRight')} onRelease={() => keysRef.current.delete('ArrowRight')} />
             </div>
             <div className="flex gap-1.5 justify-center">
               <MobileBtn
@@ -3213,6 +3073,7 @@ export function AsteroidsGame() {
                 onPress={() => keysRef.current.add(' ')}
                 onRelease={() => keysRef.current.delete(' ')}
                 full
+                accent
               />
             </div>
             <div className="flex gap-1.5 justify-center">
@@ -3228,7 +3089,7 @@ export function AsteroidsGame() {
           </div>
 
           {/* Controls hint */}
-          <div className="shrink-0 hidden sm:block text-center text-[11px] space-x-3" style={{ color: 'var(--muted)' }}>
+          <div className="shrink-0 hidden sm:block text-center text-[10px] font-medium uppercase tracking-wider space-x-3" style={{ color: '#3a4a5f' }}>
             <span>Arrow/WASD: {t('asteroids.move')}</span>
             {(mode !== 'roguelite' || (rlSave && getAppliedStats(rlSave.upgrades, rlSave.selectedShip).hasBrake)) && (
               <span>S/↓: {t('asteroids.brake')}</span>
@@ -4210,18 +4071,26 @@ function MobileBtn({
   onPress,
   onRelease,
   full,
+  accent,
 }: {
   label: string;
   onPress: () => void;
   onRelease?: () => void;
   full?: boolean;
+  accent?: boolean;
 }) {
   return (
     <button
       onPointerDown={(e) => { e.preventDefault(); onPress(); }}
       onPointerUp={() => onRelease?.()}
       onPointerLeave={() => onRelease?.()}
-      className={`select-none touch-manipulation bg-zinc-800 active:bg-zinc-700 border border-zinc-700 text-zinc-200 text-sm font-medium rounded-lg py-2.5 ${full ? 'flex-1' : 'px-6'} transition-colors`}
+      className={`select-none touch-manipulation text-xs font-black uppercase tracking-wider py-2.5 ${full ? 'flex-1' : 'px-6'} transition-all active:brightness-125`}
+      style={{
+        background: accent ? 'rgba(15,240,252,0.1)' : '#141922',
+        border: accent ? '1px solid rgba(6,182,212,0.4)' : '1px solid #1e2a3a',
+        color: accent ? '#0ff0fc' : '#5a6a7f',
+        clipPath: 'polygon(4px 0, 100% 0, calc(100% - 4px) 100%, 0 100%)',
+      }}
     >
       {label}
     </button>

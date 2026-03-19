@@ -32,15 +32,18 @@ export default function ArtifactChoice({ artifacts, onSelect }: ArtifactChoicePr
       <div className="flex flex-col items-center gap-6 px-4 py-8 w-full max-w-2xl animate-[slideUp_0.4s_ease-out]">
         {/* Header */}
         <div className="text-center">
-          <h2 className="text-3xl font-black tracking-widest text-amber-400 uppercase">
+          <div className="text-[10px] font-bold uppercase tracking-[0.3em] mb-2" style={{ color: '#f59e0b' }}>
+            /// ARTIFACT DETECTED ///
+          </div>
+          <h2 className="text-2xl font-black tracking-[0.2em] uppercase" style={{ color: '#f59e0b', textShadow: '0 0 20px rgba(245,158,11,0.3)' }}>
             {t('asteroids.rl.artifactDrop')}
           </h2>
-          <p className="mt-2 text-lg text-zinc-400">
+          <p className="mt-2 text-sm" style={{ color: '#5a6a7f' }}>
             {t('asteroids.rl.chooseArtifact')}
           </p>
         </div>
 
-        {/* Cards - 2 artifacts */}
+        {/* Cards */}
         <div className="flex flex-col sm:flex-row gap-5 w-full">
           {artifacts.map((art, i) => {
             const isSelected = selected === i;
@@ -51,38 +54,56 @@ export default function ArtifactChoice({ artifacts, onSelect }: ArtifactChoicePr
                 key={art.id}
                 onClick={() => handleSelect(i)}
                 disabled={selected !== null}
-                className={`group relative flex-1 flex flex-col items-center gap-4 rounded-xl border-2 bg-[var(--card)] p-8 transition-all duration-200 cursor-pointer ${isSelected ? 'scale-105 ring-2 ring-amber-400/50 border-amber-500' : isOther ? 'opacity-30 scale-95 border-zinc-700' : 'border-zinc-700 hover:scale-105 hover:border-amber-500/50 hover:shadow-lg hover:shadow-amber-500/10'}`}
+                className={`group relative flex-1 flex flex-col items-center gap-4 p-8 transition-all duration-200 cursor-pointer ${isSelected ? 'scale-105' : isOther ? 'opacity-25 scale-95' : 'hover:scale-105'}`}
+                style={{
+                  background: '#141922',
+                  border: isSelected ? `2px solid ${art.color}` : '2px solid #1e2a3a',
+                  clipPath: 'polygon(16px 0, 100% 0, calc(100% - 16px) 100%, 0 100%)',
+                  boxShadow: isSelected ? `0 0 40px ${art.color}30, inset 0 0 30px ${art.color}10` : 'none',
+                }}
               >
+                {/* Top accent line */}
+                <div className="absolute top-0 left-4 right-4 h-px" style={{ background: `linear-gradient(90deg, transparent, ${art.color}, transparent)` }} />
+
                 {/* Icon */}
                 <div
-                  className="flex items-center justify-center w-16 h-16 rounded-xl text-3xl"
-                  style={{ backgroundColor: art.color + '20', border: `2px solid ${art.color}40` }}
+                  className="flex items-center justify-center w-16 h-16 text-3xl"
+                  style={{
+                    backgroundColor: art.color + '15',
+                    border: `1px solid ${art.color}30`,
+                    clipPath: 'polygon(8px 0, 100% 0, calc(100% - 8px) 100%, 0 100%)',
+                  }}
                 >
                   {art.icon}
                 </div>
 
                 {/* Name */}
-                <h3 className="text-xl font-bold text-[var(--fg)]">
+                <h3 className="text-lg font-black uppercase tracking-wider" style={{ color: '#c8d6e5' }}>
                   {t(art.nameKey)}
                 </h3>
 
                 {/* Description */}
-                <p className="text-sm text-[var(--muted)] text-center leading-relaxed">
+                <p className="text-xs text-center leading-relaxed" style={{ color: '#5a6a7f' }}>
                   {t(art.descKey)}
                 </p>
 
                 {/* Artifact badge */}
                 <span
-                  className="mt-auto inline-flex items-center gap-1 rounded-full px-3 py-1 text-xs font-bold uppercase tracking-wider"
-                  style={{ backgroundColor: art.color + '15', color: art.color, border: `1px solid ${art.color}40` }}
+                  className="mt-auto inline-flex items-center gap-1 px-3 py-1 text-[10px] font-bold uppercase tracking-[0.15em]"
+                  style={{
+                    backgroundColor: art.color + '12',
+                    color: art.color,
+                    border: `1px solid ${art.color}30`,
+                    clipPath: 'polygon(4px 0, 100% 0, calc(100% - 4px) 100%, 0 100%)',
+                  }}
                 >
                   {t('asteroids.rl.artifact')}
                 </span>
 
                 {/* Hover glow */}
                 <div
-                  className="absolute inset-0 rounded-xl opacity-0 transition-opacity duration-200 group-hover:opacity-100 pointer-events-none"
-                  style={{ boxShadow: `inset 0 0 30px ${art.color}10, 0 0 20px ${art.color}08` }}
+                  className="absolute inset-0 opacity-0 transition-opacity duration-200 group-hover:opacity-100 pointer-events-none"
+                  style={{ boxShadow: `inset 0 0 40px ${art.color}08, 0 0 20px ${art.color}06` }}
                 />
               </button>
             );
