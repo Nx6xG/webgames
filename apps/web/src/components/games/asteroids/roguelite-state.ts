@@ -207,8 +207,8 @@ export function checkMilestones(
   runStats: RunStats,
   wave: number,
   defeatedMegaBoss: boolean,
-  noDamageBoss: boolean,
-  allBuffsRun: boolean,
+  _noDamageBoss?: boolean,
+  _allBuffsRun?: boolean,
 ): MilestoneId[] {
   const newMs: MilestoneId[] = [];
   const has = (id: MilestoneId) => save.unlockedMilestones.includes(id);
@@ -222,9 +222,6 @@ export function checkMilestones(
   if (!has('collect_20000_run_scrap') && runStats.scrapEarned >= 20000) newMs.push('collect_20000_run_scrap');
   if (!has('ascend_once') && save.ascensionLevel >= 1) newMs.push('ascend_once');
   if (!has('defeat_megaboss') && defeatedMegaBoss) newMs.push('defeat_megaboss');
-  if (!has('no_damage_boss') && noDamageBoss) newMs.push('no_damage_boss');
-  if (!has('all_buffs_run') && allBuffsRun) newMs.push('all_buffs_run');
-  if (!has('max_all_upgrades') && PERMANENT_UPGRADES.every((u) => (save.upgrades[u.id] ?? 0) >= u.maxTier)) newMs.push('max_all_upgrades');
   // Prestige milestones — unlock at specific ascension levels
   if (!has('prestige_stellar') && save.ascensionLevel >= 1) newMs.push('prestige_stellar');
   if (!has('prestige_crystal') && save.ascensionLevel >= 2) newMs.push('prestige_crystal');

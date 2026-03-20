@@ -205,6 +205,7 @@ interface GameState {
   rlIsDaily?: boolean;
   rlDailyModifiers?: DailyModifierId[];
   rlMidWaveEvent?: MidWaveEvent | null;
+  rlMidWaveLabel?: string; // translated name for HUD
   rlMidWaveTimer?: number; // ms until next mid-wave event roll
   rlRaider?: Raider | null;
   rlMiniBosses?: Boss[];
@@ -476,6 +477,7 @@ export function AsteroidsGame() {
   const [artifactChoices, setArtifactChoices] = useState<ArtifactDef[] | null>(null);
   const [showRunStats, setShowRunStats] = useState(false);
   const [waveEventAnnounce, setWaveEventAnnounce] = useState<{ nameKey: string; descKey: string } | null>(null);
+  const [midWaveAnnounce, setMidWaveAnnounce] = useState<{ nameKey: string; descKey: string; color: string } | null>(null);
   const [displayScrap, setDisplayScrap] = useState(0);
   const [activeCurses, setActiveCurses] = useState<CurseId[]>([]);
   const [newMilestones, setNewMilestones] = useState<MilestoneDef[]>([]);
@@ -825,6 +827,10 @@ export function AsteroidsGame() {
                 timer: cfg.duration,
                 ...(midEvt === 'gravityWell' ? { x: Math.random() * W * 0.6 + W * 0.2, y: Math.random() * H * 0.6 + H * 0.2 } : {}),
               };
+              game.rlMidWaveLabel = t(cfg.nameKey);
+              // Show announcement overlay (auto-hides after 2s)
+              setMidWaveAnnounce({ nameKey: cfg.nameKey, descKey: cfg.descKey, color: cfg.color });
+              setTimeout(() => setMidWaveAnnounce(null), 2000);
             }
           }
         }
@@ -3107,7 +3113,17 @@ export function AsteroidsGame() {
                 <div className="text-center" style={{ animation: 'slideUp 0.4s ease-out' }}>
                   <div className="text-[10px] font-bold uppercase tracking-[0.3em] mb-3" style={{ color: '#5a6a7f' }}>/// WAVE EVENT ///</div>
                   <p className="text-3xl font-black tracking-[0.2em] uppercase" style={{ color: '#f59e0b', textShadow: '0 0 30px rgba(245,158,11,0.4)' }}>{t(waveEventAnnounce.nameKey)}</p>
-                  <p className="text-sm mt-2" style={{ color: '#5a6a7f' }}>{t(waveEventAnnounce.descKey)}</p>
+                  <p className="text-sm mt-3 max-w-xs mx-auto" style={{ color: '#8a9ab5' }}>{t(waveEventAnnounce.descKey)}</p>
+                </div>
+              </div>
+            )}
+
+            {/* Mid-wave event announcement overlay (shows briefly during gameplay) */}
+            {midWaveAnnounce && (
+              <div className="absolute inset-x-0 top-8 flex justify-center pointer-events-none" style={{ animation: 'fadeInOut 2s ease-out forwards' }}>
+                <div className="text-center px-6 py-3 rounded-lg" style={{ background: 'rgba(0,0,0,0.8)', border: `1px solid ${midWaveAnnounce.color}40`, boxShadow: `0 0 20px ${midWaveAnnounce.color}20` }}>
+                  <p className="text-lg font-black tracking-widest uppercase" style={{ color: midWaveAnnounce.color, textShadow: `0 0 15px ${midWaveAnnounce.color}60` }}>{t(midWaveAnnounce.nameKey)}</p>
+                  <p className="text-xs mt-1 max-w-xs" style={{ color: '#8a9ab5' }}>{t(midWaveAnnounce.descKey)}</p>
                 </div>
               </div>
             )}
@@ -3231,6 +3247,18 @@ export function AsteroidsGame() {
           </div>
         </div>
       )}
+      <style>{`
+        @keyframes slideUp {
+          from { opacity: 0; transform: translateY(20px); }
+          to { opacity: 1; transform: translateY(0); }
+        }
+        @keyframes fadeInOut {
+          0% { opacity: 0; transform: translateY(-10px); }
+          15% { opacity: 1; transform: translateY(0); }
+          75% { opacity: 1; }
+          100% { opacity: 0; }
+        }
+      `}</style>
     </div>
   );
 }
@@ -4036,13 +4064,13 @@ function drawGame(
     // Event name + timer bar at top
     if (mweCfg.duration > 1) {
       const fraction = mwe.timer / mweCfg.duration;
-      const midNames: Record<string, string> = { solarFlare: 'SOLAR FLARE', gravityWell: 'GRAVITY WELL', powerSurge: 'POWER SURGE', asteroidSwarm: 'ASTEROID SWARM', raid: 'RAID!', empBurst: 'EMP BURST', magneticStorm: 'MAGNETIC STORM', cloakField: 'CLOAK FIELD', overdrivePulse: 'OVERDRIVE' };
+      const label = game.rlMidWaveLabel ?? mwe.type;
       ctx.save();
       ctx.fillStyle = mweCfg.color + 'cc';
       ctx.font = 'bold 11px monospace';
       ctx.textAlign = 'center';
       ctx.textBaseline = 'top';
-      ctx.fillText(midNames[mwe.type] ?? mwe.type, W / 2, 6);
+      ctx.fillText(label.toUpperCase(), W / 2, 6);
       // Timer bar
       const bw = 120, bh = 3, bx = W / 2 - bw / 2, by = 20;
       ctx.fillStyle = 'rgba(255,255,255,0.15)';

@@ -558,7 +558,7 @@ function LaneView({
   return (
     <div
       className={[
-        'relative flex flex-col gap-1.5 rounded-lg transition-all min-h-[200px] overflow-hidden',
+        'relative flex flex-col gap-1 sm:gap-1.5 rounded-lg transition-all min-h-[140px] sm:min-h-[200px] overflow-hidden',
         selectedCardId && !lane.locked ? 'cursor-pointer nc-lane-hover' : '',
         lane.locked ? 'nc-lane-locked' : '',
         isDragOver && !lane.locked ? 'nc-lane-drop-target' : '',
@@ -575,7 +575,7 @@ function LaneView({
           : lane.locked
             ? 'inset 0 0 30px rgba(201,168,76,0.05), 0 0 20px rgba(201,168,76,0.05)'
             : 'inset 0 0 30px rgba(0,0,0,0.3)',
-        padding: '8px',
+        padding: '6px',
       }}
       onClick={() => onLaneClick(laneIndex as 0 | 1 | 2)}
       onDragOver={onDragOver}
@@ -1459,11 +1459,14 @@ export function NexusClashGame({ wsUrl, gameId, initialRoomCode, quickPlay: isQu
   // ── MATCH VIEW (playing + ended) ────────────────────────────────────────────
   if (inMatch) {
     return (
-      <div className="nc-game-root relative w-full flex flex-col gap-4 max-w-5xl mx-auto" style={{
+      <div className="nc-game-root relative w-full flex flex-col gap-2 sm:gap-4 max-w-5xl mx-auto" style={{
         minHeight: '100vh',
         background: 'radial-gradient(ellipse at 50% 20%, #12121f 0%, #0a0a12 60%, #050510 100%)',
-        padding: '16px',
-      }}>
+        padding: '8px',
+        paddingTop: 'env(safe-area-inset-top, 8px)',
+        paddingBottom: 'env(safe-area-inset-bottom, 8px)',
+      }}> {/* @media sm: padding 16px via className below */}
+        <style>{`.nc-game-root { padding: 8px !important; } @media (min-width: 640px) { .nc-game-root { padding: 16px !important; } }`}</style>
         {/* Atmospheric noise overlay */}
         <div className="fixed inset-0 pointer-events-none z-0 nc-noise-overlay" style={{ opacity: 0.03 }} />
 
@@ -1741,7 +1744,7 @@ export function NexusClashGame({ wsUrl, gameId, initialRoomCode, quickPlay: isQu
             </div>
 
             {/* 3 Lanes */}
-            <div className="grid grid-cols-3 gap-3">
+            <div className="grid grid-cols-3 gap-1.5 sm:gap-3">
               {gs.lanes.map((lane, i) => (
                 <LaneView
                   key={i}
@@ -1946,7 +1949,7 @@ export function NexusClashGame({ wsUrl, gameId, initialRoomCode, quickPlay: isQu
                   <p className="text-[10px] font-bold uppercase tracking-[0.2em]" style={{ color: '#c9a84c55' }}>{t('nc.yourHand')}</p>
                   <span className="text-[10px] font-bold tabular-nums" style={{ color: '#4a7dff66' }}>({myHand.length})</span>
                 </div>
-                <div className="flex gap-3 flex-wrap justify-center pb-4">
+                <div className="flex gap-2 sm:gap-3 overflow-x-auto sm:overflow-x-visible sm:flex-wrap justify-start sm:justify-center pb-4 px-1 snap-x snap-mandatory sm:snap-none" style={{ WebkitOverflowScrolling: 'touch' }}>
                   {myHand.map((cardId, i) => {
                     const def = NC_CARD_MAP[cardId];
                     const canAfford = def ? def.cost <= availableMana : false;
@@ -1954,7 +1957,7 @@ export function NexusClashGame({ wsUrl, gameId, initialRoomCode, quickPlay: isQu
                     const isDragging = dragCard === cardId;
                     return (
                       <CardWithTooltip key={`${cardId}-${i}`} cardId={cardId} t={t} className={[
-                        'transition-all duration-200',
+                        'transition-all duration-200 snap-start flex-shrink-0 sm:flex-shrink',
                         isSelected ? 'nc-hand-card-selected' : 'nc-hand-card',
                         isDragging ? 'nc-hand-card-dragging' : '',
                         canAfford && !haveConfirmed ? 'cursor-grab' : '',
@@ -2124,7 +2127,7 @@ export function NexusClashGame({ wsUrl, gameId, initialRoomCode, quickPlay: isQu
 
         {/* Collapsible chat panel (match view) */}
         {chatVisible && (
-          <div className="fixed bottom-4 right-4 w-80 z-40">
+          <div className="fixed bottom-2 right-2 left-2 sm:left-auto sm:bottom-4 sm:right-4 w-auto sm:w-80 z-40">
             <ChatPanel
               mode="both"
               roomCode={mp.roomCode}

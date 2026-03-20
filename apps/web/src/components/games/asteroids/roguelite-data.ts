@@ -474,7 +474,7 @@ export function getAppliedStats(
 
   const base: AppliedStats = {
     maxLives: 3 + tier('hull') + (ship?.hpMod ?? 0),
-    accel: 0.12 * (1 + tier('engine') * 0.12) * (ship?.accelMod ?? 1),
+    accel: 0.12 * (ship?.accelMod ?? 1),
     turnSpeed: 0.065 * (1 + tier('gyroscope') * 0.10) * (ship?.turnSpeedMod ?? 1),
     bulletDamage: (1 + tier('caliber') * 0.6) * (ship?.bulletDamageMod ?? 1),
     fireCooldown: 150 * (1 - tier('fireRate') * 0.08) * (ship?.fireRateMod ?? 1),

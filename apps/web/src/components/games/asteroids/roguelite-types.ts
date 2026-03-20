@@ -13,6 +13,7 @@ export type PermanentUpgradeId =
   | 'fireRate' | 'bulletSpeed' | 'magnet'
   | 'scrapBonus' | 'shieldGen' | 'critStrike'
   | 'retroThruster' | 'range';
+// Note: 'engine' is kept in the union for save backwards-compat but has no PERMANENT_UPGRADES entry
 
 // Power-up upgrade IDs (upgrade each power-up from weak → full strength)
 export type PowerUpUpgradeId =
@@ -181,8 +182,7 @@ export type MilestoneId =
   | 'reach_wave_10' | 'reach_wave_20' | 'reach_wave_30'
   | 'kill_500_asteroids' | 'kill_50_bosses'
   | 'collect_20000_run_scrap' | 'ascend_once'
-  | 'defeat_megaboss' | 'no_damage_boss'
-  | 'all_buffs_run' | 'max_all_upgrades' | 'reach_wave_50'
+  | 'defeat_megaboss' | 'reach_wave_50'
   | 'prestige_plasma' | 'prestige_frenzy' | 'prestige_stellar' | 'prestige_crystal';
 
 export interface MilestoneDef {

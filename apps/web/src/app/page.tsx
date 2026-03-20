@@ -253,6 +253,12 @@ const GAME_CONTROLS_KEY: Record<string, string> = {
   crossyroad:      'modal.controls.crossyroad',
   typingtest:      'modal.controls.typingtest',
   fruitninja:      'modal.controls.fruitninja',
+  asteroids:       'modal.controls.asteroids',
+  geometrydash:    'modal.controls.geometrydash',
+  mahjong:         'modal.controls.mahjong',
+  pacman:          'modal.controls.pacman',
+  penalties:       'modal.controls.penalties',
+  whackamole:      'modal.controls.whackamole',
 };
 
 // ── Badge system ─────────────────────────────────────────────────────────────

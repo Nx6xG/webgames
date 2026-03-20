@@ -588,7 +588,7 @@ export function NexusClashCard({
       <div
         className={[
           'relative flex items-center justify-center overflow-hidden',
-          compact ? 'w-12 h-16 rounded' : 'w-28 h-40 rounded-lg',
+          compact ? 'w-12 h-16 rounded' : 'w-20 h-28 sm:w-28 sm:h-40 rounded-lg',
           className,
         ].join(' ')}
         style={{
@@ -623,7 +623,7 @@ export function NexusClashCard({
       onMouseLeave={handleMouseLeave}
       className={[
         'relative transition-all duration-200 select-none group overflow-hidden',
-        compact ? 'w-12 h-16 rounded text-[10px]' : 'w-28 h-40 rounded-lg',
+        compact ? 'w-12 h-16 rounded text-[10px]' : 'w-20 h-28 sm:w-28 sm:h-40 rounded-lg',
         onClick && !disabled ? 'cursor-pointer hover:scale-105 hover:-translate-y-1' : '',
         selected ? 'scale-105 -translate-y-1' : '',
         pending ? 'opacity-60' : '',
@@ -673,7 +673,7 @@ export function NexusClashCard({
       {/* Cost gem (top-left) — hexagonal shape */}
       <div className={[
         'absolute flex items-center justify-center font-black text-white z-10',
-        compact ? '-top-1 -left-1 w-4 h-4 text-[9px]' : '-top-1.5 -left-1.5 w-7 h-7 text-xs',
+        compact ? '-top-1 -left-1 w-4 h-4 text-[9px]' : '-top-1 -left-1 w-5 h-5 text-[10px] sm:-top-1.5 sm:-left-1.5 sm:w-7 sm:h-7 sm:text-xs',
       ].join(' ')}>
         <svg viewBox="0 0 24 24" className="absolute inset-0 w-full h-full">
           <polygon points="12,1 22,7 22,17 12,23 2,17 2,7" fill="url(#none)" style={{ fill: 'unset' }}/>
