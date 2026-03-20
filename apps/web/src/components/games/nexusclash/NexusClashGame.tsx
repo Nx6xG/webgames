@@ -1459,14 +1459,10 @@ export function NexusClashGame({ wsUrl, gameId, initialRoomCode, quickPlay: isQu
   // ── MATCH VIEW (playing + ended) ────────────────────────────────────────────
   if (inMatch) {
     return (
-      <div className="nc-game-root relative w-full flex flex-col gap-2 sm:gap-4 max-w-5xl mx-auto" style={{
+      <div className="nc-game-root relative w-full flex flex-col gap-2 sm:gap-4 max-w-5xl mx-auto p-2 sm:p-4" style={{
         minHeight: '100vh',
         background: 'radial-gradient(ellipse at 50% 20%, #12121f 0%, #0a0a12 60%, #050510 100%)',
-        padding: '8px',
-        paddingTop: 'env(safe-area-inset-top, 8px)',
-        paddingBottom: 'env(safe-area-inset-bottom, 8px)',
-      }}> {/* @media sm: padding 16px via className below */}
-        <style>{`.nc-game-root { padding: 8px !important; } @media (min-width: 640px) { .nc-game-root { padding: 16px !important; } }`}</style>
+      }}>
         {/* Atmospheric noise overlay */}
         <div className="fixed inset-0 pointer-events-none z-0 nc-noise-overlay" style={{ opacity: 0.03 }} />
 
@@ -2530,16 +2526,15 @@ export function NexusClashGame({ wsUrl, gameId, initialRoomCode, quickPlay: isQu
       </div>
 
       {/* ── Header Bar ─────────────────────────────────────────────────────── */}
-      <div className="relative z-10 px-6 pt-6 pb-4">
-        <div className="flex items-center justify-between">
+      <div className="relative z-10 px-3 sm:px-6 pt-4 sm:pt-6 pb-3 sm:pb-4">
+        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 sm:gap-0">
           {/* Title treatment */}
-          <div className="flex flex-col items-start">
+          <div className="flex flex-col items-center sm:items-start">
             <div className="relative">
-              {/* Glow behind title */}
               <div className="absolute -inset-4 pointer-events-none" style={{
                 background: 'radial-gradient(ellipse at center, rgba(201,168,76,0.08), transparent 70%)',
               }} />
-              <div className="nc-hub-title nc-gold-text text-4xl font-black uppercase tracking-[0.25em] select-none relative" style={{
+              <div className="nc-hub-title nc-gold-text text-2xl sm:text-4xl font-black uppercase tracking-[0.25em] select-none relative" style={{
                 background: 'linear-gradient(135deg, #e8d48b 0%, #c9a84c 30%, #f0e6b8 50%, #c9a84c 70%, #e8d48b 100%)',
                 backgroundSize: '200% 100%',
                 WebkitBackgroundClip: 'text',
@@ -2549,18 +2544,17 @@ export function NexusClashGame({ wsUrl, gameId, initialRoomCode, quickPlay: isQu
                 NEXUS CLASH
               </div>
             </div>
-            <div className="flex items-center gap-2 mt-1.5">
+            <div className="flex items-center gap-2 mt-1">
               <div className="h-px flex-1" style={{
                 background: 'linear-gradient(to right, #c9a84c66, transparent)',
-                width: '120px',
+                width: '80px',
               }} />
               <span className="text-[8px] uppercase tracking-[0.3em] font-bold" style={{ color: '#c9a84c44' }}>
                 TCG
               </span>
-              {/* Tutorial button */}
               <button
                 onClick={() => setShowTutorial(true)}
-                className="ml-2 w-5 h-5 rounded-full flex items-center justify-center text-[10px] font-black transition-all hover:brightness-150"
+                className="ml-1 w-5 h-5 rounded-full flex items-center justify-center text-[10px] font-black transition-all hover:brightness-150"
                 style={{
                   background: '#c9a84c22',
                   border: '1px solid #c9a84c44',
@@ -2573,62 +2567,62 @@ export function NexusClashGame({ wsUrl, gameId, initialRoomCode, quickPlay: isQu
             </div>
           </div>
 
-          {/* Currency display */}
-          <div className="flex items-center gap-2">
+          {/* Currency display - wraps on mobile */}
+          <div className="flex items-center gap-1.5 sm:gap-2 flex-wrap justify-center sm:justify-end">
             {/* Coins */}
-            <div className="nc-currency-pill flex items-center gap-2 px-3.5 py-2 rounded-lg" style={{
+            <div className="nc-currency-pill flex items-center gap-1.5 sm:gap-2 px-2.5 sm:px-3.5 py-1.5 sm:py-2 rounded-lg" style={{
               background: 'linear-gradient(135deg, #1a1808 0%, #12121f 100%)',
               border: '1px solid #c9a84c33',
               boxShadow: 'inset 0 1px 0 rgba(201,168,76,0.05), 0 2px 8px rgba(0,0,0,0.3)',
             }}>
-              <CoinIcon size={18} />
-              <span className="text-sm font-black tabular-nums" style={{ color: '#e8d48b' }}>{ncProfile.profile.currencies.coins}</span>
+              <CoinIcon size={14} />
+              <span className="text-xs sm:text-sm font-black tabular-nums" style={{ color: '#e8d48b' }}>{ncProfile.profile.currencies.coins}</span>
             </div>
             {/* Gems */}
-            <div className="nc-currency-pill flex items-center gap-2 px-3.5 py-2 rounded-lg" style={{
+            <div className="nc-currency-pill flex items-center gap-1.5 sm:gap-2 px-2.5 sm:px-3.5 py-1.5 sm:py-2 rounded-lg" style={{
               background: 'linear-gradient(135deg, #150a2a 0%, #12121f 100%)',
               border: '1px solid #7c3aed33',
               boxShadow: 'inset 0 1px 0 rgba(124,58,237,0.05), 0 2px 8px rgba(0,0,0,0.3)',
             }}>
-              <GemIcon size={18} />
-              <span className="text-sm font-black tabular-nums" style={{ color: '#a78bfa' }}>{ncProfile.profile.currencies.gems}</span>
+              <GemIcon size={14} />
+              <span className="text-xs sm:text-sm font-black tabular-nums" style={{ color: '#a78bfa' }}>{ncProfile.profile.currencies.gems}</span>
             </div>
             {/* Shards */}
-            <div className="nc-currency-pill flex items-center gap-2 px-3.5 py-2 rounded-lg" style={{
+            <div className="nc-currency-pill flex items-center gap-1.5 sm:gap-2 px-2.5 sm:px-3.5 py-1.5 sm:py-2 rounded-lg" style={{
               background: 'linear-gradient(135deg, #0a1a1e 0%, #12121f 100%)',
               border: '1px solid #22d3ee22',
               boxShadow: 'inset 0 1px 0 rgba(34,211,238,0.05), 0 2px 8px rgba(0,0,0,0.3)',
             }}>
-              <ShardIcon size={18} />
-              <span className="text-sm font-black tabular-nums" style={{ color: '#67e8f9' }}>{ncProfile.profile.currencies.shards ?? 0}</span>
+              <ShardIcon size={14} />
+              <span className="text-xs sm:text-sm font-black tabular-nums" style={{ color: '#67e8f9' }}>{ncProfile.profile.currencies.shards ?? 0}</span>
             </div>
             {/* Daily Login Calendar */}
             <button
               onClick={() => setShowDailyCalendar(true)}
-              className="flex items-center gap-1.5 px-2.5 py-2 rounded-lg transition-all hover:brightness-125"
+              className="flex items-center gap-1 sm:gap-1.5 px-2 sm:px-2.5 py-1.5 sm:py-2 rounded-lg transition-all hover:brightness-125"
               style={{
                 background: 'linear-gradient(135deg, #1a1a08 0%, #12121f 100%)',
                 border: '1px solid #c9a84c22',
               }}
               title={t('nc.dailyLogin.title')}
             >
-              <svg viewBox="0 0 20 20" className="w-4 h-4">
+              <svg viewBox="0 0 20 20" className="w-3.5 h-3.5 sm:w-4 sm:h-4">
                 <rect x="2" y="4" width="16" height="14" rx="2" fill="none" stroke="#c9a84c" strokeWidth="1.5"/>
                 <line x1="2" y1="8" x2="18" y2="8" stroke="#c9a84c" strokeWidth="1"/>
                 <line x1="6" y1="2" x2="6" y2="5" stroke="#c9a84c" strokeWidth="1.5" strokeLinecap="round"/>
                 <line x1="14" y1="2" x2="14" y2="5" stroke="#c9a84c" strokeWidth="1.5" strokeLinecap="round"/>
                 <polygon points="10,11 11,13.5 13.5,13.5 11.5,15 12.5,17.5 10,15.5 7.5,17.5 8.5,15 6.5,13.5 9,13.5" fill="#c9a84c" opacity="0.8"/>
               </svg>
-              <span className="text-[10px] font-bold uppercase tracking-wider" style={{ color: '#c9a84c' }}>
+              <span className="text-[9px] sm:text-[10px] font-bold uppercase tracking-wider" style={{ color: '#c9a84c' }}>
                 {t('nc.dailyLogin.dayShort')}{ncProfile.profile.loginDay || 0}
               </span>
             </button>
             {/* Connection */}
-            <div className="flex items-center gap-1.5 px-2.5 py-2 rounded-lg" style={{
+            <div className="flex items-center gap-1 sm:gap-1.5 px-2 sm:px-2.5 py-1.5 sm:py-2 rounded-lg" style={{
               background: '#0a0a1266',
               border: '1px solid #2a2a3a',
             }}>
-              <span className={`w-2 h-2 rounded-full ${
+              <span className={`w-1.5 h-1.5 sm:w-2 sm:h-2 rounded-full ${
                 mp.connection === 'connected'  ? 'bg-emerald-400' :
                 mp.connection === 'connecting' ? 'bg-amber-400 animate-pulse' :
                 'bg-rose-500'
@@ -2639,7 +2633,7 @@ export function NexusClashGame({ wsUrl, gameId, initialRoomCode, quickPlay: isQu
                     ? '0 0 6px rgba(251,191,36,0.5)'
                     : '0 0 6px rgba(244,63,94,0.5)',
               }} />
-              <span className="text-[10px] font-bold uppercase tracking-wider" style={{
+              <span className="text-[9px] sm:text-[10px] font-bold uppercase tracking-wider" style={{
                 color: mp.connection === 'connected' ? '#34d399' : mp.connection === 'connecting' ? '#fbbf24' : '#f43f5e',
               }}>
                 {mp.connection === 'connected' ? 'LIVE' : mp.connection === 'connecting' ? '...' : 'OFF'}
@@ -2650,15 +2644,15 @@ export function NexusClashGame({ wsUrl, gameId, initialRoomCode, quickPlay: isQu
       </div>
 
       {/* ── Navigation ─────────────────────────────────────────────────────── */}
-      <div className="relative z-10 px-6">
-        <div className="flex items-center justify-center gap-0 relative">
+      <div className="relative z-10 px-2 sm:px-6">
+        <div className="flex items-center sm:justify-center gap-0 relative overflow-x-auto scrollbar-none" style={{ WebkitOverflowScrolling: 'touch' }}>
           {TAB_ITEMS.map((tab) => {
             const isActive = hubTab === tab.id;
             return (
               <button
                 key={tab.id}
                 onClick={() => setHubTab(tab.id)}
-                className="nc-hub-tab relative flex items-center gap-1.5 px-5 py-3 text-xs font-bold uppercase tracking-[0.15em] transition-all"
+                className="nc-hub-tab relative flex items-center gap-0 sm:gap-1.5 px-2.5 sm:px-5 py-2 sm:py-3 text-[10px] sm:text-xs font-bold uppercase tracking-[0.1em] sm:tracking-[0.15em] transition-all whitespace-nowrap flex-shrink-0"
                 style={{
                   color: isActive ? '#c9a84c' : '#5a5a6a',
                   background: 'transparent',
@@ -2666,7 +2660,7 @@ export function NexusClashGame({ wsUrl, gameId, initialRoomCode, quickPlay: isQu
                 }}
               >
                 <TabIcon tab={tab.id} active={isActive} />
-                {t(tab.labelKey)}
+                <span className="hidden sm:inline">{t(tab.labelKey)}</span>
                 {/* Active indicator */}
                 {isActive && (
                   <div className="absolute bottom-0 left-2 right-2 h-0.5 rounded-full nc-tab-indicator" style={{

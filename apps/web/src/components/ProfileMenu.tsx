@@ -172,7 +172,7 @@ export function ProfileMenu() {
         onClick={() => (open ? closeMenu() : openMenu())}
         aria-label="Open profile menu"
         aria-expanded={open}
-        className="flex items-center gap-2 rounded-lg px-2 py-1 hover:bg-zinc-800 transition-colors group"
+        className="flex items-center gap-2 rounded-lg px-2 py-1.5 hover:bg-zinc-800 transition-colors group min-w-[44px] min-h-[44px] justify-center sm:justify-start"
       >
         <div className="relative">
           <AvatarBubble avatarId={avatarId} avatarFrame={avatarFrame} nickname={nickname} size="md" cosmetics={cosmetics} />
@@ -190,7 +190,7 @@ export function ProfileMenu() {
       {/* Dropdown */}
       {open && (
         <div
-          className="fixed top-12 right-3 z-50 w-[320px] rounded-2xl border border-zinc-800/80 bg-zinc-950/95 backdrop-blur-xl shadow-[0_20px_60px_-12px_rgba(0,0,0,0.8)] flex flex-col overflow-hidden"
+          className="fixed top-12 right-1 sm:right-3 z-50 w-[calc(100vw-8px)] sm:w-[320px] max-w-[320px] rounded-2xl border border-zinc-800/80 bg-zinc-950/95 backdrop-blur-xl shadow-[0_20px_60px_-12px_rgba(0,0,0,0.8)] flex flex-col overflow-hidden"
           style={{
             maxHeight: 'min(78vh, calc(100dvh - 56px))',
             animation: 'wg-profile-menu-in 0.2s ease-out',
