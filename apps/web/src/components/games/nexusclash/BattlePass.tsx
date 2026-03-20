@@ -340,10 +340,10 @@ export function BattlePass({ profile, onClose, onClaimReward, onUnlockPremium }:
         <div
           className="flex flex-col overflow-hidden"
           style={{
-            width: '95vw',
+            width: '98vw',
             maxWidth: 820,
-            height: '75vh',
-            maxHeight: 520,
+            height: '85vh',
+            maxHeight: 560,
             background: 'linear-gradient(180deg, #12121f, #0e0e1a)',
             border: '1px solid #2a2a3a',
             borderRadius: 8,
@@ -355,7 +355,7 @@ export function BattlePass({ profile, onClose, onClaimReward, onUnlockPremium }:
           <div className="h-[1px] shrink-0" style={{ background: 'linear-gradient(to right, transparent, #c9a84c20, #7c3aed20, transparent)' }} />
 
           {/* Header */}
-          <div className="flex items-center justify-between px-5 py-3 shrink-0" style={{
+          <div className="flex items-center justify-between px-3 sm:px-5 py-2.5 sm:py-3 shrink-0" style={{
             borderBottom: '1px solid #1e1e3a',
             background: 'linear-gradient(to right, #12121f, #1a1a2e, #12121f)',
           }}>
@@ -450,7 +450,7 @@ export function BattlePass({ profile, onClose, onClaimReward, onUnlockPremium }:
               <div ref={scrollRef} className="absolute inset-0 overflow-x-auto overflow-y-hidden px-2" style={{
                 scrollbarWidth: 'thin', scrollbarColor: '#2a2a3a transparent',
               }}>
-                <div className="flex h-full py-1" style={{ minWidth: NC_BP_TIERS.length * 100 }}>
+                <div className="flex h-full py-1" style={{ minWidth: NC_BP_TIERS.length * 76 }}>
                   {NC_BP_TIERS.map((tier, idx) => {
                     const reached = currentTier >= tier.level;
                     const passed = currentTier > tier.level;
@@ -462,7 +462,7 @@ export function BattlePass({ profile, onClose, onClaimReward, onUnlockPremium }:
                     const isFinal = tier.level === NC_BP_TIERS.length;
 
                     return (
-                      <div key={tier.level} data-tier={tier.level} className="flex flex-col shrink-0" style={{ width: 100 }}>
+                      <div key={tier.level} data-tier={tier.level} className="flex flex-col shrink-0 w-[76px] sm:w-[100px]">
 
                         {/* ── Paid reward ──────────────────────────────── */}
                         <div className={`bp-tier-cell flex-1 flex flex-col items-center justify-center mx-1 rounded-lg relative overflow-hidden ${canClaimPaid ? 'bp-glow-gold' : ''}`} style={{

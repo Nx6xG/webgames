@@ -327,9 +327,9 @@ export function PackOpening({ profile, onUpdateProfile, onClose }: PackOpeningPr
       <div
         className="flex flex-col items-center gap-6 relative z-[52]"
         style={{
-          width: '95vw',
+          width: '98vw',
           maxWidth: phase === 'reveal' || phase === 'summary' ? '800px' : '700px',
-          padding: '28px 24px',
+          padding: '16px 12px',
           background: 'linear-gradient(180deg, #12121fdd, #0e0e1add)',
           border: `1px solid ${phase === 'select' ? '#2a2a3a' : RARITY_COLOR[bestRarity] + '33'}`,
           borderRadius: '16px',
@@ -614,7 +614,7 @@ export function PackOpening({ profile, onUpdateProfile, onClose }: PackOpeningPr
               {allRevealed ? t('nc.pack.allRevealed') ?? '' : t('nc.pack.tapToReveal') ?? 'Tippe um aufzudecken'}
             </p>
 
-            <div className="flex gap-4 items-center flex-wrap justify-center" style={{ minHeight: 220 }}>
+            <div className="flex gap-2 sm:gap-4 items-center flex-wrap justify-center" style={{ minHeight: 180 }}>
               {cards.map((rc, i) => {
                 const isRevealed = revealedSet.has(i);
                 const rarity = rc.cardDef.rarity;
@@ -726,7 +726,7 @@ export function PackOpening({ profile, onUpdateProfile, onClose }: PackOpeningPr
         {/* ── PHASE: Summary ── */}
         {phase === 'summary' && (
           <div className="flex flex-col items-center gap-6 nc-fade-in">
-            <div className="flex gap-4 flex-wrap justify-center">
+            <div className="flex gap-2 sm:gap-4 flex-wrap justify-center">
               {cards.map((rc, i) => {
                 const rarity = rc.cardDef.rarity;
                 const color = RARITY_COLOR[rarity];

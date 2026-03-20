@@ -260,9 +260,9 @@ export function DeckBuilder({ profile, onSave, onClose, onToggleFavorite }: Deck
       <div
         className="flex flex-col overflow-hidden"
         style={{
-          width: '96vw',
+          width: '98vw',
           maxWidth: '1280px',
-          height: '94vh',
+          height: '96vh',
           background: '#0a0a12',
           border: '1px solid #1a1a2e',
           borderRadius: '12px',
@@ -273,7 +273,7 @@ export function DeckBuilder({ profile, onSave, onClose, onToggleFavorite }: Deck
         onClick={(e) => e.stopPropagation()}
       >
         {/* ═══ HEADER ═══ */}
-        <div className="flex items-center justify-between px-6 py-3.5 shrink-0" style={{
+        <div className="flex items-center justify-between px-3 sm:px-6 py-2.5 sm:py-3.5 shrink-0" style={{
           background: 'linear-gradient(to right, #0e0e1a, #14142a, #0e0e1a)',
           borderBottom: '1px solid #1e1e3a',
         }}>
@@ -316,7 +316,7 @@ export function DeckBuilder({ profile, onSave, onClose, onToggleFavorite }: Deck
           </div>
         </div>
 
-        <div className="flex-1 flex overflow-hidden">
+        <div className="flex-1 flex flex-col sm:flex-row overflow-hidden">
 
           {/* ═══ LEFT: Card Collection ═══ */}
           <div className="flex-1 flex flex-col overflow-hidden" style={{ minWidth: 0 }}>
@@ -336,7 +336,7 @@ export function DeckBuilder({ profile, onSave, onClose, onToggleFavorite }: Deck
                   value={searchQuery}
                   onChange={(e) => setSearchQuery(e.target.value)}
                   placeholder={t('nc.deckbuilder.search')}
-                  className="rounded-lg pl-7 pr-3 py-1.5 text-xs focus:outline-none w-36 transition-all"
+                  className="rounded-lg pl-7 pr-3 py-1.5 text-xs focus:outline-none w-28 sm:w-36 transition-all"
                   style={{
                     background: '#0a0a12',
                     border: `1px solid ${searchQuery ? '#c9a84c40' : '#1e1e3a'}`,
@@ -415,8 +415,8 @@ export function DeckBuilder({ profile, onSave, onClose, onToggleFavorite }: Deck
             </div>
 
             {/* Card Grid */}
-            <div className="flex-1 overflow-y-auto p-3" style={{ background: '#08080f' }}>
-              <div className="grid gap-2" style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(120px, 1fr))' }}>
+            <div className="flex-1 overflow-y-auto p-2 sm:p-3" style={{ background: '#08080f' }}>
+              <div className="grid gap-1.5 sm:gap-2" style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(88px, 1fr))' }}>
                 {filteredCards.map((card) => {
                   const inDeck = deckCounts[card.id] ?? 0;
                   const owned = ownedSet.has(card.id);
@@ -492,9 +492,9 @@ export function DeckBuilder({ profile, onSave, onClose, onToggleFavorite }: Deck
             </div>
           </div>
 
-          {/* ═══ CENTER: Card Detail ═══ */}
+          {/* ═══ CENTER: Card Detail (hidden on mobile) ═══ */}
           {selectedDef && (
-            <div className="w-60 shrink-0 overflow-y-auto flex flex-col gap-3 py-4 px-4" style={{
+            <div className="hidden sm:flex w-60 shrink-0 overflow-y-auto flex-col gap-3 py-4 px-4" style={{
               background: 'linear-gradient(180deg, #0c0c18, #08080f)',
               borderLeft: '1px solid #1a1a2e',
               borderRight: '1px solid #1a1a2e',
@@ -588,11 +588,13 @@ export function DeckBuilder({ profile, onSave, onClose, onToggleFavorite }: Deck
           )}
 
           {/* ═══ RIGHT: Deck Panel ═══ */}
-          <div className="flex flex-col overflow-hidden shrink-0" style={{
-            width: 280,
+          <div className="flex flex-col overflow-hidden shrink-0 w-full sm:w-[280px]" style={{
+            maxHeight: 'calc(40vh)',
             background: 'linear-gradient(180deg, #0c0c18, #08080f)',
             borderLeft: '1px solid #1a1a2e',
+            borderTop: '1px solid #1a1a2e',
           }}>
+            <style>{`@media (min-width: 640px) { .nc-deck-panel { max-height: none !important; border-top: none !important; } }`}</style>
 
             {/* Deck tabs */}
             <div className="flex items-center gap-0.5 px-3 pt-3 pb-2 shrink-0">

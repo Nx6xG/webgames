@@ -3093,7 +3093,7 @@ export function NexusClashGame({ wsUrl, gameId, initialRoomCode, quickPlay: isQu
                   <svg viewBox="0 0 16 16" className="w-4 h-4"><path d="M10 3L5 8l5 5" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/></svg>
                   <span className="text-[10px] font-bold uppercase tracking-wider">{t('nc.shop.back')}</span>
                 </button>
-                <span className="flex-1 text-center text-sm font-black uppercase tracking-[0.2em] -ml-12" style={{ color: '#c9a84c' }}>
+                <span className="flex-1 text-center text-xs sm:text-sm font-black uppercase tracking-[0.15em] sm:tracking-[0.2em]" style={{ color: '#c9a84c' }}>
                   {t('nc.hub.shop')}
                 </span>
               </div>
@@ -3147,7 +3147,7 @@ export function NexusClashGame({ wsUrl, gameId, initialRoomCode, quickPlay: isQu
               )}
 
               {shopSubTab === 'shards' && (
-                <div className="flex flex-col gap-6 max-w-3xl mx-auto w-full px-4 py-6">
+                <div className="flex flex-col gap-4 sm:gap-6 max-w-3xl mx-auto w-full px-3 sm:px-4 py-4 sm:py-6">
                   {/* Header with shard balance */}
                   <div className="flex flex-col items-center gap-3">
                     <div className="flex items-center gap-3 px-6 py-3 rounded-xl" style={{
@@ -3187,7 +3187,7 @@ export function NexusClashGame({ wsUrl, gameId, initialRoomCode, quickPlay: isQu
                           <div className="flex-1 h-px" style={{ background: `${rarityColor[rarity]}15` }} />
                         </div>
                         {/* Card grid with actual card visuals */}
-                        <div className="grid grid-cols-[repeat(auto-fill,minmax(112px,1fr))] gap-3">
+                        <div className="grid grid-cols-[repeat(auto-fill,minmax(56px,1fr))] sm:grid-cols-[repeat(auto-fill,minmax(112px,1fr))] gap-2 sm:gap-3">
                           {cardsOfRarity.map(card => {
                             const owned = (ncProfile.profile.collection.cards[card.id] ?? 0) >= NC_MAX_COPIES;
                             const canBuy = !owned && (ncProfile.profile.currencies.shards ?? 0) >= price;

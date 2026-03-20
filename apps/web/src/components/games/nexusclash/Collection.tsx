@@ -68,9 +68,9 @@ export function Collection({ profile, onClose, onToggleFavorite }: CollectionPro
       <div
         className="flex flex-col overflow-hidden"
         style={{
-          width: '95vw',
+          width: '98vw',
           maxWidth: '1100px',
-          height: '85vh',
+          height: '92vh',
           background: 'linear-gradient(180deg, #12121f, #0e0e1a)',
           border: '1px solid #2a2a3a',
           borderRadius: '8px',
@@ -79,7 +79,7 @@ export function Collection({ profile, onClose, onToggleFavorite }: CollectionPro
         onClick={(e) => e.stopPropagation()}
       >
         {/* Header */}
-        <div className="flex items-center justify-between px-6 py-4 shrink-0" style={{
+        <div className="flex items-center justify-between px-3 sm:px-6 py-3 sm:py-4 shrink-0" style={{
           borderBottom: '1px solid #1e1e3a',
           background: 'linear-gradient(to right, #12121f, #1a1a2e, #12121f)',
         }}>
@@ -169,7 +169,7 @@ export function Collection({ profile, onClose, onToggleFavorite }: CollectionPro
         {/* Main area: Grid + always-visible detail panel */}
         <div className="flex-1 flex overflow-hidden">
           {/* Grid — grouped */}
-          <div className="flex-1 overflow-y-auto p-5 flex flex-col gap-5">
+          <div className="flex-1 overflow-y-auto p-3 sm:p-5 flex flex-col gap-3 sm:gap-5">
             {(groupBy === 'rarity'
               ? (['legendary', 'epic', 'rare', 'common'] as const).map(r => ({
                   key: r,
@@ -200,7 +200,7 @@ export function Collection({ profile, onClose, onToggleFavorite }: CollectionPro
                     <div className="flex-1 h-px" style={{ background: `${group.color}18` }} />
                   </div>
                   {/* Cards */}
-                  <div className="grid grid-cols-[repeat(auto-fill,minmax(112px,1fr))] gap-4">
+                  <div className="grid grid-cols-[repeat(auto-fill,minmax(82px,1fr))] sm:grid-cols-[repeat(auto-fill,minmax(112px,1fr))] gap-2 sm:gap-4">
                     {group.cards.map(card => {
                       const owned = (profile.collection.cards[card.id] ?? 0) > 0;
                       return (
@@ -250,8 +250,8 @@ export function Collection({ profile, onClose, onToggleFavorite }: CollectionPro
             })}
           </div>
 
-          {/* Detail panel — always visible */}
-          <div className="w-72 shrink-0 overflow-y-auto p-5 flex flex-col gap-4" style={{
+          {/* Detail panel — hidden on mobile */}
+          <div className="hidden sm:flex w-72 shrink-0 overflow-y-auto p-5 flex-col gap-4" style={{
             borderLeft: '1px solid #1e1e3a',
             background: 'linear-gradient(180deg, #0e0e1a, #0a0a12)',
           }}>

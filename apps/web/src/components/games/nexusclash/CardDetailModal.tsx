@@ -64,14 +64,14 @@ export function CardDetailModal({
       onClick={handleBackdrop}
     >
       <div
-        className="relative flex flex-col sm:flex-row gap-6 p-6 overflow-hidden"
+        className="relative flex flex-col sm:flex-row gap-3 sm:gap-6 p-4 sm:p-6 overflow-hidden"
         style={{
           background: 'linear-gradient(180deg, #14142a, #0e0e1a)',
           border: `1px solid ${rarityColor}33`,
           borderRadius: '12px',
           boxShadow: `0 0 40px rgba(0,0,0,0.6), 0 0 15px ${rarityColor}15`,
           maxWidth: '520px',
-          width: '95vw',
+          width: '96vw',
         }}
       >
         {/* Close button */}
@@ -86,12 +86,12 @@ export function CardDetailModal({
         </button>
 
         {/* Card preview */}
-        <div className="flex flex-col items-center gap-3 shrink-0">
-          <div className="transform scale-[1.4] origin-top">
+        <div className="flex flex-col items-center gap-2 sm:gap-3 shrink-0">
+          <div className="transform scale-100 sm:scale-[1.4] origin-top">
             <NexusClashCard card={def} />
           </div>
-          {/* Spacer for the scaled card */}
-          <div className="h-8" />
+          {/* Spacer for the scaled card (desktop only) */}
+          <div className="hidden sm:block h-8" />
         </div>
 
         {/* Details */}

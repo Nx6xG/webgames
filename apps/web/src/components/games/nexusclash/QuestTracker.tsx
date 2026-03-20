@@ -136,9 +136,9 @@ export function QuestTracker({ profile, onClaimQuest, onClose }: QuestTrackerPro
       <div
         className="flex flex-col gap-5"
         style={{
-          width: '95vw',
+          width: '96vw',
           maxWidth: '550px',
-          padding: '24px',
+          padding: '16px',
           background: 'linear-gradient(180deg, #12121f, #0e0e1a)',
           border: '1px solid #2a2a3a',
           borderRadius: '8px',

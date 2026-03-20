@@ -27,6 +27,7 @@ interface AuthContextValue {
   isSyncing: boolean;
   isSupabaseConfigured: boolean;
   signInWithEmail: (email: string) => Promise<{ error: string | null }>;
+  verifyOtp: (email: string, token: string) => Promise<{ error: string | null }>;
   signOut: () => Promise<void>;
 }
 
@@ -38,6 +39,7 @@ const AuthContext = createContext<AuthContextValue>({
   isSyncing: false,
   isSupabaseConfigured: false,
   signInWithEmail: async () => ({ error: null }),
+  verifyOtp: async () => ({ error: null }),
   signOut: async () => {},
 });
 
@@ -152,6 +154,15 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     [sb],
   );
 
+  const verifyOtp = useCallback(
+    async (email: string, token: string): Promise<{ error: string | null }> => {
+      if (!sb) return { error: 'Supabase not configured' };
+      const { error } = await sb.auth.verifyOtp({ email, token, type: 'email' });
+      return { error: error?.message ?? null };
+    },
+    [sb],
+  );
+
   const signOut = useCallback(async () => {
     if (!sb) return;
     await sb.auth.signOut();
@@ -170,6 +181,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         isSyncing,
         isSupabaseConfigured: isConfigured,
         signInWithEmail,
+        verifyOtp,
         signOut,
       }}
     >
