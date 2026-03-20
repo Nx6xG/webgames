@@ -1,6 +1,7 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
 import type { PublicScoreEntry } from './types';
-import { getScoreConfig } from './config';
+import { getScoreConfig, SCORE_CONFIGS } from './config';
+import { loadScores } from './storage';
 
 // ── DB row shape (snake_case from Supabase) ─────────────────────────────────
 
@@ -119,4 +120,40 @@ export async function fetchMyBestPublicScore(
 
   if (error || !data || data.length === 0) return null;
   return rowToEntry(data[0] as ScoreRow);
+}
+
+/**
+ * Migrate all local best scores to the cloud for a newly logged-in user.
+ * Skips games where the user already has a better or equal score in the cloud.
+ */
+export async function migrateLocalScoresToCloud(
+  sb: SupabaseClient,
+  userId: string,
+  nickname: string,
+): Promise<number> {
+  let migrated = 0;
+  for (const gameId of Object.keys(SCORE_CONFIGS)) {
+    const config = getScoreConfig(gameId);
+    if (!config) continue;
+
+    const local = loadScores(gameId);
+    if (local.length === 0) continue;
+
+    // Best local score (list is already sorted)
+    const bestLocal = local[0];
+
+    // Check if user already has a score for this game in the cloud
+    const existing = await fetchMyBestPublicScore(sb, userId, gameId);
+    if (existing) {
+      const isBetter = config.sortDirection === 'desc'
+        ? bestLocal.score > existing.score
+        : bestLocal.score < existing.score;
+      if (!isBetter) continue; // cloud score is already better or equal
+    }
+
+    // Submit best local score to cloud
+    await submitPublicScore(sb, userId, nickname, gameId, bestLocal.score, bestLocal.meta);
+    migrated++;
+  }
+  return migrated;
 }

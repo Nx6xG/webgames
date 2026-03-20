@@ -16,6 +16,7 @@ import {
   loadCloudToLocal,
   runInitialSync,
 } from '@/lib/cloudSync';
+import { migrateLocalScoresToCloud } from '@/lib/personal-scores/cloud';
 
 const SYNC_TIMEOUT_MS = 10_000;
 
@@ -98,6 +99,14 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           setIsSyncing(false);
           window.dispatchEvent(new Event('webgames:cloud-sync-done'));
         }
+      }
+
+      // Migrate local scores to cloud (best scores per game)
+      try {
+        const nick = typeof window !== 'undefined' ? localStorage.getItem('wg_nickname') || u.email?.split('@')[0] || 'Player' : 'Player';
+        await migrateLocalScoresToCloud(client, u.id, nick);
+      } catch (err) {
+        console.error('[AuthProvider] score migration error:', err);
       }
 
       // Fetch role from profiles table
