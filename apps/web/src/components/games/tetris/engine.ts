@@ -308,12 +308,15 @@ function lockAndSpawn(state: TetrisState): TetrisState {
 
 /**
  * Creates a fresh game state with a filled queue and the first piece spawned.
- * Status is 'countdown' — the UI drives the countdown, then dispatches 'tick'
+ * Status is 'menu' — the UI drives the countdown, then dispatches 'tick'
  * or player actions to transition to 'running'.
+ *
+ * Pass `deterministic = true` for the SSR/useState initializer: a fixed piece
+ * order avoids React hydration mismatches. Swap in a random state on mount.
  */
-export function createInitialState(): TetrisState {
+export function createInitialState(deterministic = false): TetrisState {
   const board = createEmptyBoard();
-  let bag = newBag();
+  let bag = deterministic ? [...ALL_KINDS] : newBag();
   const queue1 = refillQueue([], bag);
   bag = queue1.bag;
   const { nextQueue } = refillQueue(queue1.nextQueue, bag);

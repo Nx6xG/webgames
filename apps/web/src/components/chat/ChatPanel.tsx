@@ -230,7 +230,7 @@ export function ChatPanel({
               <div className="flex-1 overflow-y-auto p-3 space-y-3 min-h-0">
                 {messages.length === 0 ? (
                   <p className="text-xs text-zinc-600 text-center pt-4">
-                    {scope === 'room' && !roomCode ? 'Join a room to chat.' : 'No messages yet.'}
+                    {scope === 'room' && !roomCode ? t('chat.joinToChat') : t('chat.empty')}
                   </p>
                 ) : (
                   messages.map((msg) => (
@@ -285,7 +285,7 @@ export function ChatPanel({
                   onKeyDown={(e) => {
                     if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); handleSend(); }
                   }}
-                  placeholder={canSend ? t('chat.placeholder') : 'Join a room to chat'}
+                  placeholder={canSend ? t('chat.placeholder') : t('chat.joinToChat')}
                   disabled={!canSend || !expanded}
                   className="flex-1 bg-zinc-800 border border-zinc-700 rounded-lg px-3 py-1.5 text-xs text-zinc-100 placeholder-zinc-600 focus:outline-none focus:border-indigo-500 disabled:opacity-40"
                 />
@@ -336,7 +336,7 @@ export function ChatPanel({
       <div className="flex-1 overflow-y-auto p-3 space-y-3 min-h-0">
         {messages.length === 0 ? (
           <p className="text-xs text-zinc-600 text-center pt-6">
-            {scope === 'room' && !roomCode ? 'Join a room to chat.' : 'No messages yet.'}
+            {scope === 'room' && !roomCode ? t('chat.joinToChat') : t('chat.empty')}
           </p>
         ) : (
           messages.map((msg) => (
@@ -391,7 +391,7 @@ export function ChatPanel({
           onKeyDown={(e) => {
             if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); handleSend(); }
           }}
-          placeholder={canSend ? t('chat.placeholder') : 'Join a room to chat'}
+          placeholder={canSend ? t('chat.placeholder') : t('chat.joinToChat')}
           disabled={!canSend}
           className="flex-1 bg-zinc-800 border border-zinc-700 rounded-lg px-3 py-1.5 text-xs text-zinc-100 placeholder-zinc-600 focus:outline-none focus:border-indigo-500 disabled:opacity-40"
         />

@@ -167,7 +167,8 @@ export function TetrisGame() {
   const pb = usePersonalScores('tetris', user ? { userId: user.id, nickname } : undefined);
   const shop = useSkinShop('tetris', TETRIS_SKINS);
   const sc = shop.activeSkinDef.colors;
-  const [state, setState] = useState<TetrisState>(createInitialState);
+  // Deterministic piece order for SSR — real random bag is swapped in on mount
+  const [state, setState] = useState<TetrisState>(() => createInitialState(true));
   const [countdown, setCountdown] = useState(3);
   const [stats, setStats] = useState<TetrisStats | null>(null);
   const tickRef = useRef<ReturnType<typeof setInterval> | null>(null);
@@ -182,6 +183,9 @@ export function TetrisGame() {
       saved.lastClear = undefined;
       setState(saved);
       clearSave(SAVE_TETRIS);
+    } else {
+      // Replace the deterministic SSR state with a properly shuffled bag
+      setState(createInitialState());
     }
   }, []);
 

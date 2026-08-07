@@ -1,4 +1,7 @@
+'use client';
+
 import type { GameStats } from 'shared';
+import { useI18n } from '@/components/providers/LanguageProvider';
 
 interface Props {
   stats: GameStats | null;
@@ -7,6 +10,7 @@ interface Props {
 }
 
 export function StatsCard({ stats, playerIndex }: Props) {
+  const { t } = useI18n();
   const played = stats?.gamesPlayed ?? 0;
   const draws = stats?.draws ?? 0;
   const p0wins = stats?.winsByPlayerIndex[0] ?? 0;
@@ -19,23 +23,23 @@ export function StatsCard({ stats, playerIndex }: Props) {
 
   return (
     <div className="rounded-xl border border-zinc-800 bg-zinc-900 p-4">
-      <p className="text-xs text-zinc-500 uppercase tracking-wider font-semibold mb-3">Platform Stats</p>
+      <p className="text-xs text-zinc-500 uppercase tracking-wider font-semibold mb-3">{t('stats.title')}</p>
       <div className="space-y-2 text-sm">
-        <StatRow label="Games played" value={played} />
+        <StatRow label={t('stats.gamesPlayed')} value={played} />
         {isPlayer ? (
           <>
-            <StatRow label="Your wins" value={myWins!} accent />
-            <StatRow label="Opponent wins" value={oppWins!} />
+            <StatRow label={t('stats.yourWins')} value={myWins!} accent />
+            <StatRow label={t('stats.oppWins')} value={oppWins!} />
           </>
         ) : (
           <>
-            <StatRow label="Player 1 wins" value={p0wins} />
-            <StatRow label="Player 2 wins" value={p1wins} />
+            <StatRow label={t('stats.p1Wins')} value={p0wins} />
+            <StatRow label={t('stats.p2Wins')} value={p1wins} />
           </>
         )}
-        <StatRow label="Draws" value={draws} />
+        <StatRow label={t('stats.draws')} value={draws} />
         {winRate !== null && (
-          <StatRow label="Win rate" value={`${winRate}%`} accent />
+          <StatRow label={t('stats.winRate')} value={`${winRate}%`} accent />
         )}
       </div>
     </div>

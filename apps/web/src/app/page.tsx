@@ -465,7 +465,7 @@ function SingleplayerCard({
       </p>
       {bestScore !== null && (
         <p className="text-xs text-zinc-500 mb-4">
-          Best:{' '}
+          {t('cards.bestScore')}:{' '}
           <span className="font-semibold tabular-nums text-zinc-300">
             {bestScore.toLocaleString()}
           </span>
@@ -613,10 +613,10 @@ function GameCard({
 
 type GameFilter = 'all' | 'multiplayer' | 'singleplayer';
 
-const FILTER_LABELS: { value: GameFilter; label: string }[] = [
-  { value: 'all',          label: 'All' },
-  { value: 'multiplayer',  label: 'Multiplayer' },
-  { value: 'singleplayer', label: 'Singleplayer' },
+const FILTER_LABELS: { value: GameFilter; labelKey: string }[] = [
+  { value: 'all',          labelKey: 'lobby.filter.all' },
+  { value: 'multiplayer',  labelKey: 'lobby.filter.multiplayer' },
+  { value: 'singleplayer', labelKey: 'lobby.filter.singleplayer' },
 ];
 
 export default function HomePage() {
@@ -782,30 +782,47 @@ export default function HomePage() {
 
       {/* Header */}
       <header className="border-b border-[var(--cardBorder)] bg-[var(--bg)]/80 backdrop-blur-xl sticky top-0 z-40">
-        <div className="max-w-5xl mx-auto px-6 py-4 flex items-center gap-3">
-          <div className="w-8 h-8 rounded-lg bg-indigo-600 flex items-center justify-center font-black text-sm">
+        <div className="max-w-5xl mx-auto px-4 sm:px-6 py-3 sm:py-4 flex items-center gap-2 sm:gap-3">
+          <div className="w-8 h-8 rounded-lg bg-indigo-600 flex items-center justify-center font-black text-sm shrink-0">
             W
           </div>
-          <span className="font-bold text-lg tracking-tight">Web Games</span>
-          <nav className="ml-auto flex items-center gap-3">
-            <Link href="/rooms" className="text-sm text-zinc-400 hover:text-zinc-100 transition-colors">
-              {t('nav.rooms')}
-            </Link>
-            <Link href="/leaderboards" className="text-sm text-zinc-400 hover:text-zinc-100 transition-colors">
-              {t('nav.leaderboard')}
-            </Link>
-            <Link href="/tournaments" className="text-sm text-zinc-400 hover:text-zinc-100 transition-colors">
-              {t('nav.tournaments')}
-            </Link>
-            <div className="w-px h-4 bg-zinc-700/60 shrink-0" aria-hidden />
+          <span className="font-bold text-lg tracking-tight whitespace-nowrap">Web Games</span>
+          <nav className="ml-auto flex items-center gap-2 sm:gap-3 min-w-0">
+            {/* Text links: desktop only — on mobile they live in the second row below */}
+            <div className="hidden md:flex items-center gap-3">
+              <Link href="/rooms" className="text-sm text-zinc-400 hover:text-zinc-100 transition-colors">
+                {t('nav.rooms')}
+              </Link>
+              <Link href="/leaderboards" className="text-sm text-zinc-400 hover:text-zinc-100 transition-colors">
+                {t('nav.leaderboard')}
+              </Link>
+              <Link href="/tournaments" className="text-sm text-zinc-400 hover:text-zinc-100 transition-colors">
+                {t('nav.tournaments')}
+              </Link>
+              <div className="w-px h-4 bg-zinc-700/60 shrink-0" aria-hidden />
+            </div>
             <TokenHeaderChip />
-            <div className="w-px h-4 bg-zinc-700/60 shrink-0" aria-hidden />
-            <div className="flex items-center gap-2">
+            <div className="hidden sm:block w-px h-4 bg-zinc-700/60 shrink-0" aria-hidden />
+            <div className="flex items-center gap-1.5 sm:gap-2">
               <GlobalMuteButton />
               <OnlineNavChip />
               <ProfileMenu />
             </div>
           </nav>
+        </div>
+        {/* Mobile nav row */}
+        <div className="md:hidden border-t border-[var(--cardBorder)]/60">
+          <div className="max-w-5xl mx-auto px-4 py-2 flex items-center gap-5 overflow-x-auto scrollbar-none">
+            <Link href="/rooms" className="text-sm text-zinc-400 hover:text-zinc-100 transition-colors whitespace-nowrap">
+              {t('nav.rooms')}
+            </Link>
+            <Link href="/leaderboards" className="text-sm text-zinc-400 hover:text-zinc-100 transition-colors whitespace-nowrap">
+              {t('nav.leaderboard')}
+            </Link>
+            <Link href="/tournaments" className="text-sm text-zinc-400 hover:text-zinc-100 transition-colors whitespace-nowrap">
+              {t('nav.tournaments')}
+            </Link>
+          </div>
         </div>
       </header>
 
@@ -842,7 +859,7 @@ export default function HomePage() {
       {/* Filter toggle + Search */}
       <div className="max-w-5xl mx-auto px-6 pb-8 flex flex-col sm:flex-row items-start sm:items-center gap-3">
         <div className="flex gap-1 p-1 bg-zinc-800 rounded-lg shrink-0">
-          {FILTER_LABELS.map(({ value, label }) => (
+          {FILTER_LABELS.map(({ value, labelKey }) => (
             <button
               key={value}
               onClick={() => setFilter(value)}
@@ -850,7 +867,7 @@ export default function HomePage() {
                 filter === value ? 'bg-zinc-700 text-zinc-100' : 'text-zinc-500 hover:text-zinc-300'
               }`}
             >
-              {label}
+              {t(labelKey)}
             </button>
           ))}
         </div>

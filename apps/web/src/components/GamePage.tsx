@@ -38,7 +38,7 @@ export function GamePage({ title, children, fullWidth }: Props) {
             <Link href="/rooms" className="text-xs text-zinc-500 hover:text-zinc-300 transition-colors whitespace-nowrap hidden sm:block">
               {t('nav.rooms')}
             </Link>
-            <Link href="/leaderboard" className="text-xs text-zinc-500 hover:text-zinc-300 transition-colors whitespace-nowrap hidden sm:block">
+            <Link href="/leaderboards" className="text-xs text-zinc-500 hover:text-zinc-300 transition-colors whitespace-nowrap hidden sm:block">
               {t('nav.leaderboard')}
             </Link>
           </div>

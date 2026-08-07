@@ -8,6 +8,15 @@ export const WIN_TILE  = 2048;
 // ── Public API ────────────────────────────────────────────────────────────────
 
 /**
+ * Empty board without random tiles — safe for SSR/useState initializers.
+ * The real starting tiles are spawned client-side after mount (random values
+ * in the first render cause React hydration mismatches).
+ */
+export function createEmptyState(best = 0): GameState {
+  return { grid: emptyGrid(), tiles: [], nextId: 1, score: 0, best, moves: 0, status: 'playing', keepPlaying: false };
+}
+
+/**
  * Returns a brand-new GameState with two tiles already placed.
  * Pass a `best` value to carry the all-time best score across sessions.
  */

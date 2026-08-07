@@ -126,7 +126,7 @@ export function RoomsClient({ wsUrl, initialGameFilter }: { wsUrl: string; initi
           <span className="text-zinc-700">/</span>
           <h1 className="font-bold text-zinc-100">{t('rooms.title')}</h1>
           <nav className="ml-auto">
-            <Link href="/leaderboard" className="text-sm text-zinc-400 hover:text-zinc-100 transition-colors">
+            <Link href="/leaderboards" className="text-sm text-zinc-400 hover:text-zinc-100 transition-colors">
               {t('nav.leaderboard')}
             </Link>
           </nav>
@@ -151,7 +151,7 @@ export function RoomsClient({ wsUrl, initialGameFilter }: { wsUrl: string; initi
                     gameFilter === gf ? 'bg-zinc-700 text-zinc-100' : 'text-zinc-500 hover:text-zinc-300'
                   }`}
                 >
-                  {gf === 'all' ? 'All' : t(GAME_TITLE_KEYS[gf] ?? gf)}
+                  {gf === 'all' ? t('lobby.filter.all') : t(GAME_TITLE_KEYS[gf] ?? gf)}
                 </button>
               ))}
             </div>

@@ -202,7 +202,7 @@ export const messages: Record<Lang, Record<string, string>> = {
     'pb.empty':                 'Noch keine Einträge',
     'pb.clear':                 'Zurücksetzen',
     'pb.personal':              'Persönlich',
-    'pb.public':                'Public',
+    'pb.public':                'Öffentlich',
     'pb.publicEmpty':           'Noch keine öffentlichen Einträge',
     'pb.publicLoading':         'Laden…',
     'pb.publicLogin':           'Melde dich an, um öffentliche Bestenlisten zu sehen',
@@ -282,6 +282,9 @@ export const messages: Record<Lang, Record<string, string>> = {
     'lobby.play':           'Spielen',
     'lobby.search':         'Spiel suchen…',
     'lobby.noResults':      'Keine Spiele gefunden.',
+    'lobby.filter.all':     'Alle',
+    'lobby.filter.multiplayer': 'Multiplayer',
+    'lobby.filter.singleplayer': 'Einzelspieler',
     'lobby.quickPlay':      'Schnellspiel',
     'lobby.customGame':     'Benutzerdefiniert',
     'lobby.soon':           'Bald',
@@ -1648,6 +1651,18 @@ export const messages: Record<Lang, Record<string, string>> = {
     'chat.send':            'Senden',
     'chat.placeholder':     'Nachricht…',
     'chat.spectator':       'Zuschauer',
+    'chat.empty':           'Noch keine Nachrichten.',
+    'chat.joinToChat':      'Tritt einem Raum bei, um zu chatten.',
+
+    // ── Platform stats card ────────────────────────────────────────────────
+    'stats.title':          'Plattform-Statistiken',
+    'stats.gamesPlayed':    'Gespielte Partien',
+    'stats.yourWins':       'Deine Siege',
+    'stats.oppWins':        'Siege des Gegners',
+    'stats.p1Wins':         'Siege Spieler 1',
+    'stats.p2Wins':         'Siege Spieler 2',
+    'stats.draws':          'Unentschieden',
+    'stats.winRate':        'Siegquote',
 
     // ── Online presence ────────────────────────────────────────────────────
     'online.title':         'Online',
@@ -3241,6 +3256,9 @@ export const messages: Record<Lang, Record<string, string>> = {
     'lobby.play':           'Play',
     'lobby.search':         'Search games…',
     'lobby.noResults':      'No games found.',
+    'lobby.filter.all':     'All',
+    'lobby.filter.multiplayer': 'Multiplayer',
+    'lobby.filter.singleplayer': 'Singleplayer',
     'lobby.quickPlay':      'Quick Play',
     'lobby.customGame':     'Custom',
     'lobby.soon':           'Soon',
@@ -4607,6 +4625,18 @@ export const messages: Record<Lang, Record<string, string>> = {
     'chat.send':            'Send',
     'chat.placeholder':     'Message…',
     'chat.spectator':       'Spectator',
+    'chat.empty':           'No messages yet.',
+    'chat.joinToChat':      'Join a room to chat.',
+
+    // ── Platform stats card ────────────────────────────────────────────────
+    'stats.title':          'Platform Stats',
+    'stats.gamesPlayed':    'Games played',
+    'stats.yourWins':       'Your wins',
+    'stats.oppWins':        'Opponent wins',
+    'stats.p1Wins':         'Player 1 wins',
+    'stats.p2Wins':         'Player 2 wins',
+    'stats.draws':          'Draws',
+    'stats.winRate':        'Win rate',
 
     // ── Online presence ────────────────────────────────────────────────────
     'online.title':         'Online',

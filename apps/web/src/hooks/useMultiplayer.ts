@@ -146,6 +146,12 @@ function makeLobbyState<TState extends AnyGameState>(): MultiplayerState<TState>
 const TOKEN_KEY = 'wg_player_token';
 const NICK_KEY = 'wg_nickname';
 
+/**
+ * Cap on stored game-state snapshots for replay. Real-time games (Curve Fever)
+ * emit 20+ states/second — without a cap the history grows unbounded.
+ */
+const STATE_HISTORY_MAX = 400;
+
 const NICK_ADJ = ['Blue', 'Red', 'Wild', 'Dark', 'Swift', 'Brave', 'Calm', 'Bold', 'Keen', 'Vast'];
 const NICK_NOUN = ['Tiger', 'Eagle', 'Fox', 'Wolf', 'Bear', 'Hawk', 'Lynx', 'Otter', 'Panda', 'Raven'];
 
@@ -362,7 +368,7 @@ export function useMultiplayer<TState extends AnyGameState = AnyGameState>(
         gameState: state as TState,
         spectatorCount,
         phase: state.status !== 'ongoing' ? 'ended' : 'playing',
-        stateHistory: [...prev.stateHistory, state as TState],
+        stateHistory: [...prev.stateHistory, state as TState].slice(-STATE_HISTORY_MAX),
       })),
     );
 
@@ -594,7 +600,7 @@ export function useMultiplayer<TState extends AnyGameState = AnyGameState>(
       message: trimmed,
     });
     fireAch({ type: 'message_sent' });
-  }, []);
+  }, [fireAch]);
 
   const emitCosmetics = useCallback(() => {
     const c = cosmeticsRef.current;

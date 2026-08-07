@@ -1,16 +1,17 @@
-import { createServer, type IncomingMessage, type ServerResponse } from 'node:http';
+import { createServer, type Server as HttpServer } from 'node:http';
 import { randomUUID } from 'node:crypto';
 import { Server } from 'socket.io';
+import type { GameServer } from './serverTypes.js';
 import type { ServerToClientEvents, ClientToServerEvents } from 'shared';
-import { NC_BOT_TOKEN_PREFIX } from 'shared';
+import { NC_BOT_TOKEN_PREFIX, isBotToken } from 'shared';
+import type { GameId, Match, ActionErrorCode, ChatMessage, LeaderboardMode } from 'shared';
 import { roomManager, PLAYER_RECONNECT_MS } from './rooms.js';
+import type { Room } from './rooms.js';
 import { engineRegistry } from './engineRegistry.js';
 import { rateLimiter } from './rateLimiter.js';
 import { getStats, getAllStats, recordResult } from './stats.js';
 import { addMatch, getHistory } from './matchHistory.js';
 import { recordMatchResult, recordDraw, updateNickname, getEntries } from './leaderboard.js';
-import type { RoomPlayerInfo, OpenRoomInfo, PublicRoomListItem, GameId, Match, ActionErrorCode, ChatMessage, LeaderboardMode, AnyGameState, InvitePayload, PresenceActivity, CosmeticsSelection } from 'shared';
-import type { Room } from './rooms.js';
 import { projectGameState } from './stateProjection.js';
 import { PartyManager } from './parties.js';
 import { getGameCapacity } from './gameCapacity.js';
@@ -18,37 +19,37 @@ import { InMemoryStorage } from './storage/inMemory.js';
 import type { Storage } from './storage/types.js';
 import { TournamentManager } from './tournament.js';
 
+// ── Extracted modules ─────────────────────────────────────────────────────────
+import { buildCosmetics, applyCosmetics } from './cosmetics.js';
+import {
+  profiles, identifiedTokens, nicknameMap,
+  globalChat, roomChats, pushGlobalChat, cleanChatTimestamps,
+  sanitizeNickname, safeNickname, sanitizeMessage, canChat,
+  ROOM_CHAT_BUF,
+} from './chatState.js';
+import { presence, socketActivity, buildPresenceList, broadcastPresence } from './presence.js';
+import {
+  COUNTDOWN_MS, roomGamePresence,
+  addPresence, removePresence, replacePresence,
+  emitRoomReady, allSeatedPlayersPresent, tryStartCountdown,
+} from './roomPresence.js';
+import { roomPlayers, emitGameState, emitRematchStarted, emitPlayerJoined } from './emit.js';
+import { startTickLoop, stopTickLoop } from './tickLoop.js';
+import {
+  quickPlayQueue, dropFromQuickPlayQueue,
+  PUBLIC_ROOM_RATE_LIMIT, cleanPublicRoomRateLimiter,
+  getClientIp, canCreatePublicRoom,
+  getPublicRoomList, broadcastOpenRooms,
+} from './openRooms.js';
+import { createHttpHandler } from './adminHttp.js';
+import { registerPartyHandlers } from './partyHandlers.js';
+import { registerTournamentHandlers, startTournamentMatch } from './tournamentHandlers.js';
+import { registerInviteHandlers } from './inviteHandlers.js';
+
 const storage: Storage = new InMemoryStorage();
+void storage; // reserved for future persistent backends
 const partyManager = new PartyManager();
 const tournamentManager = new TournamentManager();
-
-// ── Cosmetics helpers ─────────────────────────────────────────────────────────
-
-function buildCosmetics(p: { avatarId?: string; nameColor?: string; avatarFrame?: string; banner?: string; cardColor?: string; badges?: string[] }): CosmeticsSelection {
-  return { avatarId: p.avatarId, nameColor: p.nameColor, slots: { frame: p.avatarFrame, banner: p.banner, cardColor: p.cardColor }, badges: p.badges };
-}
-
-function applyCosmetics(target: { avatarId?: string; nameColor?: string; avatarFrame?: string; banner?: string; cardColor?: string; badges?: string[] }, c?: CosmeticsSelection) {
-  if (!c) return;
-  if (c.avatarId !== undefined) target.avatarId = c.avatarId;
-  if (c.nameColor !== undefined) target.nameColor = c.nameColor;
-  if (c.slots?.frame !== undefined) target.avatarFrame = c.slots.frame;
-  if (c.slots?.banner !== undefined) target.banner = c.slots.banner;
-  if (c.slots?.cardColor !== undefined) target.cardColor = c.slots.cardColor;
-  if (c.badges !== undefined) target.badges = c.badges;
-}
-
-function roomPlayers(room: Room): RoomPlayerInfo[] {
-  return room.players
-    .slice()
-    .sort((a, b) => a.index - b.index)
-    .map((p) => {
-      const pres = presence.get(p.playerToken);
-      return { index: p.index, nickname: p.nickname, avatarId: p.avatarId, nameColor: p.nameColor, avatarFrame: p.avatarFrame, cosmetics: buildCosmetics(p), level: pres?.level };
-    });
-}
-
-const COUNTDOWN_MS = 3000;
 
 /** Human-readable game names for global chat announcements */
 const GAME_DISPLAY_NAMES: Record<GameId, string> = {
@@ -63,189 +64,10 @@ const GAME_DISPLAY_NAMES: Record<GameId, string> = {
   nexusclash: 'Nexus Clash',
 };
 
-/** Per-gameId matchmaking queue: gameId → waiting room info */
-const quickPlayQueue = new Map<GameId, OpenRoomInfo>();
-
-// ── Tick loop management (real-time games like Curve Fever) ─────────────────
-
-const tickTimers = new Map<string, ReturnType<typeof setInterval>>();
-
-function startTickLoop(roomCode: string) {
-  if (tickTimers.has(roomCode)) return; // already running
-  const room = roomManager.getRoom(roomCode);
-  if (!room?.state) return;
-  const engine = engineRegistry[room.gameId];
-  if (!engine.tick || !engine.tickInterval) return;
-
-  const interval = setInterval(() => {
-    const r = roomManager.getRoom(roomCode);
-    if (!r?.state) { stopTickLoop(roomCode); return; }
-    let newState;
-    try {
-      newState = engine.tick!(r.state);
-    } catch (err) {
-      console.error(`[tick error] room=${r.code} game=${r.gameId}:`, err);
-      return; // skip this tick, don't crash
-    }
-    // Skip emit if state reference didn't change (no timeout occurred)
-    if (newState !== r.state) {
-      r.state = newState;
-      emitGameState(r, newState);
-    }
-    const st = engine.getStatus(newState);
-    if (st.status !== 'ongoing') {
-      stopTickLoop(roomCode);
-    }
-  }, engine.tickInterval);
-
-  tickTimers.set(roomCode, interval);
-}
-
-function stopTickLoop(roomCode: string) {
-  const timer = tickTimers.get(roomCode);
-  if (timer) { clearInterval(timer); tickTimers.delete(roomCode); }
-}
-
-/** socketId → nickname for all identified sockets */
-const nicknameMap = new Map<string, string>();
-
-// ── Presence (online users) ───────────────────────────────────────────────────
-
-/** playerToken → { nickname, avatarId, nameColor, sockets: Set of active socketIds } */
-const presence = new Map<string, { nickname: string; avatarId?: string; nameColor?: string; avatarFrame?: string; banner?: string; cardColor?: string; badges?: string[]; userId?: string; level?: number; showcase?: import('shared').ProfileShowcase; sockets: Set<string> }>();
-
-/** socketId → current activity for that socket */
-const socketActivity = new Map<string, PresenceActivity>();
-
-/** Priority: room > game > home. Pick the most specific activity across all sockets for a token. */
-function bestActivity(sockets: Set<string>): PresenceActivity | undefined {
-  let best: PresenceActivity | undefined;
-  let bestRank = -1;
-  for (const sid of sockets) {
-    const a = socketActivity.get(sid);
-    if (!a) continue;
-    const rank = a.kind === 'room' ? 2 : a.kind === 'game' ? 1 : 0;
-    if (rank > bestRank) { best = a; bestRank = rank; }
-  }
-  return best;
-}
-
-function buildPresenceList() {
-  return [...presence.entries()]
-    .map(([playerToken, { nickname, avatarId, nameColor, avatarFrame, banner, cardColor, badges, userId, level, showcase, sockets }]) => ({
-      playerToken,
-      nickname,
-      connections: sockets.size,
-      activity: bestActivity(sockets),
-      avatarId,
-      nameColor,
-      avatarFrame,
-      cosmetics: buildCosmetics({ avatarId, nameColor, avatarFrame, banner, cardColor, badges }),
-      userId,
-      level,
-      showcase,
-    }))
-    .sort((a, b) => a.nickname.localeCompare(b.nickname, undefined, { sensitivity: 'base' }));
-}
-
-function broadcastPresence() {
-  io.emit('online_users', { users: buildPresenceList() });
-}
-
-// ── Invite rate limiter ───────────────────────────────────────────────────────
-
-/** playerToken → timestamp of last invite sent (ms) */
-const inviteRateLimit = new Map<string, number>();
-
-// ── Per-room game-socket presence ─────────────────────────────────────────────
-/**
- * Tracks which players have an active GAME-PAGE socket in each room.
- * Only sockets from create_room / join_room / quick_play / identify→claimSession
- * are tracked.  The invite_create online socket is intentionally excluded so that
- * the countdown cannot start until the inviting player actually navigates to the
- * game page.
- */
-/** roomCode → playerIndex → set of active socket IDs for that seat */
-const roomGamePresence = new Map<string, Map<number, Set<string>>>();
-
-function getRoomPresence(roomCode: string): Map<number, Set<string>> {
-  let rp = roomGamePresence.get(roomCode);
-  if (!rp) { rp = new Map(); roomGamePresence.set(roomCode, rp); }
-  return rp;
-}
-
-/** Add a socket to the game-page presence for a given seat. */
-function addPresence(roomCode: string, playerIndex: number, socketId: string) {
-  const rp = getRoomPresence(roomCode);
-  let sockets = rp.get(playerIndex);
-  if (!sockets) { sockets = new Set(); rp.set(playerIndex, sockets); }
-  sockets.add(socketId);
-}
-
-/** Remove a socket from game-page presence for a given seat. */
-function removePresence(roomCode: string, playerIndex: number, socketId: string) {
-  const rp = roomGamePresence.get(roomCode);
-  if (!rp) return;
-  const sockets = rp.get(playerIndex);
-  if (sockets) {
-    sockets.delete(socketId);
-    if (sockets.size === 0) rp.delete(playerIndex);
-  }
-}
-
-/** Replace all sockets for a seat with a single new one (reconnect). */
-function replacePresence(roomCode: string, playerIndex: number, socketId: string) {
-  const rp = getRoomPresence(roomCode);
-  rp.set(playerIndex, new Set([socketId]));
-}
-
-function emitRoomReady(room: Room) {
-  const rp = roomGamePresence.get(room.code);
-  const p0 = (rp?.get(0)?.size ?? 0) > 0;
-  const p1 = (rp?.get(1)?.size ?? 0) > 0;
-  io.to(room.code).emit('room_ready', { roomCode: room.code, ready: p0 && p1, players: { p0, p1 } });
-}
-
-function allSeatedPlayersPresent(room: Room): boolean {
-  const rp = roomGamePresence.get(room.code);
-  if (!rp) return false;
-  for (const p of room.players) {
-    const sockets = rp.get(p.index);
-    if (!sockets || sockets.size === 0) return false;
-  }
-  return true;
-}
-
-function tryStartCountdown(room: Room) {
-  if (room.gameId === 'liarsbar' || room.gameId === 'uno' || room.gameId === 'curvefever') return; // lobby games use host-start instead of countdown
-  if (room.players.length < room.minPlayers) return; // not enough players yet
-  if (!allSeatedPlayersPresent(room)) return; // all must be on the game page
-  if (room.matchStartsAt) return; // already issued
-  startCountdown(room);
-}
-
-// ── Public room rate limiter (per IP, in-memory) ──────────────────────────────
-const PUBLIC_ROOM_RATE_LIMIT = 3;
-const PUBLIC_ROOM_RATE_WINDOW_MS = 10 * 60 * 1000; // 10 minutes
-const publicRoomCreations = new Map<string, { count: number; firstAt: number }>();
-// Evict stale entries every 5 minutes to prevent unbounded growth
+// ── Periodic cleanup (every 5 minutes) ───────────────────────────────────────
 setInterval(() => {
-  const cutoff = Date.now() - PUBLIC_ROOM_RATE_WINDOW_MS;
-  for (const [ip, entry] of publicRoomCreations) {
-    if (entry.firstAt < cutoff) publicRoomCreations.delete(ip);
-  }
-}, 5 * 60 * 1000);
-
-// Periodic cleanup of stale entries (every 5 minutes)
-setInterval(() => {
-  const now = Date.now();
-
-  // Clean stale chat timestamps (older than the rate window)
-  for (const [token, timestamps] of chatTimestamps) {
-    const recent = timestamps.filter(t => now - t < CHAT_RATE_WINDOW_MS);
-    if (recent.length === 0) chatTimestamps.delete(token);
-    else chatTimestamps.set(token, recent);
-  }
+  cleanPublicRoomRateLimiter();
+  cleanChatTimestamps();
 
   // Clean identified tokens for disconnected sockets
   for (const [socketId] of identifiedTokens) {
@@ -258,100 +80,11 @@ setInterval(() => {
   const activeSocketIds = new Set(io.sockets.sockets.keys());
   rateLimiter.cleanDisconnected(activeSocketIds);
 
-  // Clean finished tournaments older than 1 hour
+  // Clean stale tournaments
   tournamentManager.cleanup();
 }, 5 * 60 * 1000);
 
-function getClientIp(handshake: { headers: Record<string, string | string[] | undefined>; address: string }): string {
-  const fwd = handshake.headers['x-forwarded-for'];
-  if (fwd) {
-    const raw = Array.isArray(fwd) ? fwd[0] : fwd;
-    return raw.split(',')[0].trim();
-  }
-  return handshake.address;
-}
-
-function canCreatePublicRoom(ip: string): boolean {
-  const now = Date.now();
-  const entry = publicRoomCreations.get(ip);
-  if (!entry || now - entry.firstAt > PUBLIC_ROOM_RATE_WINDOW_MS) {
-    publicRoomCreations.set(ip, { count: 1, firstAt: now });
-    return true;
-  }
-  if (entry.count >= PUBLIC_ROOM_RATE_LIMIT) return false;
-  entry.count++;
-  return true;
-}
-
-function getPublicRoomList(): PublicRoomListItem[] {
-  const items = roomManager.getPublicRooms().map((room) => ({
-    code: room.code,
-    gameId: room.gameId,
-    roomName: room.roomName,
-    hostNickname: room.players[0]?.nickname ?? 'Unknown',
-    playerCount: room.players.length,
-    maxPlayers: room.maxPlayers,
-    createdAt: room.createdAt,
-    hostAvatarId: room.players[0]?.avatarId,
-    hostNameColor: room.players[0]?.nameColor,
-    hostAvatarFrame: room.players[0]?.avatarFrame,
-    hostCosmetics: room.players[0] ? buildCosmetics(room.players[0]) : undefined,
-  }));
-  // Sort: joinable (has space, not empty) → empty → full; newest-first within each group
-  items.sort((a, b) => {
-    const pri = (item: typeof a) => {
-      if (item.playerCount > 0 && item.playerCount < item.maxPlayers) return 0; // joinable
-      if (item.playerCount === 0) return 1; // empty
-      return 2; // full
-    };
-    const diff = pri(a) - pri(b);
-    return diff !== 0 ? diff : b.createdAt - a.createdAt;
-  });
-  return items;
-}
-
-// ── Chat ──────────────────────────────────────────────────────────────────────
-
-/** playerToken → profile (nickname, avatar, name color) */
-const profiles = new Map<string, { nickname: string; avatarId?: string; nameColor?: string; avatarFrame?: string; banner?: string; cardColor?: string; badges?: string[] }>();
-/** Global chat buffer — last 100 messages */
-const globalChat: ChatMessage[] = [];
-/** roomCode → chat buffer — last 50 messages */
-const roomChats = new Map<string, ChatMessage[]>();
-/** playerToken → recent message timestamps (sliding-window rate limiter) */
-const chatTimestamps = new Map<string, number[]>();
-/** socketId → playerToken for ALL identified sockets (not just room players) */
-const identifiedTokens = new Map<string, string>();
-
-const CHAT_RATE_MSGS = 5;
-const CHAT_RATE_WINDOW_MS = 10_000;
-const GLOBAL_CHAT_BUF = 100;
-const ROOM_CHAT_BUF = 50;
-const MSG_MAX_LEN = 200;
-
-function sanitizeNickname(raw: string): string | null {
-  const cleaned = raw.trim().slice(0, 16);
-  if (cleaned.length < 2) return null;
-  if (!/^[a-zA-Z0-9 _-]+$/.test(cleaned)) return null;
-  return cleaned;
-}
-
-function sanitizeMessage(raw: string): string | null {
-  const cleaned = raw.trim().slice(0, MSG_MAX_LEN);
-  return cleaned.length > 0 ? cleaned : null;
-}
-
-function canChat(token: string): boolean {
-  const now = Date.now();
-  const cutoff = now - CHAT_RATE_WINDOW_MS;
-  const times = (chatTimestamps.get(token) ?? []).filter((t) => t > cutoff);
-  if (times.length >= CHAT_RATE_MSGS) return false;
-  times.push(now);
-  chatTimestamps.set(token, times);
-  return true;
-}
-
-// ─────────────────────────────────────────────────────────────────────────────
+// ── Server setup ──────────────────────────────────────────────────────────────
 
 const PORT = Number(process.env.PORT ?? 3001);
 // Support multiple CORS origins via comma-separated WS_CORS_ORIGIN.
@@ -365,151 +98,13 @@ if (!CORS_ORIGINS.includes('http://localhost:3000')) {
 }
 const WS_CORS_ORIGIN: string | string[] = CORS_ORIGINS.length === 1 ? CORS_ORIGINS[0] : CORS_ORIGINS;
 
-const ADMIN_API_SECRET = process.env.ADMIN_API_SECRET ?? '';
+// Explicit annotations break the circular inference between httpServer and io
+// (the HTTP handler closes over io, io wraps httpServer).
+const httpServer: HttpServer = createServer(createHttpHandler(() => io));
 
-function verifyAdminSecret(req: IncomingMessage): boolean {
-  const auth = req.headers.authorization;
-  return !!ADMIN_API_SECRET && auth === `Bearer ${ADMIN_API_SECRET}`;
-}
-
-function readBody(req: IncomingMessage): Promise<string> {
-  return new Promise((resolve) => {
-    let body = '';
-    req.on('data', (chunk: Buffer) => { body += chunk.toString(); });
-    req.on('end', () => resolve(body));
-  });
-}
-
-function jsonResponse(res: ServerResponse, status: number, data: unknown) {
-  res.writeHead(status, { 'Content-Type': 'application/json' });
-  res.end(JSON.stringify(data));
-}
-
-const httpServer = createServer(async (req: IncomingMessage, res: ServerResponse) => {
-  const url = req.url ?? '/';
-
-  // ── Admin: list all rooms ──
-  if (url === '/admin/rooms' && req.method === 'GET') {
-    if (!verifyAdminSecret(req)) return jsonResponse(res, 401, { error: 'Unauthorized' });
-    const rooms = roomManager.getAllRooms().map((r) => ({
-      code: r.code,
-      gameId: r.gameId,
-      visibility: r.visibility,
-      roomName: r.roomName,
-      players: r.players.map((p) => ({ index: p.index, nickname: p.nickname, playerToken: p.playerToken })),
-      spectators: r.spectators.size,
-      createdAt: r.createdAt,
-      hasState: r.state !== null,
-    }));
-    return jsonResponse(res, 200, { rooms });
-  }
-
-  // ── Admin: force-close a room ──
-  if (url === '/admin/rooms/close' && req.method === 'POST') {
-    if (!verifyAdminSecret(req)) return jsonResponse(res, 401, { error: 'Unauthorized' });
-    const body = await readBody(req);
-    let roomCode: string;
-    try {
-      roomCode = JSON.parse(body).roomCode;
-    } catch {
-      return jsonResponse(res, 400, { error: 'Invalid JSON' });
-    }
-    if (!roomCode) return jsonResponse(res, 400, { error: 'Missing roomCode' });
-
-    // Kick all sockets from the Socket.IO room before deleting
-    const room = roomManager.getRoom(roomCode);
-    if (room) {
-      io.in(roomCode).socketsLeave(roomCode);
-      io.to(roomCode).emit('room_error', { code: 'ROOM_CLOSED', message: 'Room closed by admin' });
-    }
-
-    const deleted = roomManager.forceCloseRoom(roomCode);
-    if (!deleted) return jsonResponse(res, 404, { error: 'Room not found' });
-
-    broadcastOpenRooms();
-    return jsonResponse(res, 200, { ok: true });
-  }
-
-  // ── Default health check ──
-  res.writeHead(200);
-  res.end('ok');
-});
-
-const io = new Server<ClientToServerEvents, ServerToClientEvents>(httpServer, {
+const io: GameServer = new Server<ClientToServerEvents, ServerToClientEvents>(httpServer, {
   cors: { origin: WS_CORS_ORIGIN, methods: ['GET', 'POST'] },
 });
-
-function broadcastOpenRooms() {
-  io.emit('open_rooms', { rooms: getPublicRoomList() });
-}
-
-function startCountdown(room: Room) {
-  room.matchStartsAt = Date.now() + COUNTDOWN_MS;
-  io.to(room.code).emit('match_starting', { startsInMs: COUNTDOWN_MS });
-}
-
-/**
- * Broadcast game_state to every socket in the room with a per-socket projected
- * state (hides opponent ship positions for Battleship; no-op for other games).
- */
-function emitGameState(room: Room, state: AnyGameState) {
-  const sockets = io.sockets.adapter.rooms.get(room.code);
-  if (!sockets) return;
-  for (const sid of sockets) {
-    const sock = io.sockets.sockets.get(sid);
-    if (!sock) continue;
-    const isSpec = roomManager.isSpectator(sid);
-    const pIdx = isSpec
-      ? null
-      : (room.players.find((p) => p.socketId === sid)?.index ?? null);
-    sock.emit('game_state', {
-      roomCode: room.code,
-      gameId: room.gameId,
-      state: projectGameState(room.gameId, state, { playerIndex: pIdx, isSpectator: isSpec }),
-      spectatorCount: room.spectators.size,
-    });
-  }
-}
-
-/**
- * Broadcast rematch_started to every socket in the room with per-socket projection.
- */
-function emitRematchStarted(room: Room, state: AnyGameState) {
-  const sockets = io.sockets.adapter.rooms.get(room.code);
-  if (!sockets) return;
-  for (const sid of sockets) {
-    const sock = io.sockets.sockets.get(sid);
-    if (!sock) continue;
-    const isSpec = roomManager.isSpectator(sid);
-    const pIdx = isSpec
-      ? null
-      : (room.players.find((p) => p.socketId === sid)?.index ?? null);
-    sock.emit('rematch_started', {
-      state: projectGameState(room.gameId, state, { playerIndex: pIdx, isSpectator: isSpec }),
-    });
-  }
-}
-
-function emitPlayerJoined(room: Room, joinerToken: string, joinerSocketId: string) {
-  const joiner = room.players.find(p => p.playerToken === joinerToken);
-  if (!joiner) return;
-  for (const p of room.players) {
-    if (p.playerToken === joinerToken) continue;
-    const pSock = io.sockets.sockets.get(p.socketId);
-    if (pSock) {
-      pSock.emit('player_joined', {
-        playerId: joinerSocketId,
-        playerIndex: joiner.index,
-        playerCount: room.players.length,
-        spectatorCount: room.spectators.size,
-        state: room.state
-          ? projectGameState(room.gameId, room.state, { playerIndex: p.index, isSpectator: false })
-          : null,
-        players: roomPlayers(room),
-      });
-    }
-  }
-}
 
 // ── Room-level callbacks (fired outside socket event handlers) ────────────────
 
@@ -519,15 +114,11 @@ roomManager.onPlayerEvicted((room, playerIndex) => {
   if (room.state && room.gameId === 'liarsbar') {
     const lbState = room.state as import('shared').LiarsBarState;
     if (lbState.phase === 'lobby') {
-      // Find the token that was at this room index
-      // The evicted player is already removed from room.players by this point,
-      // so we need to remove them from the game state by index.
-      // playerIndex corresponds to the original room seat, not game-state index.
-      // Re-sync game-state players to match room.players.
+      // Re-sync game-state players to match room.players (the evicted player
+      // is already removed from room.players at this point).
       const roomTokens = new Set(room.players.map(p => p.playerToken));
       lbState.players = lbState.players.filter(p => roomTokens.has(p.id));
       lbState.hands = lbState.players.map(() => []);
-      // Update currentTurn to host if needed
       if (lbState.players.length > 0) {
         lbState.currentTurn = lbState.players[0].id;
       }
@@ -551,8 +142,7 @@ roomManager.onPlayerEvicted((room, playerIndex) => {
     if (cfState.phase === 'lobby') {
       const roomTokens = new Set(room.players.map(p => p.playerToken));
       // Keep human players still in room + all bots
-      const { isBotToken: isBotTk } = require('shared') as { isBotToken: (t: string) => boolean };
-      const keepIndices = cfState.playerIds.map((t, i) => (roomTokens.has(t) || isBotTk(t)) ? i : -1).filter(i => i >= 0);
+      const keepIndices = cfState.playerIds.map((t, i) => (roomTokens.has(t) || isBotToken(t)) ? i : -1).filter(i => i >= 0);
       cfState.playerIds = keepIndices.map(i => cfState.playerIds[i]);
       cfState.players = keepIndices.map(i => cfState.players[i]);
       cfState.trails = keepIndices.map(i => cfState.trails[i]);
@@ -572,9 +162,9 @@ roomManager.onPlayerEvicted((room, playerIndex) => {
   });
   // Broadcast updated game state after liarsbar/curvefever lobby change
   if (room.state && (room.gameId === 'liarsbar' || room.gameId === 'curvefever' || room.gameId === 'uno')) {
-    emitGameState(room, room.state);
+    emitGameState(io, room, room.state);
   }
-  if (room.visibility === 'public') broadcastOpenRooms();
+  if (room.visibility === 'public') broadcastOpenRooms(io);
 });
 
 roomManager.onRoomCleaned((room) => {
@@ -582,86 +172,12 @@ roomManager.onRoomCleaned((room) => {
   stopTickLoop(room.code);
   // Kick any remaining spectators from the Socket.IO room channel
   io.in(room.code).socketsLeave(room.code);
-  if (room.visibility === 'public') broadcastOpenRooms();
+  if (room.visibility === 'public') broadcastOpenRooms(io);
   // Free the room's chat buffer
   roomChats.delete(room.code);
   // Free presence map entry
   roomGamePresence.delete(room.code);
 });
-
-// ── Tournament helpers ────────────────────────────────────────────────────────
-
-function findSocketsByToken(token: string): string[] {
-  const sids: string[] = [];
-  for (const [sid, t] of identifiedTokens) {
-    if (t === token) sids.push(sid);
-  }
-  return sids;
-}
-
-function startTournamentMatch(tournamentId: string, match: { id: string; round: number; player1: string | null; player2: string | null }) {
-  if (!match.player1 || !match.player2) return;
-
-  const tournament = tournamentManager.get(tournamentId);
-  if (!tournament) return;
-
-  const cap = getGameCapacity(tournament.config.gameId);
-
-  // Find sockets for player1 so we can create the room under their socket
-  const p1Sockets = findSocketsByToken(match.player1);
-  const p1Sid = p1Sockets[0];
-  if (!p1Sid) {
-    console.log(`[tournament] no socket found for player1 ${match.player1.slice(0, 8)} in match ${match.id}`);
-    return;
-  }
-
-  const p1 = tournament.players.find(p => p.token === match.player1);
-  const p2 = tournament.players.find(p => p.token === match.player2);
-
-  const room = roomManager.createRoom(
-    p1Sid,
-    match.player1,
-    tournament.config.gameId,
-    p1?.nickname ?? 'Player 1',
-    'private',
-    `${tournament.config.name} R${match.round + 1}`,
-    {
-      ...tournament.config.gameConfig,
-      _tournamentId: tournamentId,
-      _matchId: match.id,
-    },
-    cap.min,
-    cap.max,
-  );
-
-  tournamentManager.startMatch(tournamentId, match.id, room.code);
-
-  // Join player1's socket to the room channel
-  const p1Sock = io.sockets.sockets.get(p1Sid);
-  if (p1Sock) {
-    p1Sock.join(room.code);
-    p1Sock.emit('tournament_match_ready', {
-      tournamentId,
-      matchId: match.id,
-      roomCode: room.code,
-      opponent: { token: p2?.token ?? '', nickname: p2?.nickname ?? 'TBD' },
-    });
-  }
-
-  // Notify player2 to join
-  const p2Sockets = findSocketsByToken(match.player2!);
-  for (const sid of p2Sockets) {
-    const sock = io.sockets.sockets.get(sid);
-    sock?.emit('tournament_match_ready', {
-      tournamentId,
-      matchId: match.id,
-      roomCode: room.code,
-      opponent: { token: p1?.token ?? '', nickname: p1?.nickname ?? 'TBD' },
-    });
-  }
-
-  console.log(`[tournament] match ${match.id.slice(0, 8)} started → room ${room.code} (${p1?.nickname} vs ${p2?.nickname})`);
-}
 
 // ── Per-connection logic ──────────────────────────────────────────────────────
 
@@ -675,7 +191,20 @@ io.on('connection', (socket) => {
   // ── identify ──────────────────────────────────────────────────────────────
   // Sent by the client immediately after connecting.
   // Restores the player's seat if their token matches a live session.
-  socket.on('identify', ({ playerToken, nickname, avatarId, nameColor, avatarFrame, cosmetics, userId, level, showcase }) => {
+  socket.on('identify', ({ playerToken, nickname: rawNickname, avatarId, nameColor, avatarFrame, cosmetics, userId, level: rawLevel, showcase: rawShowcase }) => {
+    if (typeof playerToken !== 'string' || playerToken.length === 0 || playerToken.length > 64) return;
+    const nickname = safeNickname(rawNickname);
+    const level = typeof rawLevel === 'number' && Number.isFinite(rawLevel)
+      ? Math.max(1, Math.min(999, Math.floor(rawLevel)))
+      : undefined;
+    // Showcase is broadcast to every client via presence — cap its size so a
+    // malicious client can't amplify arbitrary payloads through the server.
+    let showcase = rawShowcase;
+    try {
+      if (showcase && JSON.stringify(showcase).length > 4096) showcase = undefined;
+    } catch {
+      showcase = undefined;
+    }
     identifiedTokens.set(socket.id, playerToken);
     nicknameMap.set(socket.id, nickname);
     // Initialise profile from the stored nickname if no profile exists yet
@@ -708,12 +237,16 @@ io.on('connection', (socket) => {
     } else {
       presence.set(playerToken, { nickname, avatarId: profile.avatarId, nameColor: profile.nameColor, avatarFrame: profile.avatarFrame, banner: profile.banner, cardColor: profile.cardColor, badges: profile.badges, userId, level, showcase, sockets: new Set([socket.id]) });
     }
-    broadcastPresence();
+    broadcastPresence(io);
 
     // Push current party state to reconnecting sockets
     const existingParty = partyManager.getByToken(playerToken);
     if (existingParty) {
-      const partyState = partyManager.toState(existingParty, resolvePartyMember);
+      const partyState = partyManager.toState(existingParty, (token) => {
+        const p = presence.get(token);
+        if (!p) return undefined;
+        return { nickname: p.nickname, avatarId: p.avatarId, cosmetics: buildCosmetics(p) };
+      });
       socket.emit('party_updated', { party: partyState });
     }
 
@@ -732,8 +265,8 @@ io.on('connection', (socket) => {
     {
       const wasReady = allSeatedPlayersPresent(room);
       replacePresence(room.code, player.index, socket.id);
-      emitRoomReady(room);
-      if (!wasReady) tryStartCountdown(room);
+      emitRoomReady(io, room);
+      if (!wasReady) tryStartCountdown(io, room);
     }
 
     socket.emit('room_rejoined', {
@@ -765,19 +298,20 @@ io.on('connection', (socket) => {
     // reset to 'playing' (the only client event that updates phase back).
     const { state: reconnectState } = room;
     if (reconnectState) {
-      emitGameState(room, reconnectState);
+      emitGameState(io, room, reconnectState);
     }
 
     if (room.matchStartsAt && Date.now() < room.matchStartsAt) {
       socket.emit('match_starting', { startsInMs: room.matchStartsAt - Date.now() });
     }
     socketActivity.set(socket.id, { kind: 'room', gameId: room.gameId, roomCode: room.code, isPublic: room.visibility === 'public' });
-    broadcastPresence();
+    broadcastPresence(io);
     console.log(`[rejoin] ${socket.id} → ${room.code} (player ${player.index})`);
   });
 
   // ── create_room ───────────────────────────────────────────────────────────
-  socket.on('create_room', ({ playerToken, gameId = 'tictactoe', nickname, visibility = 'private', roomName, rpsConfig, ldConfig, battleshipConfig, cfConfig, unoConfig, chessConfig, ncConfig, maxPlayers: requestedMax }) => {
+  socket.on('create_room', ({ playerToken, gameId = 'tictactoe', nickname: rawNickname, visibility = 'private', roomName, rpsConfig, ldConfig, battleshipConfig, cfConfig, unoConfig, chessConfig, ncConfig, maxPlayers: requestedMax }) => {
+    const nickname = safeNickname(rawNickname);
     identifiedTokens.set(socket.id, playerToken);
     nicknameMap.set(socket.id, nickname);
     if (!profiles.has(playerToken)) profiles.set(playerToken, { nickname });
@@ -845,7 +379,7 @@ io.on('connection', (socket) => {
       creatorPlayer.nameColor = crProf?.nameColor;
       creatorPlayer.avatarFrame = crProf?.avatarFrame;
     }
-    // Liarsbar / Curvefever: create lobby-phase state immediately so it can track players
+    // Liarsbar / Curvefever / UNO: create lobby-phase state immediately so it can track players
     if (gameId === 'liarsbar' || gameId === 'curvefever' || gameId === 'uno') {
       const engine = engineRegistry[gameId];
       room.state = engine.initialState([playerToken], 0, room.gameConfig);
@@ -879,7 +413,7 @@ io.on('connection', (socket) => {
       const engine = engineRegistry[gameId];
       const state = engine.initialState([playerToken, botToken], 0, room.gameConfig);
       room.state = state;
-      startTickLoop(room.code);
+      startTickLoop(io, room.code);
       // Emit the game state to the human player
       const projected = projectGameState(room.gameId, state, { playerIndex: 0, isSpectator: false });
       socket.emit('game_state', { roomCode: room.code, gameId: room.gameId, state: projected, spectatorCount: 0 });
@@ -889,13 +423,14 @@ io.on('connection', (socket) => {
     // Empty history for the brand-new room
     socket.emit('chat_history', { scope: 'room', messages: [] });
     socketActivity.set(socket.id, { kind: 'room', gameId: room.gameId, roomCode: room.code, isPublic: room.visibility === 'public' });
-    broadcastPresence();
-    if (visibility === 'public') broadcastOpenRooms();
+    broadcastPresence(io);
+    if (visibility === 'public') broadcastOpenRooms(io);
     console.log(`[room] created ${room.code} (${room.gameId}, ${visibility}${sanitizedName ? `: ${sanitizedName}` : ''})`);
   });
 
   // ── join_room ─────────────────────────────────────────────────────────────
-  socket.on('join_room', ({ roomCode, playerToken, nickname, ncDeckCards }) => {
+  socket.on('join_room', ({ roomCode, playerToken, nickname: rawNickname, ncDeckCards }) => {
+    const nickname = safeNickname(rawNickname);
     identifiedTokens.set(socket.id, playerToken);
     nicknameMap.set(socket.id, nickname);
     if (!profiles.has(playerToken)) profiles.set(playerToken, { nickname });
@@ -910,8 +445,8 @@ io.on('connection', (socket) => {
       {
         const wasReady = allSeatedPlayersPresent(room);
         replacePresence(code, player.index, socket.id);
-        emitRoomReady(room);
-        if (!wasReady) tryStartCountdown(room);
+        emitRoomReady(io, room);
+        if (!wasReady) tryStartCountdown(io, room);
       }
       socket.emit('room_rejoined', {
         roomCode: code,
@@ -935,10 +470,10 @@ io.on('connection', (socket) => {
       // Same phase-reset broadcast as in the identify reconnect path.
       const { state: rejoinState } = room;
       if (rejoinState) {
-        emitGameState(room, rejoinState);
+        emitGameState(io, room, rejoinState);
       }
       socketActivity.set(socket.id, { kind: 'room', gameId: room.gameId, roomCode: code, isPublic: room.visibility === 'public' });
-      broadcastPresence();
+      broadcastPresence(io);
       return;
     }
 
@@ -991,10 +526,9 @@ io.on('connection', (socket) => {
           (state as { lastMoveAt?: number }).lastMoveAt = Date.now() + COUNTDOWN_MS;
         }
         room.state = state;
-        startTickLoop(room.code);
+        startTickLoop(io, room.code);
       }
       // For liarsbar, update the lobby state when new players join
-      // (add the new player to the game state's player list).
       if (room.state && room.gameId === 'liarsbar') {
         const lbState = room.state as import('shared').LiarsBarState;
         if (lbState.phase === 'lobby' && !lbState.players.some(p => p.id === playerToken)) {
@@ -1065,12 +599,12 @@ io.on('connection', (socket) => {
       });
       socket.emit('chat_history', { scope: 'room', messages: roomChats.get(code) ?? [] });
       // Notify all existing players about the new joiner
-      emitPlayerJoined(room, playerToken, socket.id);
+      emitPlayerJoined(io, room, playerToken, socket.id);
       socketActivity.set(socket.id, { kind: 'room', gameId: room.gameId, roomCode: code, isPublic: room.visibility === 'public' });
-      broadcastPresence();
-      if (room.visibility === 'public') broadcastOpenRooms();
-      emitRoomReady(room);
-      tryStartCountdown(room);
+      broadcastPresence(io);
+      if (room.visibility === 'public') broadcastOpenRooms(io);
+      emitRoomReady(io, room);
+      tryStartCountdown(io, room);
       console.log(`[room] ${socket.id} joined ${code} as player ${joiner.index}`);
       return;
     }
@@ -1101,7 +635,7 @@ io.on('connection', (socket) => {
     socket.emit('chat_history', { scope: 'room', messages: roomChats.get(code) ?? [] });
     io.to(code).emit('spectator_count_changed', { spectatorCount: room.spectators.size });
     socketActivity.set(socket.id, { kind: 'room', gameId: room.gameId, roomCode: code, isPublic: room.visibility === 'public' });
-    broadcastPresence();
+    broadcastPresence(io);
     console.log(`[room] ${socket.id} joined ${code} as spectator`);
   });
 
@@ -1162,7 +696,7 @@ io.on('connection', (socket) => {
         : currentState.currentPlayer;
       if (!connectedTokens.has(turnToken)) {
         console.error(`[sanity] ${code}: turn token ${turnToken} not in connected players ${[...connectedTokens].join(',')}, re-syncing`);
-        emitGameState(room, currentState);
+        emitGameState(io, room, currentState);
         return;
       }
     }
@@ -1179,16 +713,10 @@ io.on('connection', (socket) => {
         const prevPhase = 'phase' in currentState ? (currentState as { phase: string }).phase : undefined;
         const nextPhase = (nextState as { phase: string }).phase;
         if (prevPhase === 'lobby' && nextPhase !== 'lobby') {
-          startTickLoop(room.code);
+          startTickLoop(io, room.code);
         }
       }
-      // DEV: verify liarsbar lives broadcast
-      if (room.gameId === 'liarsbar' && 'players' in nextState) {
-        const lbPlayers = (nextState as { players: Array<{ id: string; lives: number }> }).players;
-        const sockCount = io.sockets.adapter.rooms.get(room.code)?.size ?? 0;
-        console.log(`[LD broadcast] ${room.code} → ${sockCount} sockets, lives: ${lbPlayers.map(p => `${p.id.slice(0, 6)}:${p.lives}`).join(', ')}`);
-      }
-      emitGameState(room, nextState);
+      emitGameState(io, room, nextState);
 
       // Sync bot config for curvefever rematch support
       if (room.gameId === 'curvefever' && (action.type === 'CF_ADD_BOT' || action.type === 'CF_REMOVE_BOT')) {
@@ -1265,8 +793,7 @@ io.on('connection', (socket) => {
             ts: Date.now(),
             system: true,
           };
-          globalChat.push(sysMsg);
-          if (globalChat.length > GLOBAL_CHAT_BUF) globalChat.shift();
+          pushGlobalChat(sysMsg);
           io.to('global').emit('chat_message', { message: sysMsg });
         }
 
@@ -1281,7 +808,7 @@ io.on('connection', (socket) => {
                 io.to(`tournament:${tId}`).emit('tournament_state', { tournament: tResult.tournament });
                 // Start newly ready matches
                 for (const readyMatch of tResult.readyMatches) {
-                  startTournamentMatch(tId, readyMatch);
+                  startTournamentMatch(io, tournamentManager, tId, readyMatch);
                 }
               }
             }
@@ -1353,8 +880,8 @@ io.on('connection', (socket) => {
       }
       room.state = state;
       room.rematchVotes.clear();
-      startTickLoop(room.code);
-      emitRematchStarted(room, state);
+      startTickLoop(io, room.code);
+      emitRematchStarted(io, room, state);
       console.log(`[rematch] ${code} restarted`);
     } else {
       io.to(code).emit('rematch_requested', { votes: result.votes });
@@ -1382,6 +909,7 @@ io.on('connection', (socket) => {
     // Re-create initial state in lobby phase (preserves settings/bots via gameConfig)
     const engine = engineRegistry[room.gameId];
     const playerTokens = room.players
+      .slice()
       .sort((a, b) => a.index - b.index)
       .map((p) => p.playerToken);
     const newState = engine.initialState(playerTokens, undefined, room.gameConfig ?? undefined);
@@ -1389,8 +917,8 @@ io.on('connection', (socket) => {
 
     // Notify all players to return to lobby/waiting phase, then send fresh lobby state
     io.to(code).emit('returned_to_lobby', { roomCode: code });
-    emitGameState(room, newState);
-    emitRoomReady(room);
+    emitGameState(io, room, newState);
+    emitRoomReady(io, room);
     console.log(`[lobby] ${code} returned to lobby`);
   });
 
@@ -1406,7 +934,8 @@ io.on('connection', (socket) => {
   });
 
   // ── quick_play ────────────────────────────────────────────────────────────
-  socket.on('quick_play', ({ gameId, playerToken, nickname }) => {
+  socket.on('quick_play', ({ gameId, playerToken, nickname: rawNickname }) => {
+    const nickname = safeNickname(rawNickname);
     identifiedTokens.set(socket.id, playerToken);
     nicknameMap.set(socket.id, nickname);
     if (!profiles.has(playerToken)) profiles.set(playerToken, { nickname });
@@ -1444,7 +973,7 @@ io.on('connection', (socket) => {
           // Remove from queue once room has enough players to start
           if (room.players.length >= room.minPlayers) {
             quickPlayQueue.delete(gameId);
-            broadcastOpenRooms();
+            broadcastOpenRooms(io);
           }
 
           // Initialize game when minPlayers reached (first time)
@@ -1459,7 +988,7 @@ io.on('connection', (socket) => {
               (qpState as { lastMoveAt?: number }).lastMoveAt = Date.now() + COUNTDOWN_MS;
             }
             room.state = qpState;
-            startTickLoop(room.code);
+            startTickLoop(io, room.code);
           }
           // For liarsbar, add the new player to the lobby state
           if (room.state && room.gameId === 'liarsbar') {
@@ -1510,18 +1039,18 @@ io.on('connection', (socket) => {
           socket.emit('chat_history', { scope: 'room', messages: roomChats.get(entry.roomCode) ?? [] });
           socket.emit('quick_play_joined', { roomCode: entry.roomCode });
           // Notify all existing players
-          emitPlayerJoined(room, playerToken, socket.id);
+          emitPlayerJoined(io, room, playerToken, socket.id);
           socketActivity.set(socket.id, { kind: 'room', gameId: room.gameId, roomCode: entry.roomCode, isPublic: room.visibility === 'public' });
-          broadcastPresence();
-          emitRoomReady(room);
-          tryStartCountdown(room);
+          broadcastPresence(io);
+          emitRoomReady(io, room);
+          tryStartCountdown(io, room);
           console.log(`[quick-play] ${socket.id} joined ${entry.roomCode} (${gameId})`);
           return;
         }
       }
       // Stale entry — clear it and fall through to create
       quickPlayQueue.delete(gameId);
-      broadcastOpenRooms();
+      broadcastOpenRooms(io);
     }
 
     // No waiting room — create one and enter the queue
@@ -1533,7 +1062,7 @@ io.on('connection', (socket) => {
       room.state = engineRegistry[gameId].initialState([playerToken], 0, room.gameConfig);
     }
     quickPlayQueue.set(gameId, { roomCode: room.code, gameId, hostNickname: nickname, createdAt: Date.now() });
-    broadcastOpenRooms();
+    broadcastOpenRooms(io);
     socket.join(room.code);
     addPresence(room.code, 0, socket.id);
     socket.emit('room_created', {
@@ -1546,12 +1075,12 @@ io.on('connection', (socket) => {
     socket.emit('chat_history', { scope: 'room', messages: [] });
     socket.emit('quick_play_joined', { roomCode: room.code });
     socketActivity.set(socket.id, { kind: 'room', gameId: room.gameId, roomCode: room.code, isPublic: room.visibility === 'public' });
-    broadcastPresence();
+    broadcastPresence(io);
     console.log(`[quick-play] ${socket.id} waiting in ${room.code} (${gameId})`);
   });
 
   // ── leave_room ────────────────────────────────────────────────────────────
-  socket.on('leave_room', ({ roomCode }) => {
+  socket.on('leave_room', () => {
     handleLeave(true);
   });
 
@@ -1586,7 +1115,7 @@ io.on('connection', (socket) => {
       if (nameColor !== undefined) presEntry.nameColor = nameColor || undefined;
       if (avatarFrame !== undefined) presEntry.avatarFrame = avatarFrame || undefined;
       applyCosmetics(presEntry, cosmetics);
-      broadcastPresence();
+      broadcastPresence(io);
     }
 
     // Update in any room the player is currently in
@@ -1644,8 +1173,7 @@ io.on('connection', (socket) => {
     }
 
     if (scope === 'global') {
-      globalChat.push(msg);
-      if (globalChat.length > GLOBAL_CHAT_BUF) globalChat.shift();
+      pushGlobalChat(msg);
       io.to('global').emit('chat_message', { message: msg });
     } else {
       // Room-scoped message
@@ -1676,378 +1204,7 @@ io.on('connection', (socket) => {
   socket.on('presence_update', ({ activity }) => {
     if (!activity || typeof activity.kind !== 'string') return;
     socketActivity.set(socket.id, activity);
-    broadcastPresence();
-  });
-
-  // ── invite_create ─────────────────────────────────────────────────────────
-  socket.on('invite_create', ({ toToken, gameId }) => {
-    const fromToken = identifiedTokens.get(socket.id);
-    if (!fromToken) {
-      socket.emit('invite_error', { message: 'Nicht identifiziert.' });
-      return;
-    }
-
-    // Rate limit: 2 s between invites per sender
-    const lastAt = inviteRateLimit.get(fromToken) ?? 0;
-    if (Date.now() - lastAt < 2_000) {
-      socket.emit('invite_error', { message: 'Warte kurz bevor du erneut einlädst.' });
-      return;
-    }
-    inviteRateLimit.set(fromToken, Date.now());
-
-    if (toToken === fromToken) {
-      socket.emit('invite_error', { message: 'Du kannst dich nicht selbst einladen.' });
-      return;
-    }
-
-    const receiverEntry = presence.get(toToken);
-    if (!receiverEntry || receiverEntry.sockets.size === 0) {
-      socket.emit('invite_error', { message: 'Nutzer ist nicht mehr online.' });
-      return;
-    }
-
-    if (!(gameId in engineRegistry)) {
-      socket.emit('invite_error', { message: 'Ungültiges Spiel.' });
-      return;
-    }
-    const validGameId = gameId as GameId;
-
-    const fromName = nicknameMap.get(socket.id) ?? profiles.get(fromToken)?.nickname ?? 'Unknown';
-
-    // Leave any current room so the sender can become player 0 in the invite room
-    const existing = roomManager.getRoomBySocket(socket.id);
-    if (existing) {
-      const leaveResult = roomManager.removeSocket(socket.id);
-      socket.leave(existing.code);
-      if (leaveResult?.type === 'player') {
-        io.to(existing.code).emit('player_left', {
-          playerId: socket.id,
-          playerIndex: leaveResult.player.index,
-          playerCount: existing.players.length,
-        });
-        if (existing.players.length === 0) {
-          for (const [gid, entry] of quickPlayQueue) {
-            if (entry.roomCode === existing.code) { quickPlayQueue.delete(gid); break; }
-          }
-        }
-      }
-      if (existing.visibility === 'public') broadcastOpenRooms();
-    }
-
-    // Create a private room with sender as player 0 (no room_created emitted — sender navigates manually)
-    const room = roomManager.createRoom(socket.id, fromToken, validGameId, fromName, 'private');
-    socket.join(room.code);
-    socket.emit('chat_history', { scope: 'room', messages: [] });
-
-    const invite: InvitePayload = {
-      id: randomUUID(),
-      fromToken,
-      fromName,
-      toToken,
-      gameId: validGameId,
-      roomCode: room.code,
-      createdAt: Date.now(),
-    };
-
-    // Deliver to all receiver sockets (multi-tab support)
-    for (const sid of receiverEntry.sockets) {
-      io.to(sid).emit('invite_received', invite);
-    }
-    socket.emit('invite_sent', { id: invite.id, roomCode: room.code, gameId: validGameId });
-    console.log(`[invite] ${fromName} → ${receiverEntry.nickname} (${validGameId}, room ${room.code})`);
-  });
-
-  // ── room_invite (invite into existing room — host only) ──────────────────
-  socket.on('room_invite', ({ toToken, roomCode }) => {
-    const fromToken = identifiedTokens.get(socket.id);
-    if (!fromToken) {
-      socket.emit('invite_error', { message: 'Nicht identifiziert.' });
-      return;
-    }
-
-    // Rate limit: share the same 2 s cooldown as invite_create
-    const lastAt = inviteRateLimit.get(fromToken) ?? 0;
-    if (Date.now() - lastAt < 2_000) {
-      socket.emit('invite_error', { message: 'Warte kurz bevor du erneut einlädst.' });
-      return;
-    }
-    inviteRateLimit.set(fromToken, Date.now());
-
-    if (toToken === fromToken) {
-      socket.emit('invite_error', { message: 'Du kannst dich nicht selbst einladen.' });
-      return;
-    }
-
-    const room = roomManager.getRoom(roomCode);
-    if (!room) {
-      socket.emit('invite_error', { message: 'Raum nicht gefunden.' });
-      return;
-    }
-
-    // Only the host (player 0) can send room invites
-    if (!room.players[0] || room.players[0].playerToken !== fromToken) {
-      socket.emit('invite_error', { message: 'Nur der Host kann einladen.' });
-      return;
-    }
-
-    if (room.players.length >= room.maxPlayers) {
-      socket.emit('invite_error', { message: 'Raum ist voll.' });
-      return;
-    }
-
-    const receiverEntry = presence.get(toToken);
-    if (!receiverEntry || receiverEntry.sockets.size === 0) {
-      socket.emit('invite_error', { message: 'Nutzer ist nicht mehr online.' });
-      return;
-    }
-
-    const fromName = nicknameMap.get(socket.id) ?? profiles.get(fromToken)?.nickname ?? 'Unknown';
-
-    const invite: InvitePayload = {
-      id: randomUUID(),
-      fromToken,
-      fromName,
-      toToken,
-      gameId: room.gameId,
-      roomCode: room.code,
-      createdAt: Date.now(),
-    };
-
-    // Deliver to all receiver sockets (multi-tab support)
-    for (const sid of receiverEntry.sockets) {
-      io.to(sid).emit('invite_received', invite);
-    }
-    socket.emit('invite_sent', { id: invite.id, roomCode: room.code, gameId: room.gameId });
-    console.log(`[room_invite] ${fromName} → ${receiverEntry.nickname} (${room.gameId}, room ${room.code})`);
-  });
-
-  // ── invite_decline (optional ack) ────────────────────────────────────────
-  socket.on('invite_decline', () => {
-    // No server-side action required; included for protocol completeness.
-  });
-
-  // ── invite_accept ─────────────────────────────────────────────────────────
-  socket.on('invite_accept', ({ id, fromToken, gameId, roomCode }) => {
-    const byName = nicknameMap.get(socket.id) ?? profiles.get(identifiedTokens.get(socket.id) ?? '')?.nickname ?? 'Someone';
-    const senderEntry = presence.get(fromToken);
-    if (!senderEntry || senderEntry.sockets.size === 0) return; // sender went offline
-    for (const sid of senderEntry.sockets) {
-      io.to(sid).emit('invite_accepted', { id, gameId, roomCode, byName });
-    }
-    console.log(`[invite] ${byName} accepted → ${senderEntry.nickname} (${gameId}, room ${roomCode})`);
-  });
-
-  // ── Party events ─────────────────────────────────────────────────────────
-
-  /** Resolve nickname/cosmetics from presence for party member list. */
-  function resolvePartyMember(token: string) {
-    const p = presence.get(token);
-    if (!p) return undefined;
-    return {
-      nickname: p.nickname,
-      avatarId: p.avatarId,
-      cosmetics: buildCosmetics(p),
-    };
-  }
-
-  /** Broadcast party_updated to all member sockets. */
-  function broadcastParty(party: ReturnType<typeof partyManager.getById>) {
-    if (!party) return;
-    const state = partyManager.toState(party, resolvePartyMember);
-    for (const memberToken of party.members) {
-      const entry = presence.get(memberToken);
-      if (!entry) continue;
-      for (const sid of entry.sockets) {
-        io.to(sid).emit('party_updated', { party: state });
-      }
-    }
-  }
-
-  socket.on('party_create', () => {
-    const token = identifiedTokens.get(socket.id);
-    if (!token) return;
-    const party = partyManager.create(token);
-    if (!party) {
-      socket.emit('party_error', { code: 'ALREADY_IN_PARTY', message: 'You are already in a party.' });
-      return;
-    }
-    broadcastParty(party);
-    console.log(`[party] ${presence.get(token)?.nickname} created party ${party.id}`);
-  });
-
-  socket.on('party_invite', ({ toToken }) => {
-    const token = identifiedTokens.get(socket.id);
-    if (!token) return;
-    const party = partyManager.getByToken(token);
-    if (!party) {
-      socket.emit('party_error', { code: 'NOT_IN_PARTY', message: 'You are not in a party.' });
-      return;
-    }
-    if (party.hostToken !== token) {
-      socket.emit('party_error', { code: 'NOT_HOST', message: 'Only the host can invite.' });
-      return;
-    }
-    if (party.members.length >= 6) {
-      socket.emit('party_error', { code: 'PARTY_FULL', message: 'Party is full (max 6).' });
-      return;
-    }
-    // Send invite to all receiver sockets
-    const receiverEntry = presence.get(toToken);
-    if (!receiverEntry || receiverEntry.sockets.size === 0) return;
-    const payload = {
-      partyId: party.id,
-      fromToken: token,
-      fromName: presence.get(token)?.nickname ?? 'Someone',
-      createdAt: Date.now(),
-    };
-    for (const sid of receiverEntry.sockets) {
-      io.to(sid).emit('party_invite_received', payload);
-    }
-    console.log(`[party] invite sent to ${receiverEntry.nickname} for party ${party.id}`);
-  });
-
-  socket.on('party_join', ({ partyId }) => {
-    const token = identifiedTokens.get(socket.id);
-    if (!token) return;
-    // Leave current party if in one
-    const existing = partyManager.getByToken(token);
-    if (existing && existing.id !== partyId) {
-      partyManager.leave(token);
-    }
-    const party = partyManager.join(partyId, token);
-    if (!party) {
-      socket.emit('party_error', { code: 'PARTY_NOT_FOUND', message: 'Party not found or full.' });
-      return;
-    }
-    broadcastParty(party);
-    console.log(`[party] ${presence.get(token)?.nickname} joined party ${party.id}`);
-  });
-
-  socket.on('party_leave', () => {
-    const token = identifiedTokens.get(socket.id);
-    if (!token) return;
-    const { party, disbanded } = partyManager.leave(token);
-    if (!party) return;
-    if (disbanded) {
-      // Notify all former members (except the host who left)
-      for (const memberToken of party.members) {
-        if (memberToken === token) continue;
-        const entry = presence.get(memberToken);
-        if (!entry) continue;
-        for (const sid of entry.sockets) {
-          io.to(sid).emit('party_disbanded');
-        }
-      }
-      console.log(`[party] host left, party ${party.id} disbanded`);
-    } else {
-      broadcastParty(party);
-      console.log(`[party] ${presence.get(token)?.nickname} left party ${party.id}`);
-    }
-  });
-
-  socket.on('party_kick', ({ token: targetToken }) => {
-    const token = identifiedTokens.get(socket.id);
-    if (!token) return;
-    // Notify kicked member
-    const kickedEntry = presence.get(targetToken);
-    const party = partyManager.kick(token, targetToken);
-    if (!party) {
-      socket.emit('party_error', { code: 'NOT_HOST', message: 'Only the host can kick members.' });
-      return;
-    }
-    if (kickedEntry) {
-      for (const sid of kickedEntry.sockets) {
-        io.to(sid).emit('party_disbanded');
-      }
-    }
-    broadcastParty(party);
-    console.log(`[party] ${presence.get(token)?.nickname} kicked ${kickedEntry?.nickname} from party ${party.id}`);
-  });
-
-  socket.on('party_launch', ({ gameId }) => {
-    const token = identifiedTokens.get(socket.id);
-    if (!token) return;
-    const party = partyManager.getByToken(token);
-    if (!party || party.hostToken !== token) {
-      socket.emit('party_error', { code: 'NOT_HOST', message: 'Only the host can launch a game.' });
-      return;
-    }
-    // Check party size vs game capacity
-    const capacity = getGameCapacity(gameId);
-    if (party.members.length > capacity.max) {
-      socket.emit('party_error', {
-        code: 'PARTY_FULL' as const,
-        message: `Party has ${party.members.length} members but ${gameId} supports max ${capacity.max}.`,
-      });
-      return;
-    }
-
-    // Leave any existing rooms for all party members first
-    // Then create a room for the host
-    const handleLeaveForToken = (memberToken: string) => {
-      const memberEntry = presence.get(memberToken);
-      if (!memberEntry) return;
-      for (const sid of memberEntry.sockets) {
-        const existingRoom = roomManager.getRoomBySocket(sid);
-        if (existingRoom) {
-          roomManager.removeSocket(sid);
-          io.in(existingRoom.code).emit('player_left', {
-            playerId: memberToken,
-            playerIndex: -1,
-            playerCount: existingRoom.players.length,
-          });
-        }
-      }
-    };
-
-    // Leave existing rooms
-    for (const memberToken of party.members) {
-      handleLeaveForToken(memberToken);
-    }
-
-    // Create room with host (mirrors create_room handler)
-    const nickname = presence.get(token)?.nickname ?? 'Player';
-    const effectiveMax = Math.min(party.members.length, capacity.max);
-    const room = roomManager.createRoom(socket.id, token, gameId, nickname, 'private', undefined, undefined, capacity.min, effectiveMax);
-
-    // Set cosmetics on host player
-    const creatorPlayer = room.players.find((p) => p.playerToken === token);
-    if (creatorPlayer) {
-      const prof = profiles.get(token);
-      creatorPlayer.avatarId = prof?.avatarId;
-      creatorPlayer.nameColor = prof?.nameColor;
-      creatorPlayer.avatarFrame = prof?.avatarFrame;
-    }
-
-    socket.join(room.code);
-    addPresence(room.code, 0, socket.id);
-    socketActivity.set(socket.id, { kind: 'room', gameId, roomCode: room.code });
-
-    // Update party state
-    partyManager.setRoom(party.id, gameId, room.code);
-
-    // Emit room_created to host
-    socket.emit('room_created', {
-      roomCode: room.code,
-      playerIndex: 0 as const,
-      gameId,
-      players: roomPlayers(room),
-      maxPlayers: room.maxPlayers,
-    });
-    socket.emit('chat_history', { scope: 'room', messages: [] });
-
-    // Notify all party members to navigate to the game
-    for (const memberToken of party.members) {
-      const entry = presence.get(memberToken);
-      if (!entry) continue;
-      for (const sid of entry.sockets) {
-        io.to(sid).emit('party_game_starting', { gameId, roomCode: room.code });
-      }
-    }
-
-    broadcastParty(party);
-    broadcastPresence();
-    console.log(`[party] host launched ${gameId} for party ${party.id} → room ${room.code}`);
+    broadcastPresence(io);
   });
 
   // ── leaderboard_get ───────────────────────────────────────────────────────
@@ -2061,90 +1218,10 @@ io.on('connection', (socket) => {
     });
   });
 
-  // ── Tournament handlers ──────────────────────────────────────────────────
-
-  socket.on('tournament_create', ({ playerToken, nickname, gameId, bracketSize, name, gameConfig }: {
-    playerToken: string; nickname: string; gameId: string; bracketSize: number; name: string; gameConfig?: Record<string, unknown>;
-  }) => {
-    if (!(gameId in engineRegistry)) {
-      socket.emit('tournament_error', { code: 'INVALID_GAME', message: 'Unknown game.' });
-      return;
-    }
-    const validBracketSize = ([4, 8, 16].includes(bracketSize) ? bracketSize : 8) as 4 | 8 | 16;
-    const tournament = tournamentManager.create({
-      gameId: gameId as GameId, bracketSize: validBracketSize, name, createdBy: playerToken, gameConfig,
-    });
-    // Creator auto-joins
-    tournamentManager.join(tournament.id, playerToken, nickname);
-    socket.join(`tournament:${tournament.id}`);
-    socket.emit('tournament_created', { tournamentId: tournament.id });
-    socket.emit('tournament_state', { tournament: tournamentManager.get(tournament.id)! });
-    // Broadcast updated list
-    io.emit('tournament_list', { tournaments: tournamentManager.list() });
-  });
-
-  socket.on('tournament_join', ({ playerToken, nickname, tournamentId }: {
-    playerToken: string; nickname: string; tournamentId: string;
-  }) => {
-    const result = tournamentManager.join(tournamentId, playerToken, nickname);
-    if (typeof result === 'string') {
-      socket.emit('tournament_error', { code: result, message: result });
-      return;
-    }
-    socket.join(`tournament:${tournamentId}`);
-    socket.emit('tournament_joined', { tournamentId });
-    io.to(`tournament:${tournamentId}`).emit('tournament_state', { tournament: result });
-    io.emit('tournament_list', { tournaments: tournamentManager.list() });
-  });
-
-  socket.on('tournament_leave', ({ playerToken, tournamentId }: {
-    playerToken: string; tournamentId: string;
-  }) => {
-    const result = tournamentManager.leave(tournamentId, playerToken);
-    socket.leave(`tournament:${tournamentId}`);
-    if (typeof result === 'string') {
-      if (result === 'TOURNAMENT_DELETED') {
-        io.to(`tournament:${tournamentId}`).emit('tournament_error', { code: 'TOURNAMENT_DELETED', message: 'Tournament was deleted.' });
-        io.emit('tournament_list', { tournaments: tournamentManager.list() });
-      } else {
-        socket.emit('tournament_error', { code: result, message: result });
-      }
-      return;
-    }
-    io.to(`tournament:${tournamentId}`).emit('tournament_state', { tournament: result });
-    io.emit('tournament_list', { tournaments: tournamentManager.list() });
-  });
-
-  socket.on('tournament_start', ({ playerToken, tournamentId }: {
-    playerToken: string; tournamentId: string;
-  }) => {
-    const result = tournamentManager.start(tournamentId, playerToken);
-    if (typeof result === 'string') {
-      socket.emit('tournament_error', { code: result, message: result });
-      return;
-    }
-    io.to(`tournament:${tournamentId}`).emit('tournament_state', { tournament: result });
-
-    // Start ready matches (first round)
-    const readyMatches = tournamentManager.getReadyMatches(tournamentId);
-    for (const match of readyMatches) {
-      startTournamentMatch(tournamentId, match);
-    }
-  });
-
-  socket.on('tournament_list', () => {
-    socket.emit('tournament_list', { tournaments: tournamentManager.list() });
-  });
-
-  socket.on('tournament_get', ({ tournamentId }: { tournamentId: string }) => {
-    const t = tournamentManager.get(tournamentId);
-    if (!t) {
-      socket.emit('tournament_error', { code: 'TOURNAMENT_NOT_FOUND', message: 'Tournament not found.' });
-      return;
-    }
-    socket.join(`tournament:${tournamentId}`);
-    socket.emit('tournament_state', { tournament: t });
-  });
+  // ── Extracted handler modules ─────────────────────────────────────────────
+  registerInviteHandlers(io, socket);
+  registerPartyHandlers(io, socket, partyManager);
+  registerTournamentHandlers(io, socket, tournamentManager);
 
   // ── disconnect ────────────────────────────────────────────────────────────
   socket.on('disconnect', () => {
@@ -2161,7 +1238,7 @@ io.on('connection', (socket) => {
         presEntry.sockets.delete(socket.id);
         if (presEntry.sockets.size === 0) presence.delete(disconnectedToken);
       }
-      broadcastPresence();
+      broadcastPresence(io);
     }
 
     identifiedTokens.delete(socket.id);
@@ -2179,13 +1256,13 @@ io.on('connection', (socket) => {
     const curActivity = socketActivity.get(socket.id);
     if (curActivity?.kind === 'room') {
       socketActivity.set(socket.id, { kind: 'game', gameId: room.gameId });
-      broadcastPresence();
+      broadcastPresence(io);
     }
 
     if (result.type === 'player') {
       // Update game-socket presence before broadcasting
       removePresence(room.code, result.player.index, socket.id);
-      emitRoomReady(room);
+      emitRoomReady(io, room);
 
       if (explicit) {
         // Player intentionally left — cancel their reconnect grace period
@@ -2206,12 +1283,10 @@ io.on('connection', (socket) => {
 
       // Remove from quick-play queue if this was the waiting room and it's now empty
       if (room.players.length === 0) {
-        for (const [gid, entry] of quickPlayQueue) {
-          if (entry.roomCode === room.code) { quickPlayQueue.delete(gid); break; }
-        }
+        dropFromQuickPlayQueue(room.code);
       }
       // Broadcast updated public list (covers both quick-play and custom public rooms)
-      if (room.visibility === 'public') broadcastOpenRooms();
+      if (room.visibility === 'public') broadcastOpenRooms(io);
     } else {
       // Spectator left
       io.to(room.code).emit('spectator_count_changed', { spectatorCount: room.spectators.size });

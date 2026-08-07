@@ -179,11 +179,32 @@ class RoomManager {
     // Assign the next available index (fill gaps if any)
     const usedIndices = new Set(room.players.map((p) => p.index));
     // Also consider indices held by disconnected players with active sessions
-    for (const [, session] of this.tokenSessions) {
-      if (session.roomCode === code) usedIndices.add(session.playerIndex);
+    // ("ghost seats" — held during the reconnect grace period)
+    const ghostSessions: Array<[string, TokenSession]> = [];
+    for (const [tok, session] of this.tokenSessions) {
+      if (session.roomCode === code) {
+        usedIndices.add(session.playerIndex);
+        if (!room.players.some((p) => p.playerToken === tok)) {
+          ghostSessions.push([tok, session]);
+        }
+      }
     }
     let nextIndex = 0;
     while (usedIndices.has(nextIndex)) nextIndex++;
+    // Seats must stay within 0..maxPlayers-1. If every free seat is reserved by
+    // a disconnected ghost, evict a ghost and take its seat — otherwise the
+    // room would report itself full/ready-blocked forever (live players stuck
+    // on "connecting" because seat 0/1 never comes back).
+    if (nextIndex >= room.maxPlayers) {
+      const victim = ghostSessions
+        .filter(([, s]) => !room.players.some((p) => p.index === s.playerIndex))
+        .sort((a, b) => a[1].playerIndex - b[1].playerIndex)[0];
+      if (!victim) return 'ROOM_FULL';
+      const [victimToken, victimSession] = victim;
+      if (victimSession.evictTimer !== null) clearTimeout(victimSession.evictTimer);
+      this.tokenSessions.delete(victimToken);
+      nextIndex = victimSession.playerIndex;
+    }
 
     room.players.push({ socketId, index: nextIndex, playerToken, nickname });
     this.socketRoom.set(socketId, code);

@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import {
   createInitialState,
+  createEmptyState,
   maxTile,
   move,
   keepPlaying as engineKeepPlaying,
@@ -106,9 +107,9 @@ export function Game2048() {
   const ach = useAchievements('2048');
   const pb = usePersonalScores('2048', user ? { userId: user.id, nickname } : undefined);
 
-  // Initialise with best=0 to avoid SSR/hydration mismatch;
-  // the real persisted value is loaded after first mount.
-  const [state, setState] = useState<GameState>(() => createInitialState(0));
+  // SSR-safe initial state: empty board, no random tiles (random values in the
+  // first render cause hydration mismatches). Real board is created on mount.
+  const [state, setState] = useState<GameState>(() => createEmptyState(0));
 
   // Timing / dedup refs
   const startTimeRef = useRef<number>(Date.now());
@@ -124,8 +125,9 @@ export function Game2048() {
       saved.tiles = saved.tiles.map(t => ({ ...t, isNew: false, isMerged: false }));
       setState(saved);
       clearSave(SAVE_2048);
-    } else if (savedBest > 0) {
-      setState((prev) => ({ ...prev, best: Math.max(prev.best, savedBest) }));
+    } else {
+      // Spawn the real starting board client-side (see createEmptyState note)
+      setState(createInitialState(savedBest));
     }
   }, []);
 

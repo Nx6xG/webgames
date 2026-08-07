@@ -1,9 +1,9 @@
-import type { Metadata } from 'next';
-import { LeaderboardClient } from '@/components/LeaderboardClient';
+import { redirect } from 'next/navigation';
 
-export const metadata: Metadata = { title: 'Leaderboard — Web Games' };
-
+/**
+ * Legacy route — the WS-session leaderboard was superseded by the cloud-backed
+ * /leaderboards page. Redirect so old bookmarks keep working.
+ */
 export default function LeaderboardPage() {
-  const wsUrl = process.env.NEXT_PUBLIC_WS_URL ?? '';
-  return <LeaderboardClient wsUrl={wsUrl} />;
+  redirect('/leaderboards');
 }

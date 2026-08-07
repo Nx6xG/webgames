@@ -151,6 +151,15 @@ function propagateByes(matches: TournamentMatch[], totalRounds: number): void {
 export class TournamentManager {
   private tournaments = new Map<TournamentId, TournamentState>();
 
+  /** Number of not-yet-finished tournaments created by this token. */
+  countOpenByCreator(token: string): number {
+    let n = 0;
+    for (const t of this.tournaments.values()) {
+      if (t.config.createdBy === token && t.status !== 'finished') n++;
+    }
+    return n;
+  }
+
   create(config: TournamentConfig): TournamentState {
     const id = randomUUID();
     const rounds = Math.log2(config.bracketSize);
@@ -295,13 +304,20 @@ export class TournamentManager {
     match.status = 'in_progress';
   }
 
-  /** Cleanup finished tournaments older than 1 hour */
+  /**
+   * Cleanup stale tournaments:
+   * - finished: 1 h after completion
+   * - lobby (never started): 2 h after creation
+   * - in_progress (abandoned): 24 h after start
+   */
   cleanup(): void {
-    const cutoff = Date.now() - 60 * 60 * 1000;
+    const now = Date.now();
     for (const [id, t] of this.tournaments) {
-      if (t.status === 'finished' && t.finishedAt && t.finishedAt < cutoff) {
-        this.tournaments.delete(id);
-      }
+      const stale =
+        (t.status === 'finished' && t.finishedAt !== null && now - t.finishedAt > 60 * 60 * 1000) ||
+        (t.status === 'lobby' && now - t.createdAt > 2 * 60 * 60 * 1000) ||
+        (t.status === 'in_progress' && t.startedAt !== null && now - t.startedAt > 24 * 60 * 60 * 1000);
+      if (stale) this.tournaments.delete(id);
     }
   }
 }
